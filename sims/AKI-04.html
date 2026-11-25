@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[AKI-04] Cardiorenal Syndrome and Diuretic Resistance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:12px}
+.sub{font-size:12.5px;color:var(--muted);margin:14px 0 4px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:14px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .ro{padding:6px 12px}
+body.present .ro b{font-size:19px}
+body.present .ctls{gap:2px}
+body.present .ctl{font-size:13px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .tools{margin-top:4px;gap:5px}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+body.present .sub{margin:6px 0 2px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Decongestion ใน 72 ชั่วโมง</h2>
+      <div id="chart"></div>
+      <div id="live"></div>
+      <p class="hint no-present">เส้นม่วงคือน้ำส่วนเกินใน ECF (ลิตร) แท่งเขียวคือ urine output รายชั่วโมง (แกนขวา) ทุก dose จะประเมินแบบ ESC: spot urine Na ที่ 2 ชม. และ urine output ที่ 6 ชม. ถ้าเปิด step-up จะปรับยาให้อัตโนมัติ</p>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วยและ diuretic</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="sub">เสริมฤทธิ์ (กดเปิด/ปิด)</div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roUNa"><b>-</b><span>Spot UNa 2 ชม. (mmol/L)</span></div>
+        <div class="ro" id="roUO"><b>-</b><span>UO 6 ชม. แรก (mL/h)</span></div>
+        <div class="ro" id="roNa"><b>-</b><span>Na balance 24 ชม. (mmol)</span></div>
+        <div class="ro" id="roWt"><b>-</b><span>น้ำหนักลด 72 ชม. (kg)</span></div>
+        <div class="ro" id="roCr"><b>-</b><span>Cr 0 → 72 ชม.</span></div>
+        <div class="ro" id="roK"><b>-</b><span>K 72 ชม.</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/live.js"></script>
+<script>
+(function(){
+"use strict";
+var RX={step:{name:"ESC step-up อัตโนมัติ"},acz:{name:"Acetazolamide 500 mg"},thz:{name:"Thiazide (HCTZ/metolazone)"},sglt:{name:"SGLT2i"},uf:{name:"Ultrafiltration 150 mL/h"}};
+function P(o){ var d={gfr:50,home:40,dose:80,freq:2,xs:8,ci:2.4,rx:[]}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  good:{name:"ตอบสนองดี", p:P({gfr:60,home:40,dose:80}),
+    rows:[["ผู้ป่วย","ADHF น้ำเกิน 8 L ได้ furosemide oral 40 mg/วัน"],["ให้","IV furosemide 80 mg วันละ 2 ครั้ง (2 เท่าของ oral)"],["ผล","UNa 2 ชม. > 70 UO > 150 mL/h decongest ได้ตามเป้า"]],
+    take:["เริ่ม IV loop 1–2 เท่าของขนาด oral ที่ใช้อยู่ (ถ้าไม่เคยใช้ furosemide 20–40 mg)","ประเมินเร็วที่ 2 ชม. (spot UNa > 50–70 mmol/L) และ 6 ชม. (UO > 100–150 mL/h)","ตอบสนองดีให้ต่อจนหายบวม ไม่หยุดเพราะ Cr ขึ้นเล็กน้อย"]},
+  under:{name:"ขนาดยาไม่ถึง threshold", p:P({gfr:30,home:80,dose:40}),
+    rows:[["ผู้ป่วย","CKD G3b ได้ furosemide oral 80 mg/วัน"],["ให้","IV 40 mg ต่ำกว่าขนาดที่ใช้อยู่"],["ผล","ยาไปถึง lumen ไม่พอ ไม่ถึง threshold ของ dose-response"]],
+    take:["Loop diuretic มี threshold ต้องให้ขนาดที่พอถึง lumen ก่อน การให้บ่อยขึ้นในขนาดต่ำไม่ช่วย","CKD และ albumin ต่ำ ทำให้ยาไปถึง TAL น้อย ต้องใช้ขนาดสูงขึ้น","Spot UNa < 50–70 ที่ 2 ชม. = ตอบสนองไม่พอ ให้ double dose ทันที"]},
+  stepup:{name:"Step-up ตาม ESC", p:P({gfr:35,home:80,dose:80,rx:["step"]}),
+    rows:[["เริ่ม","IV 80 mg UNa 2 ชม. ต่ำ"],["Step-up","double dose จนถึงสูงสุดราว 400 mg/วันแบบ bolus"],["ต่อ","ถ้ายังไม่พอเพิ่ม acetazolamide หรือ thiazide (sequential nephron blockade)"]],
+    take:["Natriuretic response-guided therapy ปรับยาเร็วกว่าการรอดูน้ำหนักวันรุ่งขึ้น","Double dose ก่อน แล้วจึงเพิ่มยากลุ่มอื่นที่ segment อื่น","ติดตาม K, Mg, Na และ Cr ทุกวันระหว่าง sequential blockade"]},
+  brake:{name:"Braking + distal hypertrophy", p:P({gfr:40,home:120,dose:160,rx:[]}),
+    rows:[["ผู้ป่วย","ได้ loop ขนาดสูงมานาน"],["ผล","วันแรกตอบสนอง แต่วันที่ 2–3 natriuresis ลดลง (braking)"],["กลไก","DCT hypertrophy และ post-diuretic Na retention"]],
+    take:["Braking phenomenon: natriuresis ต่อ dose ลดลงตามเวลา จาก volume ที่ลดและ distal tubule hypertrophy","Thiazide บล็อก DCT ที่โตขึ้น แก้ braking ได้แต่เสี่ยง hypoK และ hypoNa","จำกัด Na intake ระหว่างให้ยา ไม่ให้ post-diuretic retention ลบผลที่ได้"]},
+  acz:{name:"Loop + acetazolamide", p:P({gfr:45,home:80,dose:160,rx:["acz"]}),
+    rows:[["เพิ่ม","acetazolamide 500 mg IV วันละครั้ง 3 วัน"],["กลไก","ลด Na reabsorption ที่ proximal ส่ง Na ไป TAL มากขึ้น"],["ผล","natriuresis และ decongestion สำเร็จเร็วขึ้น"]],
+    take:["Acetazolamide ร่วมกับ loop เพิ่ม natriuresis และอัตรา decongestion สำเร็จ แต่ยังไม่ลด mortality","เหมาะเมื่อ HCO3 สูงจาก loop (contraction alkalosis)","ไม่ใช้เมื่อ eGFR ต่ำมากหรือ metabolic acidosis"]},
+  ckd4:{name:"CKD G4 ดื้อยา", p:P({gfr:14,home:200,dose:200,xs:12,rx:["step","thz"]}),
+    rows:[["ผู้ป่วย","eGFR 14 น้ำเกิน 12 L"],["ให้","loop ขนาดสูง + thiazide + step-up"],["ผล","natriuresis ยังไม่พอ น้ำเกินลดช้า"]],
+    take:["Refractory congestion หลัง loop ขนาดสูง + sequential blockade ให้พิจารณา UF หรือ KRT","UF ไม่ดีกว่า step-up diuretic ใน ADHF ทั่วไป ใช้เมื่อดื้อยาจริง","ระวัง hypotension และ GFR ลดเมื่อดึงน้ำเร็วกว่า plasma refill"]},
+  lowco:{name:"Low output (CI 1.6)", p:P({gfr:40,home:80,dose:160,ci:1.6,rx:["step"]}),
+    rows:[["ผู้ป่วย","LVEF 15% มือเท้าเย็น lactate สูง CI 1.6"],["ผล","renal perfusion ต่ำ diuretic ตอบสนองน้อยแม้ขนาดสูง"],["แก้","ต้องเพิ่ม cardiac output (inotrope/MCS) ไม่ใช่เพิ่ม diuretic อย่างเดียว"]],
+    take:["Cardiorenal ส่วนใหญ่เป็น congestion แต่ถ้ามี hypoperfusion ต้องแก้ cardiac output ก่อน","ดู cold/wet profile: cold ต้อง inotrope หรือ vasodilator ร่วม","Cr ที่ขึ้นใน low output บอก hypoperfusion ไม่ใช่ over-diuresis"]}
+};
+var ORDER=["good","under","stepup","brake","acz","ckd4","lowco"];
+var box=document.getElementById("ctls"), C={};
+function sl(k,o){ o.id="s"+k; o.onInput=function(){ update(true); }; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("gfr",{label:"eGFR ตั้งต้น",min:10,max:90,step:1,value:50,unit:" mL/min"});
+sl("home",{label:"Oral furosemide เดิม",min:0,max:240,step:20,value:40,unit:" mg/d"});
+sl("dose",{label:"IV furosemide/dose",min:20,max:400,step:20,value:80,unit:" mg"});
+sl("freq",{label:"จำนวนครั้ง/วัน",min:1,max:3,step:1,value:2,unit:" x"});
+sl("xs",{label:"น้ำเกิน (ECF)",min:2,max:14,step:0.5,value:8,unit:" L",fmt:function(v){ return v.toFixed(1); }});
+sl("ci",{label:"Cardiac index",min:1.4,max:3.2,step:0.1,value:2.4,unit:"",fmt:function(v){ return v.toFixed(1); }});
+var T={}, tb=document.getElementById("tools");
+Object.keys(RX).forEach(function(k){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:RX[k].name}); b.addEventListener("click",function(){ b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); tb.appendChild(b); T[k]=b; });
+function on(k){ return T[k].getAttribute("aria-pressed")==="true"; }
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?270:290,aria:"Excess extracellular fluid and hourly urine output over seventy-two hours",
+  x:{min:0,max:72,step:12,label:"Hours"},y:{min:0,max:12,label:"Excess ECF (L)"},y2:{min:0,max:600,step:100,label:"Urine output (mL/h)"},
+  series:[{id:"uo",name:"Urine output",color:A.teal,data:[],width:1,step:true,fill:true,axis:"y2"},{id:"xs",name:"Excess ECF",color:A.accent,data:[],width:2.8}],
+  hlines:[{y:0,label:"Euvolemia",color:A.muted,dash:[3,3]}],legend:true});
+var live=Live.player(chart,{mount:"live"}), LAST=null;
+var PROF=[0.30,0.25,0.18,0.12,0.09,0.06];
+function model(){
+  var gfr0=C.gfr.get(), home=C.home.get(), dose0=C.dose.get(), fq=C.freq.get(), xs0=C.xs.get(), ci=C.ci.get();
+  var step=on("step"), acz=on("acz"), thz=on("thz"), sg=on("sglt"), uf=on("uf");
+  var cr0=0.9*Math.pow(100/gfr0,0.9), k=4.2, xs=xs0, cr=cr0, dose=dose0, addAcz=acz, addThz=thz;
+  var interval=Math.round(24/fq), naUrine=new Array(80).fill(0), uoH=new Array(80).fill(0), una2=null, uo6=null, ev=[], doses=[];
+  var XS=[], UO=[], CR=[], cumNa=0, na24=null, gfrNow=gfr0, maxDaily=400;
+  function cvp(x){ return Math.min(26,6+1.5*Math.max(0,x)); }
+  function gfrAt(x){ var cong=1-0.022*Math.max(0,cvp(x)-8), perf=Math.min(1,Math.pow(ci/2.2,1.6)), over=x<0?Math.max(0.6,1+0.09*x):1; return gfr0*cong*perf*over/(1-0.022*Math.max(0,cvp(xs0)-8)); }
+  var dayDose=0, lastDay=0, poorStreak=0;
+  for(var h=0;h<=72;h++){
+    gfrNow=gfrAt(xs);
+    var day=Math.floor(h/24); if(day!==lastDay){ dayDose=0; lastDay=day; }
+    /* step-up evaluation 2 h after each dose */
+    if(step&&doses.length&&h===doses[doses.length-1].t+2&&h<70){
+      var last=doses[doses.length-1];
+      if(last.una<70){
+        if(dose*2<=maxDaily/1&&dose<400){ dose=Math.min(400,dose*2); ev.push({t:h,kind:"rx",text:"Step-up: UNa "+last.una.toFixed(0)+" < 70 ให้ double dose "+dose+" mg ทันที"}); doses.push(give(h,dose,true)); }
+        else if(!addAcz&&gfr0>=20){ addAcz=true; ev.push({t:h,kind:"rx",text:"Step-up: loop ถึงขนาดสูงแล้ว เพิ่ม acetazolamide"}); }
+        else if(!addThz){ addThz=true; ev.push({t:h,kind:"rx",text:"Step-up: เพิ่ม thiazide (sequential nephron blockade)"}); }
+        else { poorStreak++; if(poorStreak===1) ev.push({t:h,kind:"warn",text:"ยังตอบสนองไม่พอหลัง sequential blockade พิจารณา UF/KRT"}); }
+      }
+    }
+    if(h<72&&h%interval===0){ doses.push(give(h,dose,false)); }
+    var naOut=naUrine[h]+ (uf?150/1000*140:0), uoThis=uoH[h]+30+(uf?0:0);
+    var naIn=87/24;
+    xs+= (naIn-naOut)/140 - (uf?0.15:0)*0 ; /* UF Na already counted */
+    cumNa+=naIn-naOut; if(h===23) na24=cumNa;
+    /* potassium */
+    k-= (uoH[h]/1000)*(0.045+(addThz?0.04:0)+(addAcz?0.03:0));
+    /* creatinine lag 24 h */
+    var tgt=cr0*gfr0/gfrNow; cr+= (tgt-cr)/24;
+    XS.push([h,xs]); UO.push([h,uoThis]); CR.push([h,cr]);
+  }
+  function give(t,d,extra){
+    var gNow=gfrAt(xs), dayIx=Math.floor(t/24);
+    var eff=d*Math.pow(gNow/100,0.75)*Math.min(1,Math.pow(ci/2.2,1.2));
+    var thr=22*(1+home/80);
+    var r=1/(1+Math.pow(thr/Math.max(1,eff),2.4));
+    var brake=Math.max(0.45,1-0.18*dayIx*(addThz?0.25:1)-(extra?0.1:0));
+    var mult=(addAcz?1.3:1)*(addThz?1.35:1)*(sg?1.08:1);
+    var filt6=gNow*0.36*140; /* mmol per 6 h */
+    var nat=filt6*Math.min(0.16,0.075*Math.sqrt(60/Math.max(10,gNow)))*r*brake*mult;
+    var una=Math.min(150,35+85*r*brake*(addThz?1.1:1)*(addAcz?1.05:1));
+    var vol=nat/una*1000; /* mL */
+    for(var i=0;i<6&&t+i<80;i++){ naUrine[t+i]+=nat*PROF[i]; uoH[t+i]+=vol*PROF[i]; }
+    if(una2===null) una2=una;
+    if(uo6===null) uo6=vol/6+30;
+    ev.push({t:t,kind:"rx",text:"Furosemide IV "+d+" mg"+(addAcz?" + acetazolamide":"")+(addThz?" + thiazide":"")});
+    ev.push({t:t+2,kind:una<50?"warn":una<70?"warn":"ok",text:"Spot UNa 2 ชม. = "+una.toFixed(0)+" mmol/L "+(una<50?"ไม่พอ":una<70?"ก้ำกึ่ง":"เพียงพอ")+" (คาด natriuresis "+nat.toFixed(0)+" mmol)"});
+    return {t:t,dose:d,una:una,nat:nat};
+  }
+  if(uf) ev.push({t:0,kind:"rx",text:"เริ่ม ultrafiltration 150 mL/h"});
+  var x0=Live.cross(XS,0,-1); if(x0!==null) ev.push({t:x0,kind:"ok",text:"ถึง euvolemia"});
+  return {XS:XS,UO:UO,CR:CR,ev:ev,una2:una2,uo6:uo6,na24:na24,cr0:cr0,k:k,xs0:xs0,gfr0:gfr0,ci:ci,dose:dose,addAcz:addAcz,addThz:addThz,poor:poorStreak,uf:uf,step:step};
+}
+function onFrame(t,done){
+  var M=LAST, i=Math.min(72,Math.round(t));
+  Sim.ro("roUNa",t>=2?M.una2.toFixed(0):"…",t>=2?(M.una2<70?"flag":"ok"):null);
+  Sim.ro("roUO",t>=6?M.uo6.toFixed(0):"…",t>=6?(M.uo6<100?"flag":M.uo6>=150?"ok":null):null);
+  Sim.ro("roNa",t>=24?M.na24.toFixed(0):"…",t>=24?(M.na24>-150?"flag":"ok"):null);
+  var lost=M.xs0-M.XS[i][1]; Sim.ro("roWt",lost.toFixed(1),done?(lost<M.xs0*0.35?"flag":lost>=M.xs0*0.5?"ok":null):null);
+  Sim.ro("roCr",M.cr0.toFixed(1)+" → "+M.CR[i][1].toFixed(1),M.CR[i][1]/M.cr0>1.3?"flag":null);
+  Sim.ro("roK",done?M.k.toFixed(1):"…",done?(M.k<3.5?"flag":"ok"):null);
+  var a=document.getElementById("act");
+  if(done){ a.innerHTML=M.act; a.className=M.actCls; } else { a.innerHTML="<b>กำลังจำลอง</b> ชั่วโมงที่ "+t.toFixed(0)+" น้ำเกิน "+M.XS[i][1].toFixed(1)+" L urine "+M.UO[i][1].toFixed(0)+" mL/h"; a.className="act"; }
+}
+function update(deb){
+  var M=model();
+  var ymax=Math.max(4,Math.ceil(M.xs0+1)), ymin=Math.min(0,Math.floor(Math.min.apply(null,M.XS.map(function(p){ return p[1]; }))));
+  chart.update({y:{min:ymin,max:ymax,label:"Excess ECF (L)"}});
+  chart.setSeries("xs",M.XS); chart.setSeries("uo",M.UO);
+  var lost=M.xs0-M.XS[72][1], crR=M.CR[72][1]/M.cr0, m, bad=true;
+  if(M.ci<1.9) m="<b>Low output</b> diuretic ตอบสนองน้อยจาก hypoperfusion เพิ่ม cardiac output (inotrope, ปรึกษา advanced HF/MCS) แล้วจึงประเมิน diuretic ใหม่";
+  else if(M.una2<70&&!M.step) m="<b>Natriuretic response ไม่พอ</b> spot UNa "+M.una2.toFixed(0)+" ที่ 2 ชม. ให้ double dose ทันที (สูงสุดราว 400–600 mg/วัน) ถ้ายังไม่พอเพิ่ม acetazolamide หรือ thiazide";
+  else if(M.step&&lost<M.xs0*0.35) m="<b>Refractory congestion</b> หลัง loop ขนาดสูง + sequential blockade พิจารณา ultrafiltration หรือ KRT ประเมิน cardiac output และ adherence ต่อ Na restriction";
+  else if(M.XS[72][1]<-0.5) m="<b>Over-diuresis</b> ECF ต่ำกว่า euvolemia Cr ขึ้นจาก volume depletion ลดหรือหยุด diuretic ชั่วคราว";
+  else if(M.k<3.5) m="<b>Decongest ได้แต่ K ต่ำ</b> เสริม KCl และ Mg พิจารณา MRA ติดตาม electrolyte ทุกวัน";
+  else if(M.una2>=70&&lost<M.xs0*0.5&&!M.addThz) m="<b>Braking</b> วันแรกตอบสนองดีแต่ natriuresis ลดลงในวันต่อมา เพิ่ม thiazide หรือ acetazolamide (sequential nephron blockade) ตรวจ Na intake และติดตาม K, Na";
+  else if(lost>=M.xs0*0.5){ bad=false; m="<b>Decongest ตามเป้า</b> ให้ต่อจนหายบวม แล้วเปลี่ยนเป็น oral loop ขนาดที่เหมาะ เริ่มหรือปรับ GDMT (SGLT2i, MRA, ARNI, β-blocker) ก่อนจำหน่าย"+(crR>1.1?" Cr ขึ้นเล็กน้อยยอมรับได้ถ้า congestion ดีขึ้น":""); }
+  else { bad=false; m="<b>ตอบสนองบางส่วน</b> ปรับ dose ตาม UNa และ UO ทุก 6–12 ชม. จำกัด Na intake ประเมินน้ำหนักทุกวัน"; }
+  M.act="<b>Next step:</b> "+m; M.actCls="act"+(bad?" bad":"");
+  LAST=M;
+  live.load({tMax:72,unit:"ชม.",ms:9000,debounce:deb===true,num:function(x){ return x.toFixed(0); },events:M.ev.sort(function(a,b){ return a.t-b.t; }),onFrame:onFrame,
+    cursorLabel:function(t){ return "Excess "+Live.valueAt(M.XS,t).toFixed(1)+" L"; }});
+}
+Sim.mount({code:"AKI-04", title:"Cardiorenal Syndrome and Diuretic Resistance", lead:"ตั้ง eGFR, ขนาด loop diuretic เดิม, น้ำเกินและ cardiac index แล้วจำลอง 72 ชั่วโมงของการ decongest ดู spot urine Na, urine output, braking และผลของ step-up กับ sequential nephron blockade",
+  scenarios:S, order:ORDER, captureMs:1000,
+  onChange:function(k,s){ ["gfr","home","dose","freq","xs","ci"].forEach(function(x){ C[x].set(s.p[x]); }); Object.keys(T).forEach(function(x){ T[x].setAttribute("aria-pressed",s.p.rx.indexOf(x)>=0?"true":"false"); }); update(); },
+  refs:["Mullens W, Damman K, Harjola VP, et al. The use of diuretics in heart failure with congestion: a position statement from the Heart Failure Association of the ESC. Eur J Heart Fail 2019, 21(2): 137-155",
+        "McDonagh TA, Metra M, Adamo M, et al. 2021 ESC Guidelines for the diagnosis and treatment of acute and chronic heart failure. Eur Heart J 2021, 42(36): 3599-3726",
+        "Felker GM, Lee KL, Bull DA, et al (DOSE). Diuretic strategies in patients with acute decompensated heart failure. N Engl J Med 2011, 364(9): 797-805",
+        "Mullens W, Dauw J, Martens P, et al (ADVOR). Acetazolamide in acute decompensated heart failure with volume overload. N Engl J Med 2022, 387(13): 1185-1195",
+        "Trullàs JC, Morales-Rull JL, Casado J, et al (CLOROTIC). Combining loop with thiazide diuretics for decompensated heart failure. Eur Heart J 2023, 44(5): 411-421",
+        "Bart BA, Goldsmith SR, Lee KL, et al (CARRESS-HF). Ultrafiltration in decompensated heart failure with cardiorenal syndrome. N Engl J Med 2012, 367(24): 2296-2304",
+        "Ter Maaten JM, Beldhuis IE, van der Meer P, et al (PUSH-AHF). Natriuresis-guided diuretic therapy in acute heart failure. Nat Med 2023, 29(10): 2625-2632",
+        "Ellison DH, Felker GM. Diuretic treatment in heart failure. N Engl J Med 2017, 377(20): 1964-1975"],
+  note:"Model เพื่อการสอน: dose-response ของ furosemide เป็น sigmoid (Hill 2.4) ของขนาดที่ถึง lumen (ขนาด x (GFR/100)^0.75 x perfusion) threshold เพิ่มตามขนาด oral เดิม (tolerance) natriuresis ต่อ dose สูงสุดราว 7.5% ของ Na ที่กรองใน 6 ชม. กระจายตาม profile 6 ชม. braking ลด 18% ต่อวัน (thiazide ลดผลนี้) Na intake 2 g/วัน น้ำเกินคิดจาก Na balance/140 CVP และ GFR ปรับตามน้ำเกิน Cr ตาม GFR ด้วย lag 24 ชม."
+});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[GN-10] ANCA Vasculitis and Anti-GBM: Biopsy, Risk and Treatment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.15fr 1fr}}
+.gl{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px}
+.bc{display:flex;gap:6px;margin-top:10px}
+.bc div{flex:1;text-align:center;padding:7px 2px;border-radius:9px;background:var(--canvas);font:500 12.5px var(--body);color:var(--muted)}
+.bc div.on{background:var(--ink);color:#fff}
+.sel{display:grid;grid-template-columns:minmax(90px,120px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px;margin:6px 0}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.plex{margin-top:10px;padding:10px 14px;border-radius:12px;font-size:14px;border:1px solid var(--line)}
+.plex.yes{background:#F9EAEA;border-color:#E9B9BC}
+.plex b,.act b{font-weight:600}
+.act{margin-top:10px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .act,body.present .tools{display:none}
+body.present .card{padding:14px 18px}
+body.present .ctls{grid-template-columns:1fr 1fr;column-gap:22px}
+body.present .gl{grid-template-columns:repeat(12,minmax(0,1fr))}
+body.present #risk{max-height:220px;width:auto!important;margin:0 auto}
+body.present .sel{margin:2px 0}
+body.present .plex{margin-top:6px;padding:6px 12px;font-size:13px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Biopsy, Berden class และความเสี่ยง</h2>
+      <div class="gl" id="gl"></div>
+      <div class="bc" id="bc"></div>
+      <div class="svgwrap" style="margin-top:12px"><svg id="risk" viewBox="0 0 640 250" role="img" aria-label="Risk estimates"></svg></div>
+      <p class="hint no-present">Glomeruli 12 อันสะท้อนสัดส่วน normal, cellular crescent, fibrous crescent และ global sclerosis แถบความเสี่ยงคำนวณจาก ANCA renal risk score (AAV) หรือข้อมูล cohort ของ anti-GBM ตาม Cr และ dialysis ส่วน relapse และ infection เป็นการประเมินเชิงคุณภาพ</p>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วยและการรักษา</h2>
+      <div class="sel"><label for="sSero">Serology</label><select id="sSero">
+        <option value="mpo">MPO-ANCA</option><option value="pr3">PR3-ANCA</option><option value="gbm">Anti-GBM</option><option value="dp">Double positive (ANCA + anti-GBM)</option><option value="neg">ANCA-negative pauci-immune</option></select></div>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools"></div>
+      <div class="sel"><label for="sInd">Induction</label><select id="sInd">
+        <option value="rtx">Rituximab</option><option value="cyc">Cyclophosphamide</option><option value="rtxcyc">Rituximab + low-dose CYC</option></select></div>
+      <div class="sel"><label for="sGc">Glucocorticoid</label><select id="sGc">
+        <option value="red">Reduced-dose taper</option><option value="std">Standard-dose taper</option><option value="ava">Avacopan + minimal GC</option></select></div>
+      <div class="tools" id="tx"></div>
+      <div class="plex" id="plex"></div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/patho.js"></script>
+<script>
+(function(){
+"use strict";
+/* Berden class: sclerotic >= 50% globally sclerosed, focal >= 50% normal, crescentic >= 50% cellular crescents, otherwise mixed.
+   ANCA renal risk score (Brix 2018): normal glomeruli > 25% 0, 10-25% 4, < 10% 6, IFTA > 25% 2, eGFR <= 15 3. Low 0, medium 2-7, high 8-11.
+   3-year ESKD in the derivation cohort: low 0%, medium 26%, high 68%.
+   Anti-GBM 1-year kidney survival (Levy 2001): Cr < 5.7 mg/dL 95%, Cr >= 5.7 not on dialysis 82%, dialysis-dependent 8% (near 0 with 100% crescents).
+   Dialysis independence at 12 months for AAV on dialysis: logistic teaching estimate from normal glomeruli, IFTA and cellular crescents.
+   Relapse and infection are qualitative scores. */
+var S0 = {
+  mpo:{name:"MPO-AAV RPGN", p:{sero:"mpo", egfr:20, normal:30, cell:45, scl:10, ifta:20, age:66, dial:false, dah:false, ind:"rtx", gc:"red", plex:false, maint:true},
+    rows:[["Clinical","หญิง 66 ปี Cr 1.0 เป็น 3.0 ใน 3 สัปดาห์ hematuria RBC cast"],["Serology","MPO-ANCA บวก anti-GBM ลบ complement ปกติ"],["Biopsy","Pauci-immune necrotizing crescentic GN cellular crescent 45%"],["Berden","Mixed"]],
+    take:["RPGN + ANCA บวกเริ่ม induction ได้ทันที biopsy ช่วยบอก prognosis","Rituximab และ cyclophosphamide ได้ผล induction ใกล้เคียงกัน","Glucocorticoid แบบลดขนาดได้ผลไม่ด้อยกว่าและติดเชื้อน้อยกว่า"]},
+  dah:{name:"PR3 + DAH", p:{sero:"pr3", egfr:35, normal:45, cell:35, scl:5, ifta:10, age:45, dial:false, dah:true, ind:"rtx", gc:"red", plex:true, maint:true},
+    rows:[["Clinical","ชาย 45 ปี sinusitis ไอเป็นเลือด SpO2 88% Cr 2.0"],["Serology","PR3-ANCA บวก"],["Imaging","CT: ground-glass ทั้งสองข้าง Hb ลด"],["Plan","Rituximab หรือ CYC + GC พิจารณา PLEX เมื่อ DAH มี hypoxemia"]],
+    take:["DAH ร่วม hypoxemia เป็นข้อบ่งชี้ที่ควรพิจารณา plasma exchange","PR3-AAV relapse บ่อยกว่า MPO ต้อง maintenance ยาว","ตรวจ anti-GBM ในทุกรายที่มี DAH"]},
+  scl:{name:"MPO dialysis, sclerotic", p:{sero:"mpo", egfr:6, normal:5, cell:10, scl:60, ifta:55, age:78, dial:true, dah:false, ind:"rtx", gc:"red", plex:false, maint:true},
+    rows:[["Clinical","ชาย 78 ปี เบื่ออาหาร 3 เดือน Cr 7.8 ต้องฟอกเลือด"],["Biopsy","Global sclerosis 60%, normal 5%, IFTA 55%"],["Berden","Sclerotic"],["Risk","ANCA renal risk score สูง"]],
+    take:["Sclerotic class และ normal glomeruli น้อยทำนายว่าไตฟื้นน้อย","ผู้สูงอายุบน dialysis เสี่ยงติดเชื้อรุนแรงจาก immunosuppression","ถ้ามีอาการนอกไตยังต้องรักษา vasculitis แม้ไตไม่ฟื้น"]},
+  gbm:{name:"Anti-GBM ยังไม่ฟอก", p:{sero:"gbm", egfr:16, normal:20, cell:70, scl:0, ifta:10, age:28, dial:false, dah:false, ind:"cyc", gc:"std", plex:true, maint:false},
+    rows:[["Clinical","ชาย 28 ปี สูบบุหรี่ Cr 4.0 ใน 2 สัปดาห์"],["Serology","Anti-GBM สูง ANCA ลบ"],["Biopsy","Linear IgG crescent 70% ระยะเดียวกัน"],["Plan","PLEX ทุกวัน + GC + cyclophosphamide"]],
+    take:["Anti-GBM ที่ยังไม่ต้องฟอกตอบสนองดีถ้ารักษาเร็ว","PLEX + CYC + GC เป็นการรักษามาตรฐาน","Anti-GBM ไม่ค่อย relapse ไม่ต้อง maintenance ยาว"]},
+  gbmd:{name:"Anti-GBM dialysis 100%", p:{sero:"gbm", egfr:5, normal:0, cell:90, scl:10, ifta:20, age:60, dial:true, dah:false, ind:"cyc", gc:"std", plex:false, maint:false},
+    rows:[["Clinical","หญิง 60 ปี ต้องฟอกตั้งแต่แรก ไม่มี DAH"],["Biopsy","Crescent 100% ไม่มี normal glomeruli"],["Prognosis","โอกาสไตฟื้นแทบไม่มี"],["Plan","ไม่ต้อง PLEX/IS เพื่อไต ถ้าไม่มี DAH (ตัดสินใจร่วมผู้ป่วย)"]],
+    take:["Dialysis-dependent + crescent 100% และไม่มี DAH ไตแทบไม่ฟื้น","อาจไม่ให้ immunosuppression เพื่อเลี่ยงพิษยา","ปลูกถ่ายไตเมื่อ anti-GBM ลบอย่างน้อย 6 เดือน"]},
+  dp:{name:"Double positive", p:{sero:"dp", egfr:10, normal:15, cell:60, scl:10, ifta:20, age:72, dial:false, dah:false, ind:"cyc", gc:"std", plex:true, maint:true},
+    rows:[["Clinical","หญิง 72 ปี RPGN Cr 5.2"],["Serology","MPO-ANCA และ anti-GBM บวก"],["Biopsy","Linear IgG + crescent หลายระยะ"],["Plan","รักษาแบบ anti-GBM แล้ว maintenance แบบ AAV"]],
+    take:["Double positive ระยะแรกรักษาแบบ anti-GBM (PLEX + CYC + GC)","Relapse ได้เหมือน AAV จึงต้อง maintenance","อายุมากกว่า anti-GBM เดี่ยว"]},
+  focal:{name:"Focal MPO, eGFR ดี", p:{sero:"mpo", egfr:52, normal:70, cell:15, scl:5, ifta:5, age:55, dial:false, dah:false, ind:"rtx", gc:"ava", plex:false, maint:true},
+    rows:[["Clinical","หญิง 55 ปี hematuria proteinuria 1 g Cr 1.2"],["Biopsy","Normal glomeruli 70% necrosis บางส่วน"],["Berden","Focal"],["Plan","Rituximab + avacopan หรือ reduced GC"]],
+    take:["Focal class มี prognosis ดีที่สุด","Avacopan ลดการใช้ glucocorticoid และช่วย eGFR ฟื้น","Maintenance rituximab ลด relapse"]}
+};
+
+/* ---------- controls ---------- */
+var box = document.getElementById("ctls"), C = {};
+function add(k, o){ o.onInput = update; C[k] = Sim.slider(o); box.appendChild(C[k].el); }
+add("egfr", {id:"sG", label:"eGFR", min:4, max:100, step:1, value:20, unit:""});
+add("normal", {id:"sN", label:"Normal glomeruli", min:0, max:100, step:5, value:30, unit:"%"});
+add("cell", {id:"sC", label:"Cellular crescent", min:0, max:100, step:5, value:40, unit:"%"});
+add("scl", {id:"sS", label:"Global sclerosis", min:0, max:100, step:5, value:10, unit:"%"});
+add("ifta", {id:"sI", label:"IFTA", min:0, max:80, step:5, value:20, unit:"%"});
+add("age", {id:"sA", label:"Age", min:18, max:90, step:1, value:65, unit:"y"});
+var F = {dial:false, dah:false, plex:false, maint:true}, TG = {};
+[["dial","Dialysis ตอนวินิจฉัย"],["dah","DAH + hypoxemia"]].forEach(function(x){ TG[x[0]] = Sim.toggle(x[1], function(on){ F[x[0]] = on; update(); }, false); document.getElementById("tools").appendChild(TG[x[0]]); });
+[["plex","Plasma exchange"],["maint","Maintenance rituximab"]].forEach(function(x){ TG[x[0]] = Sim.toggle(x[1], function(on){ F[x[0]] = on; update(); }, F[x[0]]); document.getElementById("tx").appendChild(TG[x[0]]); });
+var sSero = document.getElementById("sSero"), sInd = document.getElementById("sInd"), sGc = document.getElementById("sGc");
+[sSero, sInd, sGc].forEach(function(s){ s.addEventListener("change", update); });
+function P(){ var p = {sero:sSero.value, ind:sInd.value, gc:sGc.value}; Object.keys(C).forEach(function(k){ p[k] = C[k].get(); }); Object.keys(F).forEach(function(k){ p[k] = F[k]; }); return p; }
+
+var gl = document.getElementById("gl"), GL = [];
+for(var i = 0; i < 12; i++){ var d = Sim.h("div"); gl.appendChild(d); GL.push(Patho.glom(d, {seed:40 + i})); }
+function comp(p){ var n = p.normal, c = Math.min(p.cell, 100 - n), s = Math.min(p.scl, 100 - n - c), f = Math.max(0, 100 - n - c - s); return {n:n, c:c, s:s, f:f}; }
+function berden(cp){ return cp.s >= 50 ? "Sclerotic" : cp.n >= 50 ? "Focal" : cp.c >= 50 ? "Crescentic" : "Mixed"; }
+function arrs(p, cp){ var s = (cp.n > 25 ? 0 : cp.n >= 10 ? 4 : 6) + (p.ifta > 25 ? 2 : 0) + (p.egfr <= 15 ? 3 : 0); return {s:s, cat:s <= 1 ? "Low" : s <= 7 ? "Medium" : "High", eskd:s <= 1 ? 0 : s <= 7 ? 26 : 68}; }
+function cr(p){ return Math.min(12, 0.8 * Math.pow(Math.max(4, p.egfr) / (142 * Math.pow(0.9938, p.age)), -1 / 1.2)); } // approximate inverse CKD-EPI 2021 (sex-averaged)
+var risk = document.getElementById("risk");
+function bar(y, label, v, txt, col){
+  var FT = "IBM Plex Sans Thai, sans-serif", x0 = 230, w = 330;
+  Sim.svg("text", {x:x0 - 12, y:y + 15, "text-anchor":"end", "font-family":FT, "font-size":13, fill:"#0B0B1F", text:label}, risk);
+  Sim.svg("rect", {x:x0, y:y + 2, width:w, height:18, rx:6, fill:"#F4F5F9"}, risk);
+  Sim.svg("rect", {x:x0, y:y + 2, width:Math.max(3, w * v / 100), height:18, rx:6, fill:col}, risk);
+  Sim.svg("text", {x:x0 + w + 8, y:y + 15, "font-family":"Geist Mono, monospace", "font-size":12, fill:"#5E6075", text:txt}, risk);
+}
+function update(){
+  var p = P(), cp = comp(p), b = berden(cp), aa = arrs(p, cp), gbm = p.sero === "gbm" || p.sero === "dp", crv = cr(p);
+  // glomeruli
+  var counts = [Math.round(cp.n / 100 * 12), Math.round(cp.c / 100 * 12), Math.round(cp.f / 100 * 12)];
+  for(var i = 0; i < 12; i++){
+    var o = {hyper:0.1, endocap:0, neutrophils:0, mesExpand:0, nodules:0, thick:0, wireloop:0, crescent:"none", crescentFrac:0, sclerosis:0, collapse:false, thrombi:0, necrosis:0, lobular:false, spikes:false, doubleContour:false, label:null};
+    if(i < counts[0]){}
+    else if(i < counts[0] + counts[1]){ o.crescent = "cellular"; o.crescentFrac = 0.5; o.necrosis = 0.4; }
+    else if(i < counts[0] + counts[1] + counts[2]){ o.crescent = "fibrous"; o.crescentFrac = 0.45; }
+    else { o.sclerosis = 1; o.label = "GS"; }
+    GL[i].update(o);
+  }
+  var bc = document.getElementById("bc"); bc.innerHTML = "";
+  ["Focal","Crescentic","Mixed","Sclerotic"].forEach(function(n){ bc.appendChild(Sim.h("div", {class:n === b ? "on" : "", text:n})); });
+  // risk bars
+  risk.innerHTML = "";
+  var FT = "IBM Plex Sans Thai, sans-serif";
+  var indep, eskdTxt;
+  if(gbm){
+    var surv = p.dial ? (cp.c + cp.f >= 85 ? 3 : 8) : crv >= 5.7 ? 82 : 95;
+    indep = surv; eskdTxt = surv + "%";
+    Sim.svg("text", {x:16, y:22, "font-family":FT, "font-size":12, fill:"#5E6075", text:"Anti-GBM cohort: Cr about " + crv.toFixed(1) + " mg/dL" + (p.dial ? ", dialysis-dependent" : "")}, risk);
+    bar(36, "Kidney survival 1 yr", surv, surv + "%", surv > 60 ? "#1F7A72" : "#B4232A");
+  } else {
+    Sim.svg("text", {x:16, y:22, "font-family":FT, "font-size":12, fill:"#5E6075", text:"ANCA renal risk score " + aa.s + " (" + aa.cat + "): normal glomeruli, IFTA, eGFR"}, risk);
+    bar(36, "ESKD at 3 years", aa.eskd, aa.eskd + "%", aa.eskd > 40 ? "#B4232A" : aa.eskd > 10 ? "#D9731A" : "#1F7A72");
+    if(p.dial){ var lg = 0.4 + 0.06 * (cp.n - 15) - 0.04 * (p.ifta - 25) + 0.015 * cp.c - 0.02 * cp.s; indep = Math.round(100 / (1 + Math.exp(-lg))); bar(66, "Off dialysis at 12 mo", indep, indep + "%", indep > 50 ? "#1F7A72" : "#B4232A"); }
+  }
+  var rel = gbm && p.sero === "gbm" ? 5 : (p.sero === "pr3" ? 55 : p.sero === "dp" ? 35 : 30) * (p.maint ? 0.45 : 1) * (p.ind === "cyc" && !p.maint ? 1.1 : 1);
+  bar(p.dial && !gbm ? 106 : 76, "Relapse risk (qualitative)", Math.min(100, rel), rel < 15 ? "low" : rel < 30 ? "moderate" : "high", "#5B4BFF");
+  var inf = 15 + (p.age > 65 ? 15 : 0) + (p.dial ? 15 : 0) + (p.gc === "std" ? 20 : p.gc === "red" ? 8 : 3) + (p.ind === "cyc" ? 8 : 4) + (p.plex ? 6 : 0) + (p.ind === "rtxcyc" ? 6 : 0);
+  bar(p.dial && !gbm ? 146 : 116, "Serious infection risk", Math.min(100, inf), inf < 40 ? "lower" : inf < 60 ? "moderate" : "high", "#A8842C");
+  Sim.svg("text", {x:16, y:238, "font-family":FT, "font-size":10.5, fill:"#9A9CB2", text:"Relapse and infection bars are qualitative teaching scores, not validated probabilities."}, risk);
+  // PLEX decision
+  var why = [];
+  if(gbm){ if(!(p.dial && cp.c + cp.f >= 85 && !p.dah)) why.push(p.sero === "dp" ? "double positive" : "anti-GBM disease"); }
+  else { if(p.dah) why.push("DAH ร่วม hypoxemia"); if(crv > 3.4 || p.dial) why.push("Cr > 3.4 mg/dL หรือต้อง dialysis หรือ Cr ขึ้นเร็ว"); }
+  var pl = document.getElementById("plex");
+  pl.className = "plex" + (why.length ? " yes" : "");
+  pl.innerHTML = "<b>Plasma exchange:</b> " + (why.length ? (gbm ? "ให้ทันที (" + why.join(", ") + ")" : "พิจารณาได้ (" + why.join(", ") + ") ผลต่อ death/ESKD โดยรวมไม่ชัด อาจลด ESKD ระยะสั้นในกลุ่มเสี่ยงสูง ชั่งกับ infection") : (gbm ? "ไม่แนะนำเพื่อไตเมื่อ dialysis-dependent + crescent ≈ 100% และไม่มี DAH" : "ไม่มีข้อบ่งชี้ชัดเจน")) + (p.plex && !why.length ? " <span style='color:#B4232A'>ตอนนี้เปิด PLEX อยู่โดยไม่มีข้อบ่งชี้</span>" : "") + (!p.plex && why.length && gbm ? " <span style='color:#B4232A'>ยังไม่ได้เปิด PLEX</span>" : "");
+  // next step
+  var n;
+  if(p.sero === "gbm") n = (p.dial && cp.c + cp.f >= 85 && !p.dah) ? "คุยกับผู้ป่วยเรื่องโอกาสฟื้นที่ต่ำมาก อาจไม่ให้ immunosuppression ถ้าไม่มี DAH ให้ dialysis และวางแผนปลูกถ่ายไตเมื่อ anti-GBM ลบ ≥ 6 เดือน" : "PLEX ทุกวันจน anti-GBM ลบ ร่วม GC ขนาดสูงและ cyclophosphamide (rituximab ถ้า CYC ใช้ไม่ได้) ไม่ต้อง maintenance ยาว ให้เลิกบุหรี่";
+  else if(p.sero === "dp") n = "รักษาแบบ anti-GBM (PLEX + GC + CYC) ช่วงแรก แล้วให้ maintenance แบบ AAV (rituximab) เพราะ relapse ได้";
+  else {
+    n = "Induction ด้วย " + (p.ind === "cyc" ? "cyclophosphamide" : p.ind === "rtx" ? "rituximab" : "rituximab + low-dose CYC") + " ร่วม " + (p.gc === "ava" ? "avacopan" : p.gc === "red" ? "GC แบบลดขนาด" : "GC") + " แล้ว maintenance ด้วย rituximab 18–48 เดือน (PR3 นานกว่า) ให้ PJP prophylaxis";
+    if(p.gc === "std") n += " พิจารณา GC แบบลดขนาดหรือ avacopan เพื่อลดการติดเชื้อ";
+    if(b === "Sclerotic" && p.dial) n += " Sclerotic + dialysis ไตฟื้นน้อย ชั่งความเสี่ยงติดเชื้อ ถ้าไม่มีอาการนอกไตอาจลดความเข้มของ IS";
+    if(p.egfr <= 15 && p.ind === "rtx") n += " eGFR ต่ำมาก บางทีมใช้ rituximab ร่วม low-dose CYC";
+  }
+  document.getElementById("act").innerHTML = "<b>Next step:</b> " + n;
+}
+Sim.mount({code:"GN-10", title:"ANCA Vasculitis and Anti-GBM: Biopsy, Risk and Treatment",
+  lead:"ปรับ serology, eGFR, dialysis, DAH และสัดส่วน glomeruli ใน biopsy ดู Berden class, ANCA renal risk score หรือ prognosis ของ anti-GBM แล้วตัดสินใจเรื่อง induction, glucocorticoid และ plasma exchange",
+  scenarios:S0, order:["mpo","dah","scl","gbm","gbmd","dp","focal"], captureMs:1000,
+  onChange:function(k, s){ var q = s.p; sSero.value = q.sero; sInd.value = q.ind; sGc.value = q.gc; ["egfr","normal","cell","scl","ifta","age"].forEach(function(n){ C[n].set(q[n]); });
+    ["dial","dah","plex","maint"].forEach(function(n){ F[n] = !!q[n]; TG[n].setState(F[n]); }); update(); },
+  refs:["KDIGO 2024 Clinical Practice Guideline for the Management of ANCA-Associated Vasculitis. Kidney Int 2024, 105(3S): S71-S116",
+        "Berden AE, Ferrario F, Hagen EC, et al. Histopathologic classification of ANCA-associated glomerulonephritis. J Am Soc Nephrol 2010, 21(10): 1628-1636",
+        "Brix SR, Noriega M, Tennstedt P, et al. Development and validation of a renal risk score in ANCA-associated glomerulonephritis. Kidney Int 2018, 94(6): 1177-1188",
+        "Walsh M, Merkel PA, Peh CA, et al. Plasma exchange and glucocorticoids in severe ANCA-associated vasculitis (PEXIVAS). N Engl J Med 2020, 382(7): 622-631",
+        "Jayne DRW, Merkel PA, Schall TJ, Bekker P. Avacopan for the treatment of ANCA-associated vasculitis (ADVOCATE). N Engl J Med 2021, 384(7): 599-609",
+        "Stone JH, Merkel PA, Spiera R, et al. Rituximab versus cyclophosphamide for ANCA-associated vasculitis (RAVE). N Engl J Med 2010, 363(3): 221-232",
+        "Guillevin L, Pagnoux C, Karras A, et al. Rituximab versus azathioprine for maintenance in ANCA-associated vasculitis (MAINRITSAN). N Engl J Med 2014, 371(19): 1771-1780",
+        "Levy JB, Turner AN, Rees AJ, Pusey CD. Long-term outcome of anti-glomerular basement membrane antibody disease treated with plasma exchange and immunosuppression. Ann Intern Med 2001, 134(11): 1033-1042",
+        "McAdoo SP, Tanna A, Hrušková Z, et al. Patients double-seropositive for ANCA and anti-GBM antibodies have varied renal survival, frequency of relapse, and outcomes compared to single-seropositive patients. Kidney Int 2017, 92(3): 693-702"],
+  note:"Cr แสดงเป็นค่าประมาณจาก eGFR โอกาสหลุด dialysis ใน AAV เป็นโมเดลสอนจาก normal glomeruli, IFTA และ crescent ไม่ใช่สมการที่ validate แล้ว ส่วน ESKD 3 ปีและ anti-GBM kidney survival มาจาก cohort อ้างอิงตามกลุ่ม"
+});
+})();
+</script>
+</body>
+</html>

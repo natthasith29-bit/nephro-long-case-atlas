@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[KT-03] Alloimmune Response and Immunosuppressant Targets</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.45fr 1fr}}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.sub{font-size:12.5px;color:var(--muted);margin:14px 0 4px}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.tox{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-top:12px}
+.tox div{border:1px solid var(--line);border-radius:10px;padding:6px 8px;font-size:12px;color:var(--muted)}
+.tox div b{display:block;font:500 14px var(--mono);color:var(--ink)}
+.tox div.hi b{color:var(--red)}
+@media (max-width:560px){.tox{grid-template-columns:repeat(3,minmax(0,1fr))}}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .act{display:none}
+body.present .card{padding:14px 18px}
+body.present .ctls{gap:4px}
+body.present .ctl{font-size:14px}
+body.present .tools{margin-top:4px;gap:5px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .sub{margin:6px 0 2px}
+body.present .ro{padding:6px 12px}
+body.present .ro b{font-size:19px}
+body.present .tox{margin-top:6px}
+body.present .svgwrap svg{max-height:440px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Three-signal model และจุดออกฤทธิ์ของยา</h2>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 700 470" role="img" aria-label="T cell three signal activation, B cell and antibody pathway with immunosuppressant blockade"></svg></div>
+      <p class="hint no-present">ความหนาและความเร็วของจุดที่วิ่งตามเส้นคือ flux ของแต่ละขั้น ✕ แดงคือจุดที่ยาที่เปิดอยู่ออกฤทธิ์ ตัวเลขในกล่องเป็น % เทียบกับไม่ได้ยา แตะชื่อยาด้านขวาเพื่อเปิดหรือปิด</p>
+    </div>
+    <div class="card">
+      <h2>Regimen</h2>
+      <div class="sub">Induction</div>
+      <div class="tools" id="tInd"></div>
+      <div class="sub">Maintenance</div>
+      <div class="tools" id="tMain"></div>
+      <div class="sub">Antibody-directed</div>
+      <div class="tools" id="tAb"></div>
+      <div class="ctls" id="ctls" style="margin-top:12px"></div>
+      <div class="readout">
+        <div class="ro" id="roS1"><b>-</b><span>Signal 1 (TCR)</span></div>
+        <div class="ro" id="roIL2"><b>-</b><span>IL-2 output</span></div>
+        <div class="ro" id="roPro"><b>-</b><span>T-cell proliferation</span></div>
+        <div class="ro" id="roDSA"><b>-</b><span>DSA production</span></div>
+        <div class="ro" id="roTC"><b>-</b><span>TCMR risk</span></div>
+        <div class="ro" id="roAB"><b>-</b><span>ABMR risk</span></div>
+      </div>
+      <div class="tox" id="tox"></div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script>
+(function(){
+"use strict";
+var DRUG = {
+  atg:{n:"ATG", g:"tInd"}, bas:{n:"Basiliximab", g:"tInd"},
+  tac:{n:"Tacrolimus", g:"tMain"}, bela:{n:"Belatacept", g:"tMain"}, mtor:{n:"mTOR inhibitor", g:"tMain"}, mpa:{n:"Mycophenolate", g:"tMain"}, ster:{n:"Steroid", g:"tMain"},
+  rtx:{n:"Rituximab", g:"tAb"}, ivig:{n:"IVIG / PLEX", g:"tAb"}, btz:{n:"Bortezomib", g:"tAb"}, ecu:{n:"Eculizumab", g:"tAb"}
+};
+var S = {
+  none:{name:"ไม่ได้ immunosuppression", p:{rx:[], adh:100, mem:10},
+    rows:[["Setting","Allograft ที่ไม่ใช่ identical twin โดยไม่มียา"],["Signal 1–3","ทำงานเต็มที่"],["ผล","T cell proliferation และ DSA เต็มที่"],["Rejection","TCMR ภายในวันถึงสัปดาห์ ABMR ตามมา"]],
+    take:["Allorecognition ต้องอาศัย signal 1 (TCR), signal 2 (costimulation) และ signal 3 (cytokine)","Direct pathway เด่นช่วงแรก indirect pathway ขับ DSA และ chronic rejection","ทุก allograft ยกเว้น identical twin ต้องใช้ immunosuppression"]},
+  std:{name:"Basiliximab + triple", p:{rx:["bas","tac","mpa","ster"], adh:100, mem:10},
+    rows:[["Induction","Basiliximab (anti-CD25)"],["Maintenance","Tacrolimus + mycophenolate + prednisolone"],["จุดออกฤทธิ์","CD25, calcineurin, purine synthesis, cytokine transcription"],["ใช้กับ","Low immunologic risk"]],
+    take:["Triple therapy ยับยั้งหลายขั้นพร้อมกันจึงใช้ยาแต่ละตัวขนาดต่ำได้","Basiliximab ลด acute rejection โดยไม่ deplete T cell","CNI เป็นแกนหลักที่ทำให้ acute rejection ต่ำ"]},
+  atg:{name:"ATG + triple (high risk)", p:{rx:["atg","tac","mpa","ster"], adh:100, mem:45},
+    rows:[["Recipient","Sensitized มี DSA ระดับต่ำ"],["Induction","Rabbit ATG (T-cell depletion หลายเดือน)"],["Maintenance","Tacrolimus + MPA + steroid"],["Trade-off","Rejection ต่ำ แต่ CMV, BK, PTLD สูงขึ้น"]],
+    take:["ATG ทำลาย T cell จึงลด rejection ในผู้ป่วย high risk ได้มากกว่า basiliximab","T-cell depletion เพิ่มความเสี่ยง viral infection และ PTLD","Memory B cell และ plasma cell ไม่ถูก ATG ยับยั้งมาก"]},
+  bela:{name:"Belatacept (CNI-free)", p:{rx:["bas","bela","mpa","ster"], adh:100, mem:10},
+    rows:[["Regimen","Basiliximab + belatacept + MPA + steroid"],["จุดออกฤทธิ์","CTLA4-Ig จับ CD80/86 ปิด signal 2"],["ข้อดี","ไม่มี nephrotoxicity eGFR ระยะยาวดีกว่า และ de novo DSA น้อยกว่า"],["ข้อจำกัด","Early TCMR มากกว่า ห้ามใช้ใน EBV seronegative"]],
+    take:["Belatacept ปิด costimulation (signal 2) แทนการใช้ CNI","Acute rejection ช่วงแรกสูงกว่า แต่ไตทำงานระยะยาวดีกว่า","EBV-seronegative เสี่ยง PTLD ในระบบประสาทสูง จึงห้ามใช้"]},
+  mtor:{name:"mTORi แทน CNI", p:{rx:["bas","mtor","mpa","ster"], adh:100, mem:10},
+    rows:[["Regimen","Everolimus หรือ sirolimus + MPA + steroid"],["จุดออกฤทธิ์","mTOR (signal 3 ปลายน้ำของ IL-2R)"],["ข้อดี","ไม่มี CNI nephrotoxicity ลด skin cancer และ CMV"],["ข้อเสีย","Rejection มากขึ้น proteinuria, แผลหายช้า, lymphocele, mouth ulcer"]],
+    take:["mTOR inhibitor ยับยั้ง signal 3 จึงแรงน้อยกว่า CNI เมื่อใช้แทนทั้งหมด","ใช้ร่วม CNI ขนาดต่ำได้ผลใกล้เคียงกันและลด CMV","เหมาะเมื่อมี skin SCC หลายตำแหน่งหรือ Kaposi sarcoma"]},
+  nonadh:{name:"Non-adherence", p:{rx:["tac","mpa","ster"], adh:35, mem:10},
+    rows:[["Recipient","อายุ 19 ปี tacrolimus trough แกว่ง 2–9 ng/mL"],["ผล","Calcineurin หลุดการยับยั้งเป็นช่วง"],["ตามมา","De novo DSA ต่อ DQ และ chronic active ABMR"],["Clue","Tac intrapatient variability สูง"]],
+    take:["Non-adherence เป็นสาเหตุหลักของ de novo DSA และ graft loss ระยะยาว","Tacrolimus variability สูงบ่งชี้ปัญหา adherence","CNI ที่ไม่พอทำให้ indirect pathway กระตุ้น B cell ได้"]},
+  abmr:{name:"Rescue ABMR", p:{rx:["tac","mpa","ster","ivig","rtx","btz"], adh:100, mem:70},
+    rows:[["Recipient","Active ABMR มี DSA สูง"],["Plan","PLEX + IVIG + optimize tacrolimus และ steroid"],["Adjunct","Rituximab (B cell), bortezomib (plasma cell), eculizumab (C5)"],["ข้อจำกัด","Long-lived plasma cell ไม่มี CD20 จึงดื้อ rituximab"]],
+    take:["ABMR ต้องลด antibody ที่มีอยู่ (PLEX, IVIG) และลดการสร้างใหม่","Rituximab ไม่ได้ทำลาย plasma cell ที่สร้าง DSA อยู่แล้ว","Complement inhibitor ลด injury แต่ไม่ลด DSA"]}
+};
+var ORDER = ["none","std","atg","bela","mtor","nonadh","abmr"];
+var T = {};
+Object.keys(DRUG).forEach(function(k){ var d = DRUG[k]; T[k] = Sim.toggle(d.n, update, false); document.getElementById(d.g).appendChild(T[k]); });
+function on(k){ return T[k].getAttribute("aria-pressed") === "true"; }
+var box = document.getElementById("ctls"), C = {};
+C.adh = Sim.slider({id:"sAdh", label:"Adherence ต่อยาหลัก", min:10, max:100, step:5, value:100, unit:"%", onInput:update}); box.appendChild(C.adh.el);
+C.mem = Sim.slider({id:"sMem", label:"Memory B / plasma cell", min:0, max:100, step:5, value:10, unit:"%", onInput:update}); box.appendChild(C.mem.el);
+
+/* ---------- model ---------- */
+function model(){
+  var a = C.adh.get() / 100, mem = C.mem.get() / 100, o = {};
+  Object.keys(DRUG).forEach(function(k){ o[k] = on(k); });
+  var cover = function(x){ return x ? a : 0; };
+  var tcells = o.atg ? 0.18 : 1;
+  var s1 = tcells;
+  var s2 = 1 - 0.72 * cover(o.bela);
+  var cn = 1 - 0.85 * cover(o.tac);
+  var il2 = s1 * (0.35 + 0.65 * s2) * cn * (o.ster ? 1 - 0.3 * a : 1);
+  var il2r = il2 * (o.bas ? 0.25 : 1);
+  var mt = 1 - 0.6 * cover(o.mtor);
+  var cyc = 1 - 0.5 * cover(o.mpa);
+  var pro = il2r * mt * cyc;
+  var tfh = Math.pow(pro, 0.7) * (o.bela ? 0.75 : 1);
+  var bcell = (o.rtx ? 0.15 : 1) * (0.25 + 0.75 * tfh) * (o.mpa ? 1 - 0.35 * a : 1);
+  var plasma = Math.min(1, bcell * 0.75 + mem * 0.8) * (o.btz ? 0.5 : 1);
+  var dsa = plasma * (o.ivig ? 0.45 : 1);
+  var injury = dsa * (o.ecu ? 0.3 : 1);
+  var tcmr = Math.min(1, pro * 1.05), abmr = Math.min(1, injury * (0.55 + 0.45 * Math.max(mem, tfh)));
+  var inf = Math.min(10, (o.atg ? 3 : 0) + (o.bas ? 0.5 : 0) + (o.tac ? 1.5 * a : 0) + (o.bela ? 1.5 : 0) + (o.mtor ? 1 : 0) + (o.mpa ? 1.5 : 0) + (o.ster ? 1.2 : 0) + (o.rtx ? 1.5 : 0) + (o.btz ? 0.8 : 0) + (o.ecu ? 0.8 : 0));
+  var tox = {
+    infection:inf,
+    nephro:(o.tac ? 3 * a : 0),
+    metabolic:(o.tac ? 2 : 0) + (o.ster ? 3 : 0) + (o.mtor ? 2.5 : 0),
+    cytopenia:(o.mpa ? 2 : 0) + (o.atg ? 3 : 0) + (o.mtor ? 1 : 0) + (o.btz ? 1.5 : 0) + (o.rtx ? 1 : 0),
+    ptld:(o.atg ? 3 : 0) + (o.bela ? 3 : 0) + (o.tac ? 1 : 0) - (o.mtor ? 0.5 : 0)
+  };
+  return {o:o, a:a, mem:mem, s1:s1, s2:s2, cn:cn, il2:il2, il2r:il2r, pro:pro, tfh:tfh, bcell:bcell, plasma:plasma, dsa:dsa, injury:injury, tcmr:tcmr, abmr:abmr, tox:tox};
+}
+
+/* ---------- drawing ---------- */
+var svg = document.getElementById("vis"), FT = "IBM Plex Sans Thai, sans-serif", MO = "Geist Mono, monospace";
+function SV(t, a, p){ var o = {}; Object.keys(a).forEach(function(k){ if(a[k] !== null && a[k] !== undefined) o[k] = a[k]; }); return Sim.svg(t, o, p); }
+var N = {
+  apcD:{x:20, y:40, w:118, h:44, t:"Donor APC", s:"direct pathway"},
+  apcR:{x:20, y:110, w:118, h:44, t:"Recipient APC", s:"indirect pathway"},
+  s1:{x:190, y:40, w:116, h:44, t:"Signal 1", s:"TCR + MHC"},
+  s2:{x:190, y:110, w:116, h:44, t:"Signal 2", s:"CD28 + CD80/86"},
+  cn:{x:356, y:40, w:116, h:44, t:"Calcineurin", s:"NFAT"},
+  il2:{x:356, y:110, w:116, h:44, t:"IL-2", s:"transcription"},
+  il2r:{x:526, y:40, w:154, h:44, t:"Signal 3", s:"IL-2R (CD25)"},
+  mt:{x:526, y:110, w:154, h:44, t:"mTOR", s:"G1 to S"},
+  cyc:{x:526, y:180, w:154, h:44, t:"Proliferation", s:"purine synthesis"},
+  eff:{x:526, y:258, w:154, h:44, t:"Effector T cell", s:"CD8 CTL, Th1"},
+  tfh:{x:356, y:258, w:116, h:44, t:"Tfh help", s:"CD40L, IL-21"},
+  b:{x:190, y:258, w:116, h:44, t:"B cell", s:"CD20+"},
+  pc:{x:20, y:258, w:118, h:44, t:"Plasma cell", s:"CD20-, CD38+"},
+  dsa:{x:20, y:340, w:118, h:44, t:"DSA", s:"anti-HLA IgG"},
+  cmp:{x:190, y:340, w:116, h:44, t:"Complement", s:"C1q to C5b-9"},
+  abmr:{x:356, y:340, w:116, h:44, t:"ABMR", s:"endothelium, MVI"},
+  tcmr:{x:526, y:340, w:154, h:44, t:"TCMR", s:"tubulitis, arteritis"}
+};
+var E = [["apcD","s1","s1"],["apcR","s2","s2"],["apcR","s1","s1"],["s1","cn","s1"],["s2","il2","s2"],["cn","il2","cn"],["il2","il2r","il2"],["il2r","mt","il2r"],["mt","cyc","pro"],["cyc","eff","pro"],["eff","tcmr","tcmr"],["cyc","tfh","tfh"],["tfh","b","tfh"],["b","pc","bcell"],["pc","dsa","plasma"],["dsa","cmp","dsa"],["cmp","abmr","injury"]];
+var BLOCK = {atg:["s1","T-cell depletion"], bas:["il2r","anti-CD25"], tac:["cn","CNI"], bela:["s2","CTLA4-Ig"], mtor:["mt","mTORi"], mpa:["cyc","IMPDH"], ster:["il2","NF-kB, AP-1"], rtx:["b","anti-CD20"], btz:["pc","proteasome"], ivig:["dsa","remove, block"], ecu:["cmp","anti-C5"]};
+function ctr(n, side){ var b = N[n]; return side === "c" ? [b.x + b.w / 2, b.y + b.h / 2] : [b.x + b.w / 2, b.y + b.h / 2]; }
+function edgePts(e){ var a = N[e[0]], b = N[e[1]];
+  var ax = a.x + a.w / 2, ay = a.y + a.h / 2, bx = b.x + b.w / 2, by = b.y + b.h / 2;
+  function clip(cx, cy, box, tx, ty){ var dx = tx - cx, dy = ty - cy, sx = Math.abs(dx) > 0 ? (box.w / 2) / Math.abs(dx) : Infinity, sy = Math.abs(dy) > 0 ? (box.h / 2) / Math.abs(dy) : Infinity, s = Math.min(sx, sy); return [cx + dx * s, cy + dy * s]; }
+  var p1 = clip(ax, ay, a, bx, by), p2 = clip(bx, by, b, ax, ay); return [p1, p2]; }
+var FLOW = [], GDOT = null, M = null, raf = null, t0 = 0;
+function draw(m){
+  svg.innerHTML = "";
+  var defs = SV("defs", {}, svg), mk = SV("marker", {id:"ar", viewBox:"0 0 10 10", refX:9, refY:5, markerWidth:7, markerHeight:7, markerUnits:"userSpaceOnUse", orient:"auto-start-reverse"}, defs);
+  SV("path", {d:"M0,0 L10,5 L0,10 z", fill:"#9A9CB2"}, mk);
+  SV("rect", {x:176, y:20, width:512, height:220, rx:16, fill:"none", stroke:"#E6E7F0", "stroke-dasharray":"4 4"}, svg);
+  SV("text", {x:188, y:232, "font-family":MO, "font-size":10.5, fill:"#9A9CB2", text:"CD4/CD8 T cell"}, svg);
+  FLOW = [];
+  E.forEach(function(e){
+    var pts = edgePts(e), f = Math.max(0, Math.min(1, m[e[2]]));
+    SV("line", {x1:pts[0][0], y1:pts[0][1], x2:pts[1][0], y2:pts[1][1], stroke:f > 0.15 ? "#5B4BFF" : "#D3D5E2", "stroke-width":1 + 4 * f, "stroke-opacity":0.35 + 0.5 * f, "marker-end":"url(#ar)"}, svg);
+    FLOW.push({p:pts, f:f});
+  });
+  Object.keys(N).forEach(function(k){
+    var b = N[k], key = {s1:"s1", s2:"s2", cn:"cn", il2:"il2", il2r:"il2r", mt:"il2r", cyc:"pro", eff:"pro", tfh:"tfh", b:"bcell", pc:"plasma", dsa:"dsa", cmp:"injury", abmr:"abmr", tcmr:"tcmr"}[k];
+    var v = key ? m[key] : 1, isOut = k === "abmr" || k === "tcmr";
+    var hot = isOut && v > 0.35;
+    SV("rect", {x:b.x, y:b.y, width:b.w, height:b.h, rx:11, fill:hot ? "#F9EAEA" : "#FFFFFF", stroke:hot ? "#B4232A" : "#D3D5E2", "stroke-width":1.2}, svg);
+    SV("text", {x:b.x + 10, y:b.y + 18, "font-family":FT, "font-size":12.5, "font-weight":600, fill:"#0B0B1F", text:b.t}, svg);
+    SV("text", {x:b.x + 10, y:b.y + 34, "font-family":FT, "font-size":10.5, fill:"#5E6075", text:b.s}, svg);
+    if(key){ SV("text", {x:b.x + b.w - 8, y:b.y + 18, "text-anchor":"end", "font-family":MO, "font-size":11.5, "font-weight":600, fill:hot ? "#B4232A" : v < 0.3 ? "#1F7A72" : "#5E6075", text:Math.round(v * 100) + "%"}, svg); }
+  });
+  // drug blockade marks
+  var byNode = {};
+  Object.keys(BLOCK).forEach(function(d){ if(m.o[d]){ var nd = BLOCK[d][0]; (byNode[nd] = byNode[nd] || []).push(DRUG[d].n); } });
+  Object.keys(byNode).forEach(function(nd){
+    var b = N[nd], lab = byNode[nd].join(" + "), w = Math.max(64, lab.length * 6.3 + 26), x = Math.min(696 - w, b.x + b.w - 14), y = b.y - 12;
+    SV("rect", {x:x, y:y, width:w, height:18, rx:9, fill:"#B4232A"}, svg);
+    SV("text", {x:x + 9, y:y + 13, "font-family":FT, "font-size":10.5, fill:"#fff", text:"✕ " + lab}, svg);
+  });
+  GDOT = SV("g", {}, svg);
+  SV("text", {x:20, y:418, "font-family":FT, "font-size":11.5, fill:"#5E6075", text:"Numbers are % activity versus no immunosuppression (teaching model)."}, svg);
+  SV("text", {x:20, y:436, "font-family":FT, "font-size":11.5, fill:"#5E6075", text:"Memory B and long-lived plasma cells bypass T-cell blockade and keep making DSA."}, svg);
+}
+function animate(ts){
+  if(!GDOT) return;
+  if(!t0) t0 = ts; var t = (ts - t0) / 1000;
+  GDOT.innerHTML = "";
+  FLOW.forEach(function(fl, i){
+    if(fl.f < 0.04) return;
+    var n = 1 + Math.round(fl.f * 3), sp = 0.25 + fl.f * 0.6;
+    for(var j = 0; j < n; j++){
+      var u = Sim.reduce || Sim.capture ? (j + 0.5) / n : ((t * sp + j / n + i * 0.13) % 1);
+      var x = fl.p[0][0] + (fl.p[1][0] - fl.p[0][0]) * u, y = fl.p[0][1] + (fl.p[1][1] - fl.p[0][1]) * u;
+      SV("circle", {cx:x, cy:y, r:3.2, fill:"#5B4BFF"}, GDOT);
+    }
+  });
+  if(!(Sim.reduce || Sim.capture)) raf = requestAnimationFrame(animate);
+}
+function lvl(v){ return v < 0.15 ? "Low" : v < 0.4 ? "Moderate" : "High"; }
+function update(){
+  var m = model(); M = m;
+  draw(m);
+  if(raf) cancelAnimationFrame(raf); t0 = 0; raf = requestAnimationFrame(animate);
+  Sim.ro("roS1", Math.round(m.s1 * 100) + "%", m.s1 < 0.3 ? "ok" : null);
+  Sim.ro("roIL2", Math.round(m.il2 * 100) + "%", m.il2 < 0.25 ? "ok" : m.il2 > 0.6 ? "flag" : null);
+  Sim.ro("roPro", Math.round(m.pro * 100) + "%", m.pro < 0.15 ? "ok" : m.pro > 0.4 ? "flag" : null);
+  Sim.ro("roDSA", Math.round(m.dsa * 100) + "%", m.dsa < 0.2 ? "ok" : m.dsa > 0.45 ? "flag" : null);
+  Sim.ro("roTC", lvl(m.tcmr), m.tcmr >= 0.4 ? "flag" : m.tcmr < 0.15 ? "ok" : null);
+  Sim.ro("roAB", lvl(m.abmr), m.abmr >= 0.4 ? "flag" : m.abmr < 0.15 ? "ok" : null);
+  var tx = document.getElementById("tox"); tx.innerHTML = "";
+  [["Infection","infection",6],["Nephrotoxic","nephro",2],["Metabolic","metabolic",4],["Cytopenia","cytopenia",4],["PTLD","ptld",3]].forEach(function(r){
+    var v = m.tox[r[1]], l = v <= 0.2 ? "-" : v < r[2] * 0.6 ? "+" : v < r[2] ? "++" : "+++";
+    tx.appendChild(Sim.h("div", {class:v >= r[2] ? "hi" : ""}, [Sim.h("b", {text:l}), Sim.h("span", {text:r[0]})]));
+  });
+  var o = m.o, n = [];
+  if(!Object.keys(o).some(function(k){ return o[k]; })) n.push("ต้องเริ่ม induction และ maintenance immunosuppression ทุกราย");
+  else {
+    if(m.tcmr >= 0.4) n.push(m.a < 0.7 ? "ปัญหาหลักคือ adherence คุยหาสาเหตุ (ค่ายา, ผลข้างเคียง, วัยรุ่น) ใช้ยาวันละครั้งหรือ pill organizer ตรวจ tacrolimus variability และ DSA" : "Rejection risk สูง เพิ่มยาที่ออกฤทธิ์ต่าง signal หรือใช้ CNI เป็นแกน");
+    if(o.bela && m.tcmr >= 0.15) n.push("Belatacept มี early TCMR มากกว่า ตรวจ EBV serostatus ก่อน (ห้ามใช้ถ้า EBV ลบ)");
+    if(o.mtor && !o.tac) n.push("mTORi แทน CNI ทั้งหมดเพิ่ม rejection ระวัง proteinuria และแผลผ่าตัดช่วงแรก");
+    if(m.abmr >= 0.4 && !o.ivig) n.push("DSA ยังสูง ถ้ามี active ABMR ให้ PLEX + IVIG optimize tacrolimus และ steroid ก่อน adjunct");
+    if(m.mem >= 0.5 && o.rtx && m.dsa > 0.3) n.push("Plasma cell ที่สร้าง DSA ไม่มี CD20 rituximab อย่างเดียวจึงลด DSA ได้น้อย");
+    if(m.tox.infection >= 6) n.push("Immunosuppression รวมสูงมาก ให้ CMV, PJP prophylaxis และ BK screening ตามกำหนด");
+    if(!n.length) n.push("Regimen สมดุล ติดตาม trough, CBC, Cr, DSA และ BK ตามกำหนด");
+  }
+  document.getElementById("act").innerHTML = "<b>Next step:</b> " + n.join(" ");
+}
+Sim.mount({code:"KT-03", title:"Alloimmune Response and Immunosuppressant Targets",
+  lead:"เปิดยา induction, maintenance และยาที่มุ่ง antibody ดูว่าแต่ละตัวตัดวงจร three-signal และ B cell ที่จุดไหน flux ไปถึง TCMR และ ABMR เท่าไร และแลกกับพิษยาแบบใด",
+  scenarios:S, order:ORDER, captureMs:900,
+  onChange:function(k, s){ Object.keys(T).forEach(function(x){ T[x].setState(s.p.rx.indexOf(x) >= 0); }); C.adh.set(s.p.adh); C.mem.set(s.p.mem); update(); },
+  refs:["Halloran PF. Immunosuppressive drugs for kidney transplantation. N Engl J Med 2004, 351(26): 2715-2729",
+        "Wood KJ, Goto R. Mechanisms of rejection: current perspectives. Transplantation 2012, 93(1): 1-10",
+        "Ekberg H, Tedesco-Silva H, Demirbas A, et al. Reduced exposure to calcineurin inhibitors in renal transplantation (ELITE-Symphony). N Engl J Med 2007, 357(25): 2562-2575",
+        "Brennan DC, Daller JA, Lake KD, et al. Rabbit antithymocyte globulin versus basiliximab in renal transplantation. N Engl J Med 2006, 355(19): 1967-1977",
+        "Vincenti F, Rostaing L, Grinyo J, et al. Belatacept and long-term outcomes in kidney transplantation (BENEFIT). N Engl J Med 2016, 374(4): 333-343",
+        "Pascual J, Berger SP, Witzke O, et al. Everolimus with reduced calcineurin inhibitor exposure in renal transplantation (TRANSFORM). J Am Soc Nephrol 2018, 29(7): 1979-1991",
+        "Kidney Disease: Improving Global Outcomes (KDIGO) Transplant Work Group. KDIGO clinical practice guideline for the care of kidney transplant recipients. Am J Transplant 2009, 9(Suppl 3): S1-S155"],
+  note:"Model เพื่อการสอน: flux แต่ละขั้นคูณกัน (ATG เหลือ T cell 18%, belatacept ลด signal 2 72%, tacrolimus ลด calcineurin 85%, steroid ลด IL-2 30%, basiliximab ลด IL-2R 75%, mTORi ลด 60%, MPA ลด proliferation 50%) คูณ adherence สำหรับยาหลัก ส่วน DSA มาจาก B cell ที่ได้ Tfh help รวมกับ memory/plasma cell ที่ไม่ขึ้นกับ T cell คะแนนพิษยาเป็นเชิงคุณภาพ"
+});
+})();
+</script>
+</body>
+</html>

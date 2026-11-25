@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[MX-05] Drug Dosing in CKD, HD and CRRT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.25fr 1fr}}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:8px}
+.sub{font-size:12.5px;color:var(--muted);margin:12px 0 4px}
+.sel{display:flex;gap:10px;align-items:center;margin:4px 0 8px;font-size:14px;flex-wrap:wrap}
+.sel select{font:inherit;padding:6px 10px;border-radius:10px;border:1px solid var(--line-strong);background:#fff}
+.dinfo{font-size:13px;color:var(--muted);margin-top:10px;line-height:1.5}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .steps,body.present .dinfo{display:none}
+body.present .card{padding:12px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .ro{padding:5px 12px}
+body.present .ro b{font-size:17px}
+body.present .ctls{gap:0}
+body.present .ctl{font-size:12.5px}
+body.present .tog{padding:3px 8px;font-size:11.5px}
+body.present .tools{margin-top:3px;gap:4px}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+body.present .sub{margin:4px 0 1px}
+body.present .sel{margin:2px 0 4px;font-size:12.5px}
+body.present .sel select{padding:3px 8px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>ระดับยาในเลือด 7 วัน</h2>
+      <div id="chart"></div>
+      <p class="hint no-present">เส้นคือระดับยาในเลือด แถบสีคือช่วงเป้าหรือช่วงที่ปลอดภัยของยานั้น แถบเทาแนวตั้งคือช่วงฟอกเลือด (HD จันทร์ พุธ ศุกร์ ชั่วโมงที่ 20–24, 68–72, 116–120) ลองปิด loading dose หรือเปลี่ยน interval แล้วดูว่าระดับยาถึงเป้าเร็วแค่ไหน loading dose ขึ้นกับ Vd ส่วน maintenance dose ขึ้นกับ clearance</p>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วย การทำงานของไต และ regimen</h2>
+      <div class="sel"><label for="drug">ยา</label><select id="drug"></select><label for="mod">KRT</label><select id="mod"><option value="none">ไม่ได้ฟอก</option><option value="ihd">IHD 3 ครั้ง/สัปดาห์</option><option value="crrt">CRRT</option></select></div>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools"></div>
+      <div class="sel"><label for="iv">Interval</label><select id="iv"><option value="6">q6h</option><option value="8">q8h</option><option value="12">q12h</option><option value="24">q24h</option><option value="48">q48h</option><option value="hd">หลังฟอกทุกครั้ง</option></select></div>
+      <div class="readout">
+        <div class="ro" id="roCl"><b>-</b><span>CrCl (CG) mL/min</span></div>
+        <div class="ro" id="roT"><b>-</b><span>t½ นอกช่วงฟอก</span></div>
+        <div class="ro" id="roPk"><b>-</b><span>Peak วันที่ 7</span></div>
+        <div class="ro" id="roTr"><b>-</b><span>Trough วันที่ 7</span></div>
+        <div class="ro" id="roX"><b>-</b><span>-</span></div>
+        <div class="ro" id="roD"><b>-</b><span>ถึงเป้าครั้งแรก</span></div>
+      </div>
+      <div class="act" id="act"></div>
+      <div class="dinfo" id="dinfo"></div>
+      <div id="steps" class="no-present"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/calc.js"></script>
+<script src="../core/plot.js"></script>
+<script>
+(function(){
+"use strict";
+/* vd L/kg, cl(crcl,w) L/h, hd L/h added during IHD, sieve for CRRT, route iv (1-h infusion) or sc/po with ka and F, unit display factor */
+var D={
+  vanco:{n:"Vancomycin IV",vd:0.7,cl:function(c){ return (0.689*c+3.66)*0.06; },hd:6,sv:0.8,route:"iv",F:1,ka:0,unit:"mg/L",fac:1,lo:10,hi:20,band:"Trough 10–20",ax:60,dose:[250,3000,50],
+    info:"Vd 0.7 L/kg, ขับทางไตเกือบทั้งหมด (CL ≈ 0.689 x CrCl + 3.66 mL/min), MW 1,450 Da ผ่าน high-flux และ CRRT ได้ เป้า AUC24 400–600 mg h/L (MIC 1) ใน HD ใช้ pre-HD level 15–20"},
+  gent:{n:"Gentamicin IV",vd:0.3,cl:function(c){ return 0.06*c+0.1; },hd:3.5,sv:0.85,route:"iv",F:1,ka:0,unit:"mg/L",fac:1,lo:0,hi:1,band:"Trough < 1",ax:30,dose:[40,700,10],
+    info:"Vd 0.25–0.3 L/kg (เพิ่มใน sepsis, ascites), CL ≈ GFR, extended-interval 5–7 mg/kg ให้ peak สูงแล้วรอให้ trough < 1 mg/L ก่อนให้ครั้งต่อไป HD เอาออกราวครึ่งหนึ่งต่อครั้ง"},
+  gaba:{n:"Gabapentin oral",vd:0.8,cl:function(c){ return 0.06*c; },hd:6,sv:1,route:"po",F:0.6,ka:0.6,unit:"mg/L",fac:1,lo:2,hi:20,band:"2–20",ax:50,dose:[100,1200,100],
+    info:"ไม่จับโปรตีน ไม่ผ่านตับ ขับทางไตทั้งหมด t½ 5–7 ชม. เมื่อไตปกติ แต่ยาวถึง 50+ ชม. ใน ESKD สะสมจนง่วง สับสน myoclonus หกล้ม HD เอาออกได้ดี ให้หลังฟอก"},
+  enox:{n:"Enoxaparin SC",vd:0.07,cl:function(c){ return 0.77*(0.6+0.4*Math.min(c,120)/100); },hd:0,sv:0,route:"sc",F:1,ka:0.5,unit:"anti-Xa IU/mL",fac:0.1,lo:0.5,hi:1.0,band:"Peak 0.5–1.0",ax:2,dose:[20,150,10],
+    info:"Vd ใกล้ plasma volume ขับทางไตบางส่วน สะสมเมื่อ CrCl < 30 เพิ่ม bleeding ใช้ 1 mg/kg วันละครั้ง หรือเปลี่ยนเป็น unfractionated heparin ไม่ถูกเอาออกด้วย HD ตรวจ anti-Xa peak 4 ชม. หลังฉีด"}
+};
+function P(o){ var d={drug:"vanco",mod:"none",age:60,w:70,cr:0.9,eff:2,dose:1000,load:0,iv:"12",rx:[]}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  vNorm:{name:"Vancomycin ไตปกติ", p:P({}),
+    rows:[["ผู้ป่วย","70 kg อายุ 60 Cr 0.9 (CrCl ราว 86)"],["Regimen","1,000 mg q12h"],["ผล","AUC24 ราว 530 อยู่ในเป้า"]],
+    take:["Maintenance dose ปรับตาม clearance (ไต) ส่วนระดับคงที่ใช้เวลาราว 4–5 t½","Loading dose ขึ้นกับ Vd ไม่ขึ้นกับการทำงานของไต","ใช้ AUC-guided dosing แทนการไล่ trough สูงเพื่อลด nephrotoxicity"]},
+  vHD:{name:"Vancomycin ใน HD + loading", p:P({mod:"ihd",cr:8,dose:450,load:1750,iv:"hd",rx:["anuric"]}),
+    rows:[["ผู้ป่วย","HD anuric 70 kg"],["Regimen","loading 25 mg/kg (1,750 mg) แล้ว 450 mg หลังฟอกทุกครั้ง"],["ผล","ระดับถึงเป้าตั้งแต่วันแรก pre-HD level 15–20"]],
+    take:["ผู้ป่วยไตวายยังต้องได้ loading dose เต็ม เพราะ Vd ไม่ลด","High-flux HD เอา vancomycin ออกราว 30–40% ต่อครั้ง ให้ maintenance หลังฟอก","ติดตาม pre-HD level เพื่อปรับขนาด"]},
+  vNoLoad:{name:"HD ไม่ให้ loading", p:P({mod:"ihd",cr:8,dose:500,load:0,iv:"hd",rx:["anuric"]}),
+    rows:[["ผู้ป่วย","HD anuric"],["Regimen","500 mg หลังฟอกโดยไม่มี loading"],["ผล","ต่ำกว่าเป้าหลายวันในช่วงที่ติดเชื้อรุนแรงที่สุด"]],
+    take:["ลด dose ตามไตโดยไม่ให้ loading ทำให้ระดับยาต่ำนานในวันแรก ๆ","ความผิดพลาดที่พบบ่อยคือ 'ไตไม่ดีเลยให้น้อย' ตั้งแต่ dose แรก","Loading dose = Vd x target concentration"]},
+  gent:{name:"Gentamicin ใน AKI q24h", p:P({drug:"gent",cr:2.6,dose:490,iv:"24"}),
+    rows:[["ผู้ป่วย","70 kg Cr 2.6 (CrCl ราว 30)"],["Regimen","7 mg/kg q24h"],["ผล","trough > 1 สะสม เสี่ยงพิษต่อไตและหู"]],
+    take:["Aminoglycoside เป็น concentration-dependent killing ได้ประโยชน์จาก peak สูง","เมื่อ GFR ลด ให้คงขนาดต่อครั้งแต่ยืด interval ตามระดับยา","Trough สูงค้างสัมพันธ์กับ nephrotoxicity และ ototoxicity"]},
+  gaba:{name:"Gabapentin ใน CKD G5", p:P({drug:"gaba",cr:5,dose:300,iv:"8",age:70,w:60}),
+    rows:[["ผู้ป่วย","อายุ 70 60 kg Cr 5 (CrCl ราว 10)"],["Regimen","300 mg tid เท่าคนปกติ"],["ผล","ระดับขึ้นต่อเนื่องจนเกินช่วงปลอดภัย ง่วง สับสน"]],
+    take:["ยาที่ขับทางไตทั้งหมดและไม่จับโปรตีนสะสมมากใน CKD","Gabapentinoid เป็นสาเหตุที่พบบ่อยของ encephalopathy ใน CKD","CrCl < 15 จำกัดราว 100–300 mg/วัน ใน HD ให้หลังฟอก"]},
+  enox:{name:"Enoxaparin CrCl 20", p:P({drug:"enox",cr:3,dose:70,iv:"12",age:75}),
+    rows:[["ผู้ป่วย","อายุ 75 70 kg Cr 3 (CrCl ราว 20)"],["Regimen","1 mg/kg q12h"],["ผล","anti-Xa สะสมเกิน 1.0 เสี่ยงเลือดออก"]],
+    take:["LMWH สะสมเมื่อ CrCl < 30","ลดเป็น 1 mg/kg q24h หรือใช้ unfractionated heparin","ติดตาม anti-Xa peak 4 ชม. หลังฉีดเมื่อจำเป็นต้องใช้"]},
+  vCRRT:{name:"Vancomycin ใน CRRT", p:P({mod:"crrt",cr:6,eff:2,dose:1000,load:1750,iv:"12",rx:["anuric"]}),
+    rows:[["ผู้ป่วย","septic AKI anuric บน CVVHDF effluent 2 L/h"],["Regimen","loading 1,750 แล้ว 1,000 q12h"],["ผล","ระดับสูงเกิน เพราะ CRRT clearance ราว 1.6 L/h เท่านั้น"]],
+    take:["CRRT clearance ≈ effluent rate x sieving coefficient","Effluent 2 L/h เทียบได้กับ GFR ราว 25–30 mL/min","ขนาดยาใน CRRT ต้องตาม effluent จริงและ downtime ตรวจระดับยาเสมอ"]}
+};
+var ORDER=["vNorm","vHD","vNoLoad","gent","gaba","enox","vCRRT"];
+var ds=document.getElementById("drug"); Object.keys(D).forEach(function(k){ ds.appendChild(Sim.h("option",{value:k,text:D[k].n})); });
+var md=document.getElementById("mod"), iv=document.getElementById("iv");
+[ds,md,iv].forEach(function(e){ e.addEventListener("change",function(){ if(e===ds) setDoseRange(); update(); }); });
+var box=document.getElementById("ctls"), C={};
+function sl(k,o){ o.id="s"+k; o.onInput=function(){ update(); }; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("age",{label:"อายุ",min:20,max:95,step:1,value:60,unit:" ปี"});
+sl("w",{label:"น้ำหนัก",min:40,max:120,step:1,value:70,unit:" kg"});
+sl("cr",{label:"Serum Cr",min:0.5,max:10,step:0.1,value:0.9,unit:" mg/dL",fmt:function(v){ return v.toFixed(1); }});
+sl("eff",{label:"CRRT effluent",min:0.5,max:4,step:0.1,value:2,unit:" L/h",fmt:function(v){ return v.toFixed(1); }});
+sl("dose",{label:"Maintenance dose",min:250,max:3000,step:50,value:1000,unit:" mg"});
+sl("load",{label:"Loading dose (0 = ไม่ให้)",min:0,max:3000,step:50,value:0,unit:" mg"});
+function setDoseRange(){ var d=D[ds.value], r=d.dose; [C.dose,C.load].forEach(function(s,i){ s.input.min=i?0:r[0]; s.input.max=i?r[1]*1.5:r[1]; s.input.step=r[2]; }); }
+var T={}, tb=document.getElementById("tools");
+[["anuric","Anuric (renal CL = 0)"],["female","เพศหญิง"]].forEach(function(q){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:q[1]}); b.addEventListener("click",function(){ b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); tb.appendChild(b); T[q[0]]=b; });
+function on(k){ return T[k].getAttribute("aria-pressed")==="true"; }
+var A=Plot.colors;
+var HDW=[[20,24],[68,72],[116,120],[164,168]];
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?420:360,aria:"Drug concentration over seven days",
+  x:{min:0,max:168,step:24,label:"Hours"},y:{min:0,max:60,label:"Concentration"},
+  series:[{id:"c",name:"Concentration",color:A.accent,data:[],width:2.2}],legend:false});
+function simulate(d,o){
+  var V=d.vd*o.w, crcl=o.anuric?0:o.crcl, cl0=Math.max(0.02,d.cl(crcl)), clK=o.mod==="crrt"?o.eff*d.sv:0;
+  var dt=0.05, A=0, G=0, out=[], inf=0, infEnd=-1, times=[];
+  /* dose times */
+  if(o.iv==="hd"&&o.mod==="ihd"){ times=[0]; HDW.forEach(function(w){ if(w[1]<168) times.push(w[1]); }); }
+  else { var I=+o.iv||12; for(var t=0;t<168;t+=I) times.push(t); }
+  var di=0, peaks=[], troughs=[], firstHit=null, auc=0, aucLast=0, hdRem=[];
+  var hdStartA=null;
+  for(var i=0;i<=168/dt;i++){ var t=i*dt;
+    if(di<times.length&&t>=times[di]-1e-9){ var dose=(di===0&&o.load>0)?o.load:o.dose; if(d.route==="iv"){ inf=dose; infEnd=t+1; } else G+=dose*d.F; troughs.push([times[di],A/V*d.fac]); di++; }
+    var inHD=o.mod==="ihd"&&HDW.some(function(w){ return t>=w[0]&&t<w[1]; });
+    if(inHD&&hdStartA===null) hdStartA=A; if(!inHD&&hdStartA!==null){ hdRem.push(1-A/hdStartA); hdStartA=null; }
+    var cl=cl0+clK+(inHD?d.hd:0);
+    var inRate=(t<infEnd)?inf:0, abs=G*d.ka;
+    A+=(inRate+abs-cl*A/V)*dt; G-=abs*dt; if(A<0) A=0;
+    var c=A/V*d.fac; if(i%10===0) out.push([t,c]);
+    if(t>=144) aucLast+=c*dt;
+  }
+  var chk=o.mod==="ihd"?HDW.map(function(w){ return w[0]; }):troughs.map(function(q){ return q[0]; });
+  var lv=chk.map(function(tt){ var q=out.filter(function(p){ return Math.abs(p[0]-tt)<0.26; }); return [tt,q.length?q[0][1]:0]; });
+  for(var j=lv.length-1;j>=0;j--){ if(lv[j][1]>=o.lo) firstHit=lv[j][0]; else break; }
+  var last=out.filter(function(p){ return p[0]>=144; }), pk=Math.max.apply(null,last.map(function(p){ return p[1]; }));
+  var trs=troughs.filter(function(q){ return q[0]>=144; }), tr=trs.length?trs[trs.length-1][1]:Math.min.apply(null,last.map(function(p){ return p[1]; }));
+  if(o.mod==="ihd"){ var pre=out.filter(function(p){ return Math.abs(p[0]-116)<0.3; }); if(pre.length) tr=pre[0][1]; }
+  return {series:out,V:V,cl0:cl0,clK:clK,crcl:crcl,thalf:0.693*V/(cl0+clK),pk:pk,tr:tr,auc24:aucLast,first:firstHit,hdRem:hdRem.length?hdRem[0]:null};
+}
+function update(){
+  var d=D[ds.value], o={age:C.age.get(),w:C.w.get(),cr:C.cr.get(),eff:C.eff.get(),dose:C.dose.get(),load:C.load.get(),iv:iv.value,mod:md.value,anuric:on("anuric"),female:on("female")};
+  var cg=Calc.cockcroftGault({age:o.age,w:o.w,cr:o.cr,sex:o.female?"F":"M"}); o.crcl=cg.value;
+  if(o.iv==="hd"&&o.mod!=="ihd") o.iv="24";
+  C.eff.el.style.display=o.mod==="crrt"?"":"none";
+  o.lo=d===D.vanco&&o.mod==="ihd"?15:d.lo; var hiT=d===D.vanco&&o.mod==="ihd"?20:d.hi;
+  var R=simulate(d,o);
+  var ymax=Math.max(d.ax,Math.ceil(Math.max.apply(null,R.series.map(function(p){ return p[1]; }))*1.15/(d.ax/6))*(d.ax/6));
+  chart.update({y:{min:0,max:ymax,label:d.unit},
+    bands:[{y0:o.lo,y1:hiT,color:Plot.alpha(A.teal,0.12),label:d===D.vanco&&o.mod==="ihd"?"Pre-HD 15–20":d.band}],
+    xbands:o.mod==="ihd"?HDW.map(function(w){ return {x0:w[0],x1:w[1],label:"HD",color:"rgba(94,96,117,0.12)"}; }):[]});
+  chart.setSeries("c",R.series,{unit:d.unit});
+  Sim.ro("roCl",o.anuric?"0 (anuric)":cg.value.toFixed(0),cg.value<30||o.anuric?"flag":null);
+  Sim.ro("roT",R.thalf<48?R.thalf.toFixed(1)+" h":(R.thalf/24).toFixed(1)+" d",R.thalf>24?"flag":null);
+  var dp=d===D.enox?2:1;
+  Sim.ro("roPk",R.pk.toFixed(dp),R.pk>d.hi*(d===D.gent?25:1.0)&&d!==D.gent?"flag":null);
+  var trBad=d===D.gent?R.tr>1:R.tr>hiT||R.tr<o.lo;
+  document.getElementById("roTr").querySelector("span").textContent=o.mod==="ihd"?"Pre-HD level (พุธ)":"Trough วันที่ 7";
+  Sim.ro("roTr",R.tr.toFixed(dp),trBad?"flag":"ok");
+  var xl=document.getElementById("roX").querySelector("span");
+  if(d===D.vanco){ xl.textContent="AUC24 วันที่ 7 (mg h/L)"; Sim.ro("roX",R.auc24.toFixed(0),R.auc24<400||R.auc24>600?"flag":"ok"); }
+  else if(o.mod==="ihd"){ xl.textContent="เอาออกต่อ HD"; Sim.ro("roX",R.hdRem===null?"–":(R.hdRem*100).toFixed(0)+"%",null); }
+  else { xl.textContent="Vd (L)"; Sim.ro("roX",R.V.toFixed(0),null); }
+  var fh=R.first; Sim.ro("roD",d===D.gent?"–":fh===null?"ไม่ถึง":fh<1?"< 1 h":fh.toFixed(0)+" h",d!==D.gent&&(fh===null||fh>24)?"flag":null);
+  document.getElementById("dinfo").textContent=d.info;
+  Calc.renderSteps(document.getElementById("steps"),cg,{title:"Cockcroft-Gault"});
+  var m,bad=false, Vt=(d.lo+d.hi)/2;
+  if(d===D.vanco){
+    if(o.load===0&&(fh===null||fh>24)){ m="<b>ให้ loading dose</b> 20–35 mg/kg (Vd x เป้า) แม้ไตวาย เพื่อให้ถึงเป้าในวันแรก"; bad=true; }
+    else if(o.mod==="ihd"&&R.tr>20){ m="<b>Pre-HD level "+R.tr.toFixed(0)+" สูงกว่า 20</b> ลด maintenance หลังฟอก หรือข้ามหนึ่งครั้งแล้วตรวจ pre-HD level ซ้ำ"; bad=true; }
+    else if(o.mod==="ihd"&&R.tr<15){ m="<b>Pre-HD level "+R.tr.toFixed(0)+" ต่ำกว่า 15</b> เพิ่ม maintenance หลังฟอก (ราว 500–1,000 mg ตามระดับ)"; bad=true; }
+    else if(o.mod==="ihd") m="<b>Pre-HD level อยู่ในเป้า</b> ตรวจ pre-HD level เป็นระยะ ให้ยาหลังฟอกทุกครั้ง";
+    else if(R.auc24>600){ m="<b>AUC24 "+R.auc24.toFixed(0)+" สูงเกิน</b> ลดขนาดหรือยืด interval "+(o.mod==="crrt"?"(clearance ใน CRRT ≈ effluent x 0.8 = "+R.clK.toFixed(1)+" L/h)":"")+" ตรวจระดับยาซ้ำ"; bad=true; }
+    else if(R.auc24<400){ m="<b>AUC24 "+R.auc24.toFixed(0)+" ต่ำ</b> เพิ่มขนาดหรือให้ถี่ขึ้น"; bad=true; }
+    else m="<b>AUC24 อยู่ในเป้า</b> ตรวจระดับยา (2 จุดหรือ Bayesian) ภายใน 24–48 ชม. "+(o.mod==="ihd"?"และ pre-HD level ก่อนฟอกครั้งถัดไป":"");
+  } else if(d===D.gent){
+    if(R.tr>1){ m="<b>Trough "+R.tr.toFixed(1)+" mg/L</b> คงขนาดต่อครั้ง แต่ยืด interval (q36–48h ตาม nomogram หรือระดับยา) หรือเปลี่ยนเป็นยาที่ไม่เป็นพิษต่อไต"; bad=true; }
+    else m="<b>Trough < 1</b> interval เหมาะสม ตรวจระดับยาและ Cr ทุก 2–3 วัน ใช้ให้สั้นที่สุด";
+  } else if(d===D.gaba){
+    if(R.pk>20){ m="<b>Gabapentin สะสม</b> หยุดยาก่อน ถ้าอาการทางสมองรุนแรงพิจารณา HD แล้วเริ่มใหม่ 100–300 mg/วัน "+(o.mod==="ihd"?"หลังฟอก":""); bad=true; }
+    else m="<b>ระดับปลอดภัย</b> ใช้ขนาดต่ำสุดที่ได้ผล ปรับตาม CrCl (15–29: 200–700 mg/วัน, < 15: 100–300 mg/วัน)";
+  } else {
+    if(R.pk>1.0){ m="<b>Anti-Xa "+R.pk.toFixed(2)+" IU/mL</b> ลดเป็น 1 mg/kg q24h เมื่อ CrCl < 30 หรือเปลี่ยนเป็น UFH ใน HD"; bad=true; }
+    else if(R.pk<0.5){ m="<b>Anti-Xa ต่ำกว่าเป้า</b> ตรวจขนาดตามน้ำหนักจริง"; bad=true; }
+    else m="<b>Anti-Xa อยู่ในเป้า</b> ติดตาม CBC และอาการเลือดออก";
+  }
+  var a=document.getElementById("act"); a.innerHTML="<b>Next step:</b> "+m; a.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"MX-05", title:"Drug Dosing in CKD, HD and CRRT", lead:"เลือกยา ปรับ Cr, น้ำหนัก, การฟอกเลือด และ regimen แล้วดูระดับยา 7 วัน เห็นว่า loading dose ขึ้นกับ Vd, maintenance dose ขึ้นกับ clearance และการฟอกเอายาออกเท่าไร",
+  scenarios:S, order:ORDER, captureMs:700,
+  onChange:function(k,s){ var p=s.p; ds.value=p.drug; setDoseRange(); md.value=p.mod; iv.value=p.iv; ["age","w","cr","eff","dose","load"].forEach(function(x){ C[x].set(p[x]); }); Object.keys(T).forEach(function(x){ T[x].setAttribute("aria-pressed",p.rx.indexOf(x)>=0?"true":"false"); }); update(); },
+  refs:["Matzke GR, Aronoff GR, Atkinson AJ, et al. Drug dosing consideration in patients with acute and chronic kidney disease: a clinical update from KDIGO. Kidney Int 2011, 80(11): 1122-1137",
+        "Rybak MJ, Le J, Lodise TP, et al. Therapeutic monitoring of vancomycin for serious MRSA infections: a revised consensus guideline. Am J Health Syst Pharm 2020, 77(11): 835-864",
+        "Matzke GR, McGory RW, Halstenson CE, Keane WF. Pharmacokinetics of vancomycin in patients with various degrees of renal function. Antimicrob Agents Chemother 1984, 25(4): 433-437",
+        "Nicolau DP, Freeman CD, Belliveau PP, et al. Experience with a once-daily aminoglycoside program administered to 2,184 adult patients. Antimicrob Agents Chemother 1995, 39(3): 650-655",
+        "Zand L, McKian KP, Qian Q. Gabapentin toxicity in patients with chronic kidney disease: a preventable cause of morbidity. Am J Med 2010, 123(4): 367-373",
+        "Lim W, Dentali F, Eikelboom JW, Crowther MA. Meta-analysis: low-molecular-weight heparin and bleeding in patients with severe renal insufficiency. Ann Intern Med 2006, 144(9): 673-684",
+        "Hoff BM, Maker JH, Dager WE, Heintz BH. Antibiotic dosing for critically ill adult patients receiving intermittent hemodialysis, prolonged intermittent renal replacement therapy, and continuous renal replacement therapy: an update. Ann Pharmacother 2020, 54(1): 43-55"],
+  note:"Model เพื่อการสอน: one-compartment, IV infuse 1 ชม., SC/oral first-order absorption, ไม่มี post-HD rebound vancomycin CL = 0.689 x CrCl + 3.66 mL/min, HD เพิ่ม 6 L/h  gentamicin CL = 0.06 x CrCl + 0.1 L/h, HD 3.5 L/h  gabapentin F 0.6, CL = CrCl, HD 6 L/h  enoxaparin Vd 0.07 L/kg, CL 0.77 L/h x (0.6 + 0.4 x CrCl/100), ไม่ถูก dialyze  CRRT clearance = effluent x sieving ห้ามใช้ตัวเลขในหน้านี้สั่งยาจริง ใช้ระดับยาและแนวทางของโรงพยาบาล"
+});
+})();
+</script>
+</body>
+</html>

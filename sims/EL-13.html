@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[EL-13] Phosphate: TmP/GFR and FGF23</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(110px,140px) 1fr 96px}
+.sel{display:grid;grid-template-columns:minmax(110px,140px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.tools{margin-top:10px}
+.readout{grid-template-columns:repeat(3,1fr)}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,1fr)}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+body.present .bench{grid-template-columns:1.3fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:16px 20px}
+body.present .ro{padding:8px 12px}
+body.present .ctl{padding:2px 0}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+body.present #cell svg{max-height:180px;width:auto!important;margin:0 auto}
+body.present #cell .nc-bar{display:none}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Renal phosphate titration (TmP/GFR)</h2>
+      <div id="chart"></div>
+      <div id="cell" style="margin-top:10px"></div>
+      <p class="hint no-present">แกน y คือ phosphate ที่ขับต่อ GFR 1 dL (UP x SCr/UCr) ซึ่งเท่ากับ phosphate ที่ดูดซึมสุทธิจากลำไส้ต่อ GFR ใน steady state จุดที่เส้นตัดแกน x คือ TmP/GFR ถ้า TmP/GFR ต่ำ (FGF23, PTH, proximal tubule เสีย) serum P จะต่ำแม้กินมาก ถ้า GFR ต่ำ จุดผู้ป่วยขยับขึ้นตามเส้นจน P สูง</p>
+    </div>
+    <div class="card">
+      <h2>ภาวะและการรักษา</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roP"><b>-</b><span>Serum P (mg/dL)</span></div>
+        <div class="ro" id="roT"><b>-</b><span>TmP/GFR (mg/dL)</span></div>
+        <div class="ro" id="roF"><b>-</b><span>FEPO4 (%)</span></div>
+        <div class="ro" id="roG"><b>-</b><span>Intact FGF23 (pg/mL)</span></div>
+        <div class="ro" id="roH"><b>-</b><span>PTH (pg/mL)</span></div>
+        <div class="ro" id="roD"><b>-</b><span>1,25(OH)2D</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/nephron.js"></script>
+<script>
+(function(){
+"use strict";
+/* fgf intact FGF23 pg/mL, pth pg/mL, prox proximal tubule factor, gfr ml/min, intake mg/d, shift cellular uptake mg/d */
+var DX={
+  norm:{name:"ปกติ",fgf:40,pth:40,prox:1,gfr:100,intake:1200,shift:0},
+  xlh:{name:"XLH (PHEX)",fgf:180,pth:55,prox:1,gfr:100,intake:1200,shift:0},
+  tio:{name:"Tumor-induced osteomalacia",fgf:500,pth:60,prox:1,gfr:100,intake:1200,shift:0},
+  fcm:{name:"Ferric carboxymaltose",fgf:230,pth:90,prox:1,gfr:90,intake:1100,shift:0},
+  phpt:{name:"Primary hyperparathyroidism",fgf:60,pth:160,prox:1,gfr:90,intake:1200,shift:0},
+  fanc:{name:"Fanconi syndrome (tenofovir)",fgf:20,pth:50,prox:0.35,gfr:70,intake:1200,shift:0},
+  refeed:{name:"Refeeding syndrome",fgf:15,pth:40,prox:1,gfr:90,intake:600,shift:1100},
+  ckd:{name:"CKD G4-5",fgf:900,pth:250,prox:1,gfr:10,intake:1400,shift:0},
+  ftc:{name:"Familial tumoral calcinosis (GALNT3)",fgf:6,pth:25,prox:1,gfr:100,intake:1200,shift:0}
+};
+var RX={bur:{name:"Burosumab"},supp:{name:"Phosphate + calcitriol"},res:{name:"ตัดเนื้องอก/หยุดยา"},bind:{name:"Phosphate binder"}};
+function P(o){ var d={dx:"norm",rx:[],gfr:null,intake:null}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  norm:{name:"ปกติ", p:P({}),
+    rows:[["Serum P","3.5 mg/dL TmP/GFR 3.0"],["FEPO4","ราว 10–20%"],["หลัก","serum P = TmP/GFR + phosphate ที่ดูดซึมต่อ GFR"]],
+    take:["Proximal tubule NaPi-IIa/IIc กำหนด TmP/GFR และเป็นตัวกำหนดหลักของ serum P","FGF23 และ PTH ลด NaPi ที่ apical membrane","TmP/GFR ปกติผู้ใหญ่ราว 2.5–4.2 mg/dL (0.8–1.35 mmol/L)"]},
+  xlh:{name:"XLH", p:P({dx:"xlh"}),
+    rows:[["ผู้ป่วย","ขาโก่ง ตัวเตี้ย P 2.0 ALP สูง"],["กลไก","PHEX เสีย FGF23 สูง TmP/GFR ต่ำ"],["จุดสังเกต","1,25D ปกติหรือต่ำ ทั้งที่ P ต่ำ (inappropriate)"]],
+    take:["HypoP + FEPO4 ไม่ต่ำ = renal phosphate wasting","FGF23 สูงหรือปกติที่ไม่กดใน hypoP = FGF23-mediated","Burosumab แก้ที่สาเหตุ ส่วน phosphate + calcitriol ต้องให้หลายครั้งต่อวัน"]},
+  tio:{name:"TIO", p:P({dx:"tio"}),
+    rows:[["ผู้ป่วย","ผู้ใหญ่ ปวดกระดูก กล้ามเนื้ออ่อนแรง กระดูกหักง่าย P 1.4"],["กลไก","phosphaturic mesenchymal tumor หลั่ง FGF23"],["หา","Ga-68 DOTATATE PET/CT แล้วผ่าตัดออก"]],
+    take:["HypoP ที่เกิดในผู้ใหญ่ + FGF23 สูง ให้หา TIO","ตัดเนื้องอกออกได้หมด P กลับปกติในไม่กี่วัน","หาเนื้องอกไม่พบหรือผ่าไม่ได้ ใช้ burosumab"]},
+  fcm:{name:"FCM", p:P({dx:"fcm"}),
+    rows:[["ผู้ป่วย","IDA ได้ ferric carboxymaltose 2 สัปดาห์ก่อน P 1.7"],["กลไก","FCM ลดการสลาย intact FGF23 ทำให้ระดับสูงชั่วคราว"],["ผล","1,25D ต่ำ PTH สูง ถ้าซ้ำหลายรอบ osteomalacia"]],
+    take:["Ferric carboxymaltose ทำให้ hypoP ได้บ่อย มากกว่า iron preparation อื่น","ตรวจ P ก่อนให้ซ้ำ โดยเฉพาะ GFR ดี IBD หรือได้ซ้ำหลายรอบ","เปลี่ยนเป็น iron ตัวอื่นเมื่อเกิด hypoP"]},
+  fanc:{name:"Fanconi", p:P({dx:"fanc"}),
+    rows:[["ผู้ป่วย","HIV ได้ tenofovir DF P 2.2 glycosuria ปกติ glucose"],["กลไก","proximal tubule เสีย TmP/GFR ต่ำโดย FGF23 ไม่สูง"],["ร่วมด้วย","normoglycemic glycosuria, low-MW proteinuria, uricosuria, pRTA"]],
+    take:["HypoP + FGF23 ต่ำหรือปกติ + glycosuria = Fanconi","หยุดยาที่เป็นสาเหตุ (TDF, ifosfamide, aminoglycoside)","FGF23 ช่วยแยก FGF23-mediated กับ non-FGF23"]},
+  refeed:{name:"Refeeding", p:P({dx:"refeed"}),
+    rows:[["ผู้ป่วย","ขาดอาหาร เริ่ม enteral feeding P 1.1"],["กลไก","insulin ดึง phosphate เข้าเซลล์"],["ไต","FEPO4 < 5% ไตเก็บเต็มที่"]],
+    take:["HypoP + FEPO4 < 5% = shift หรือ intake ต่ำ ไม่ใช่ renal wasting","เริ่มอาหารช้าในรายเสี่ยงและตรวจ P, K, Mg ทุกวัน","P < 1 mg/dL ทำให้ rhabdomyolysis, respiratory failure, hemolysis"]},
+  ckd:{name:"CKD", p:P({dx:"ckd"}),
+    rows:[["ผู้ป่วย","CKD G5 ยังไม่ฟอก P 5.7"],["กลไก","FGF23 และ PTH สูง TmP/GFR ต่ำมากแต่ GFR ต่ำเกินชดเชย"],["รักษา","จำกัด phosphate (โดยเฉพาะ additive) และ binder"]],
+    take:["FGF23 เริ่มสูงก่อน PTH และก่อน P สูง","เมื่อ GFR ต่ำมาก P สูงแม้ FEPO4 สูงเกิน 50%","ลด P ที่สูงไปทางปกติ เน้นแหล่ง phosphate additive"]}
+};
+var ORDER=["norm","xlh","tio","fcm","fanc","refeed","ckd"];
+var box=document.getElementById("ctls");
+var ds=Sim.h("select",{id:"dx"},Object.keys(DX).map(function(k){ return Sim.h("option",{value:k,text:DX[k].name}); }));
+ds.addEventListener("change",function(){ var d=DX[ds.value]; gf.set(d.gfr); ik.set(d.intake); update(); });
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"dx",text:"ภาวะ"}),ds]));
+var gf=Sim.slider({id:"gf",label:"GFR",min:5,max:120,step:1,value:100,unit:" ml/min",onInput:update}); box.appendChild(gf.el);
+var ik=Sim.slider({id:"ik",label:"Phosphate intake",min:300,max:2000,step:50,value:1200,unit:" mg/d",onInput:update}); box.appendChild(ik.el);
+var T={}, tb=document.getElementById("tools");
+Object.keys(RX).forEach(function(k){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:RX[k].name}); b.addEventListener("click",function(){ b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); tb.appendChild(b); T[k]=b; });
+function on(k){ return T[k].getAttribute("aria-pressed")==="true"; }
+var A=Plot.colors, SPL=0.3;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?215:320,aria:"Phosphate excretion per GFR against serum phosphate",
+  x:{min:0,max:8,step:1,label:"Serum phosphate (mg/dL)"},y:{min:0,max:5,step:1,label:"Excretion per GFR (mg/dL GF)"},
+  xbands:[{x0:2.5,x1:4.5,label:"Normal P"}],
+  series:[{id:"n",name:"Normal TmP/GFR 3.0",color:A.muted,data:[],width:1.2,dash:[4,4]},{id:"p",name:"Patient",color:A.accent,data:[],width:2.6}],
+  marks:[],legend:true});
+function curve(tm){ var d=[]; for(var x=0;x<=8.001;x+=0.1) d.push([x,SPL*Math.log(1+Math.exp((x-tm)/SPL))]); return d; }
+var cell=Nephron.cell("cell","PT",{level:"full",levelButtons:false});
+function drawCell(tm,fgf,pth,k){
+  var o={flows:{NaPi:Math.max(0.1,tm/3)},focus:["NaPi","NKA_PT"],badges:{blood:"FGF23 "+Math.round(fgf)+"  PTH "+Math.round(pth)}};
+  if(k==="fanc"&&!on("res")){ o.blocked=["NaPi","SGLT2","NHE3","AA","URAT1","MEG"]; o.focus=["NaPi","SGLT2","NHE3","AA","URAT1","MEG"]; o.caption="Whole proximal cell failure: NaPi, SGLT2, NHE3 and amino acid transporters stop together. FGF23 is not high."; }
+  else if(k==="refeed") o.caption="NaPi works at full speed and urine phosphate is near zero: low serum P comes from cell uptake, not the kidney.";
+  else if(tm<2.2) o.caption="FGF23 or PTH pulls NaPi off the membrane: fewer transporters, low TmP/GFR, phosphate is lost in urine.";
+  else if(tm>4.6) o.caption="Little FGF23: many NaPi transporters, high TmP/GFR, phosphate is retained.";
+  else o.caption="NaPi-IIa/IIc reclaims filtered phosphate with Na. FGF23 and PTH set how many transporters sit on the membrane.";
+  cell.update("PT",o);
+}
+function update(){
+  var d=DX[ds.value], fgf=d.fgf, pth=d.pth, prox=d.prox, shift=d.shift, gfr=gf.get(), intake=ik.get(), fgfEff;
+  if(on("res")){ if(ds.value==="tio"||ds.value==="fcm") fgf=Math.min(fgf,45); if(ds.value==="fanc") prox=0.9; if(ds.value==="phpt") pth=40; }
+  if(on("supp")){ intake+=1000; }
+  fgfEff=on("bur")?Math.min(fgf,40):fgf;
+  /* calcitriol: suppressed by FGF23, stimulated by PTH and low GFR reduces it */
+  var calc=Math.pow(40/fgfEff,0.45)*Math.pow(pth/40,0.3)*Math.min(1,Math.pow(gfr/60,0.6));
+  if(on("supp")) calc*=2.2;
+  var absFrac=0.5+0.25*Math.min(1.6,calc)/1.6; if(on("bind")) absFrac*=0.6;
+  var absorbed=intake*absFrac - shift;
+  var tm=3.0*Math.pow(40/fgfEff,0.4)*Math.pow(40/pth,0.2)*prox;
+  /* fit physiological ceiling for low FGF23 */
+  tm=Math.min(tm,6.5);
+  var gfDl=gfr*14.4, y=absorbed/gfDl, sP;
+  if(y>0.03) sP=tm+SPL*Math.log(Math.expm1(y/SPL));
+  else { sP=tm+SPL*Math.log(Math.expm1(0.03/SPL)) - Math.max(0,-absorbed)/250; y=0.03; }
+  sP=Math.max(0.6,sP);
+  var fe=100*y/sP;
+  drawCell(tm,fgfEff,pth,ds.value);
+  chart.setSeries("n",curve(3.0)); chart.setSeries("p",curve(tm));
+  chart.update({marks:[{x:sP,y:y,label:"Patient P "+sP.toFixed(1),color:A.red}],vlines:[{x:tm,label:"TmP/GFR "+tm.toFixed(1)}]});
+  Sim.ro("roP",sP.toFixed(1),sP<2.5||sP>4.5?"flag":"ok");
+  Sim.ro("roT",tm.toFixed(1),tm<2.5||tm>4.5?"flag":"ok");
+  Sim.ro("roF",fe.toFixed(fe<10?1:0),null);
+  Sim.ro("roG",fgf.toFixed(0)+(on("bur")?" (blocked)":""),fgf>60||fgf<10?"flag":"ok");
+  Sim.ro("roH",pth.toFixed(0),pth>65?"flag":"ok");
+  Sim.ro("roD",calc>1.5?"สูง":calc<0.6?"ต่ำ":"ปกติ",calc<0.6||calc>1.5?"flag":"ok");
+  var a=document.getElementById("act"), m, bad=true, k=ds.value;
+  if(sP<2.5){
+    if(fe<5) m="<b>HypoP + FEPO4 "+fe.toFixed(1)+"%</b> ไตเก็บเต็มที่ หาสาเหตุ shift (refeeding, insulin, respiratory alkalosis, hungry bone) หรือ intake/absorption ต่ำ ให้ phosphate ตามระดับ และตรวจ K Mg";
+    else if(fgf>60&&!on("bur")) m="<b>Renal wasting + FGF23 "+fgf.toFixed(0)+"</b> FGF23-mediated "+(k==="fcm"?"หยุด ferric carboxymaltose เปลี่ยน iron ตัวอื่น":k==="tio"?"ทำ Ga-68 DOTATATE PET/CT หาเนื้องอก":"ตรวจ PHEX ประวัติครอบครัว พิจารณา burosumab");
+    else if(pth>65) m="<b>Renal wasting จาก PTH</b> ตรวจ Ca และ 25(OH)D ถ้า Ca สูงคิด PHPT";
+    else m="<b>Renal wasting + FGF23 ไม่สูง</b> ตรวจ glucose ในปัสสาวะ, uric acid, low-MW protein, HCO3 หา Fanconi และยาที่เป็นสาเหตุ";
+  } else if(sP>4.5){
+    if(gfr<30) m="<b>HyperP จาก GFR ต่ำ</b> FEPO4 "+fe.toFixed(0)+"% ไตชดเชยเต็มที่แล้ว จำกัด phosphate additive, ให้ binder"+(on("bind")?" (ให้แล้ว)":"")+", ประเมินการฟอกไต";
+    else m="<b>HyperP + GFR ดี</b> TmP/GFR "+tm.toFixed(1)+" สูง คิด FGF23 ต่ำหรือดื้อ (tumoral calcinosis), hypoparathyroidism, vitamin D เกิน หรือ phosphate load";
+  } else { m="<b>Serum P ปกติ</b>"+(fgf>100?" แม้ FGF23 สูง ติดตาม P และ PTH":" ติดตามตามปกติ"); bad=fgf>100&&k!=="ckd"; }
+  a.innerHTML="<b>Next step:</b> "+m; a.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"EL-13", title:"Phosphate: TmP/GFR and FGF23", lead:"ปรับ FGF23, PTH, proximal tubule, GFR และ intake ดูว่า serum P ถูกกำหนดโดย TmP/GFR อย่างไร แล้วแยก renal phosphate wasting แบบ FGF23-mediated, non-FGF23 และ shift",
+  scenarios:S, order:ORDER, captureMs:800,
+  onChange:function(k,s){ var d=DX[s.p.dx]; ds.value=s.p.dx; gf.set(s.p.gfr||d.gfr); ik.set(s.p.intake||d.intake); Object.keys(T).forEach(function(x){ T[x].setAttribute("aria-pressed",s.p.rx.indexOf(x)>=0?"true":"false"); }); update(); },
+  refs:["Walton RJ, Bijvoet OL. Nomogram for derivation of renal threshold phosphate concentration. Lancet 1975, 2(7929): 309-310",
+        "Florenzano P, Cipriani C, Roszko KL, et al. Approach to patients with hypophosphataemia. Lancet Diabetes Endocrinol 2020, 8(2): 163-174",
+        "Blaine J, Chonchol M, Levi M. Renal control of calcium, phosphate, and magnesium homeostasis. Clin J Am Soc Nephrol 2015, 10(7): 1257-1272",
+        "Wolf M, Rubin J, Achebe M, et al. Effects of iron isomaltoside vs ferric carboxymaltose on hypophosphatemia in iron-deficiency anemia: two randomized clinical trials. JAMA 2020, 323(5): 432-443",
+        "Insogna KL, Briot K, Imel EA, et al. A randomized, double-blind, placebo-controlled, phase 3 trial evaluating the efficacy of burosumab, an anti-FGF23 antibody, in adults with X-linked hypophosphatemia. J Bone Miner Res 2018, 33(8): 1383-1393"],
+  note:"Model เพื่อการสอน: excretion ต่อ GFR = phosphate ที่ดูดซึมสุทธิ / GFR (steady state) เส้น titration แบบ softplus ตัดแกน x ที่ TmP/GFR = 3.0 x (40/FGF23)^0.4 x (40/PTH)^0.2 x proximal factor การดูดซึมเพิ่มตาม calcitriol ซึ่งถูกกดโดย FGF23 refeeding ลบ phosphate ที่เข้าเซลล์ออกจากที่ดูดซึม"
+});
+})();
+</script>
+</body>
+</html>

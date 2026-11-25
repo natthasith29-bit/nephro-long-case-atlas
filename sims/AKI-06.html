@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[AKI-06] Tumor Lysis Syndrome and Myeloma Cast Nephropathy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.sel{display:grid;grid-template-columns:minmax(80px,170px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:12px}
+.sub{font-size:12.5px;color:var(--muted);margin:14px 0 4px}
+.cb{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.cb span{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:3px 10px;color:var(--muted)}
+.cb span.on{border-color:var(--red);color:var(--red);background:var(--pink)}
+.hide{display:none!important}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:14px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .ro{padding:6px 12px}
+body.present .ro b{font-size:19px}
+body.present .ctls{gap:2px}
+body.present .ctl{font-size:13px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .tools{margin-top:4px;gap:5px}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+body.present .sub{margin:6px 0 2px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2 id="ttl">Electrolyte หลังเริ่มเคมีบำบัด</h2>
+      <div id="chart"></div>
+      <div id="live"></div>
+      <div class="cb" id="cb"></div>
+      <p class="hint no-present" id="hint"></p>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วยและการป้องกัน</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="sub" id="subrx">การป้องกันและรักษา (กดเปิด/ปิด)</div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="r1"><b>-</b><span id="l1"></span></div>
+        <div class="ro" id="r2"><b>-</b><span id="l2"></span></div>
+        <div class="ro" id="r3"><b>-</b><span id="l3"></span></div>
+        <div class="ro" id="r4"><b>-</b><span id="l4"></span></div>
+        <div class="ro" id="r5"><b>-</b><span id="l5"></span></div>
+        <div class="ro" id="r6"><b>-</b><span id="l6"></span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/live.js"></script>
+<script>
+(function(){
+"use strict";
+var RXT={allo:"Allopurinol",ras:"Rasburicase 0.2 mg/kg",feb:"Febuxostat",alk:"Urine alkalinization",g6pd:"G6PD deficiency",hd:"HD เมื่อมีข้อบ่งชี้"};
+var RXM={chemo:"Bortezomib-based therapy",hco:"High cut-off HD",hyd:"Hydration 3 L/วัน",fur:"Furosemide",ca:"Hypercalcemia",ctr:"Contrast/NSAID"};
+function P(o){ var d={mode:"tls",burden:2,cr0:1.0,hyd:3,flc:4000,cr0m:2.5,rx:[]}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  tlsNone:{name:"TLS เสี่ยงสูง ไม่ป้องกัน", p:P({burden:3,hyd:1.5,rx:[]}),
+    rows:[["ผู้ป่วย","Burkitt lymphoma LDH 2,400 เริ่มเคมีบำบัด"],["ผล","urate, K, P ขึ้นภายใน 24–72 ชม. Ca ต่ำตาม P"],["ไต","urate และ CaP ตกผลึกในท่อไต เกิด TLS-AKI"]],
+    take:["Lab TLS: ≥ 2 ข้อจาก urate ≥ 8 mg/dL, K ≥ 6 mmol/L, P ≥ 4.5 mg/dL (ผู้ใหญ่), Ca ≤ 7 mg/dL หรือเปลี่ยน 25% จาก baseline ช่วง 3 วันก่อนถึง 7 วันหลังเริ่มเคมีบำบัด","Clinical TLS = lab TLS + Cr ≥ 1.5 เท่าของ ULN, arrhythmia หรือ sudden death, หรือ seizure","ความเสี่ยงสูง: Burkitt, ALL, AML WBC สูง, tumor bulky, LDH สูง, CKD เดิม"]},
+  tlsAllo:{name:"Allopurinol + hydration", p:P({burden:2,hyd:3,rx:["allo"]}),
+    rows:[["ความเสี่ยง","intermediate"],["ป้องกัน","allopurinol เริ่มก่อน 24–48 ชม. + IV fluid 3 L/m²/วัน"],["ผล","urate production ลดแต่ urate ที่มีอยู่ไม่ลดเร็ว xanthine สะสม"]],
+    take:["Allopurinol ป้องกันการสร้าง urate ใหม่ ไม่ลด urate ที่มีอยู่","Xanthine สะสมได้ใน tumor burden สูง เสี่ยง xanthine nephropathy","ปรับ dose ตาม GFR และระวัง azathioprine/6-MP interaction"]},
+  tlsRas:{name:"High risk + rasburicase", p:P({burden:3,hyd:3,rx:["ras","hd"]}),
+    rows:[["ความเสี่ยง","high"],["ป้องกัน","rasburicase 0.2 mg/kg + hydration"],["ผล","urate ลดต่ำภายในชั่วโมง แต่ K และ P ยังขึ้น"]],
+    take:["Rasburicase เปลี่ยน urate เป็น allantoin ลด urate ได้ภายใน 4 ชม. ใช้ในความเสี่ยงสูงหรือ urate สูงอยู่แล้ว","ห้ามใช้ใน G6PD deficiency (hemolysis, methemoglobinemia) ตรวจ G6PD ก่อนในผู้ป่วยไทย","ตัวอย่างเลือดต้องแช่เย็นทันที ไม่งั้น urate ต่ำปลอม และ hyperphosphatemia ยังต้องจัดการแยก"]},
+  tlsAlk:{name:"Alkalinization ทำให้แย่ลง", p:P({burden:3,hyd:3,rx:["ras","alk"]}),
+    rows:[["ให้","NaHCO3 ให้ urine pH > 7"],["ผล","urate ละลายดีขึ้น แต่ CaP ตกผลึกมากขึ้น"],["ข้อสรุป","ไม่แนะนำ alkalinization โดยเฉพาะเมื่อใช้ rasburicase"]],
+    take:["Urine alkalinization ไม่แนะนำแล้ว เพราะเพิ่ม CaP และ xanthine precipitation","ไม่ให้ Ca แก้ hypocalcemia ที่ไม่มีอาการ เพราะเพิ่ม CaP deposition","HD ช่วยเมื่อ P สูงมาก, K ดื้อการรักษา, น้ำเกิน หรือ hypocalcemia มีอาการ"]},
+  tlsG6:{name:"Rasburicase ใน G6PD deficiency", p:P({burden:3,hyd:3,rx:["ras","g6pd"]}),
+    rows:[["ผู้ป่วย","ชาย ไม่ได้ตรวจ G6PD ก่อนให้ rasburicase"],["ผล","H2O2 จาก urate oxidase ทำให้ hemolysis และ methemoglobinemia"],["แก้","หยุด rasburicase ใช้ allopurinol, ห้ามให้ methylene blue"]],
+    take:["G6PD deficiency พบบ่อยในไทย ต้องตรวจก่อน rasburicase","Methemoglobinemia จาก rasburicase ห้ามรักษาด้วย methylene blue ใน G6PD deficiency","Hemolysis เพิ่ม pigment load และ AKI ได้อีกทาง"]},
+  castNo:{name:"Cast nephropathy + precipitants", p:P({mode:"cast",flc:6000,cr0m:2.5,rx:["fur","ca","ctr"]}),
+    rows:[["ผู้ป่วย","myeloma λ FLC 6,000 mg/L Ca 12.5 ได้ furosemide และ CT contrast"],["กลไก","FLC จับ uromodulin เป็น cast อุดท่อ distal precipitant เร่ง cast"],["ผล","Cr ขึ้นต่อเนื่อง"]],
+    take:["Cast nephropathy มักมี involved FLC > 1,500 mg/L ถ้า < 500 mg/L โอกาสน้อย ให้หาสาเหตุอื่นและพิจารณา biopsy","Precipitant: volume depletion, loop diuretic, hypercalcemia, contrast, NSAID ต้องแก้ทั้งหมด","ไม่ควรใช้ loop diuretic เพื่อเพิ่ม urine flow ใน cast nephropathy"]},
+  castTx:{name:"Bortezomib เร็ว + hydration", p:P({mode:"cast",flc:6000,cr0m:2.5,rx:["chemo","hyd"]}),
+    rows:[["รักษา","bortezomib-based ทันทีที่สงสัย + hydration, แก้ Ca"],["ผล","FLC ลด > 60% ภายในวันที่ 21"],["ไต","มีโอกาสหลุดจาก dialysis สูงขึ้น"]],
+    take:["หัวใจของการรักษาคือลด FLC เร็วด้วย bortezomib-based regimen","การลด FLC มากและเร็วในช่วง 3 สัปดาห์แรกสัมพันธ์กับการฟื้นตัวของไต","Kidney biopsy ช่วยยืนยันเมื่อ FLC ไม่สูงมากหรือสงสัย MGRS อื่น"]},
+  castHco:{name:"เพิ่ม high cut-off HD", p:P({mode:"cast",flc:9000,cr0m:4.5,rx:["chemo","hyd","hco"]}),
+    rows:[["เพิ่ม","HCO-HD เอา FLC ออกระหว่างฟอก"],["ผล","FLC ลดเร็วขึ้นในช่วงแรก มี rebound ระหว่างรอบ"],["หลักฐาน","ไม่ได้ผลดีชัดเจนกว่า chemotherapy อย่างเดียวในการหลุด dialysis ที่ 3 เดือน"]],
+    take:["HCO-HD ไม่ใช่ standard therapy ผลต่อ dialysis independence ไม่สม่ำเสมอ","Plasma exchange ลด FLC ได้น้อยเพราะ Vd กว้าง","Chemotherapy ที่ได้ผลเร็วสำคัญกว่าการกรอง FLC"]}
+};
+var ORDER=["tlsNone","tlsAllo","tlsRas","tlsAlk","tlsG6","castNo","castTx","castHco"];
+var box=document.getElementById("ctls"), C={};
+var ms=Sim.h("select",{id:"mode"},[Sim.h("option",{value:"tls",text:"Tumor lysis syndrome"}),Sim.h("option",{value:"cast",text:"Myeloma cast nephropathy"})]);
+ms.addEventListener("change",function(){ setMode(ms.value); update(); });
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"mode",text:"ภาวะ"}),ms]));
+function sl(k,o,grp){ o.id="s"+k; o.onInput=function(){ update(true); }; C[k]=Sim.slider(o); C[k].el.dataset.grp=grp; box.appendChild(C[k].el); }
+sl("burden",{label:"Tumor burden",min:1,max:3,step:1,value:2,unit:"",fmt:function(v){ return ["","low","intermediate","high"][v]; }},"tls");
+sl("cr0",{label:"Baseline Cr",min:0.6,max:3,step:0.1,value:1,unit:" mg/dL",fmt:function(v){ return v.toFixed(1); }},"tls");
+sl("hyd",{label:"IV fluid",min:1,max:4,step:0.5,value:3,unit:" L/m²",fmt:function(v){ return v.toFixed(1); }},"tls");
+sl("flc",{label:"Involved FLC",min:200,max:15000,step:100,value:4000,unit:" mg/L"},"cast");
+sl("cr0m",{label:"Cr ตอนวินิจฉัย",min:1.2,max:8,step:0.1,value:2.5,unit:" mg/dL",fmt:function(v){ return v.toFixed(1); }},"cast");
+var T={}, tb=document.getElementById("tools");
+function mk(obj,grp){ Object.keys(obj).forEach(function(k){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:obj[k]}); b.dataset.grp=grp; b.addEventListener("click",function(){ b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); tb.appendChild(b); T[k]=b; }); }
+mk(RXT,"tls"); mk(RXM,"cast");
+function on(k){ return T[k].getAttribute("aria-pressed")==="true"; }
+var A=Plot.colors, mode="tls";
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?270:290,aria:"Laboratory values over time",x:{min:0,max:5,step:1,label:"Days"},y:{min:0,max:20,label:"mg/dL"},series:[],legend:true});
+var live=Live.player(chart,{mount:"live"}), LAST=null;
+function setMode(m){
+  mode=m; ms.value=m;
+  Object.keys(C).forEach(function(k){ C[k].el.classList.toggle("hide",C[k].el.dataset.grp!==m); });
+  Object.keys(T).forEach(function(k){ T[k].classList.toggle("hide",T[k].dataset.grp!==m); });
+  document.getElementById("ttl").textContent=m==="tls"?"Electrolyte หลังเริ่มเคมีบำบัด (5 วัน)":"Serum FLC และ Cr ใน 30 วัน";
+  document.getElementById("hint").textContent=m==="tls"?"Urate และ phosphate (mg/dL แกนซ้าย) K (mmol/L แกนขวา) ป้ายด้านล่างคือเกณฑ์ Cairo-Bishop ที่เข้าแล้ว Ca ลดลงเมื่อ P สูงเพราะตกตะกอนเป็น CaP":"Serum FLC (log scale แกนซ้าย) และ Cr (แกนขวา) cast เกิดมากเมื่อ FLC สูงร่วมกับ precipitant เส้นประคือเกณฑ์ 500 mg/L";
+  var lab=m==="tls"?["Urate สูงสุด","K สูงสุด","P สูงสุด","Ca ต่ำสุด","Cr วันที่ 5","Classification"]:["FLC ลดลงวันที่ 21","FLC วันที่ 30","Cr สูงสุด","Cr วันที่ 30","Cast risk","Dialysis independence"];
+  lab.forEach(function(s,i){ document.getElementById("l"+(i+1)).textContent=s; });
+  if(m==="tls") chart.update({x:{min:0,max:5,step:1,label:"Days after chemotherapy"},y:{min:0,max:20,step:4,label:"Urate, phosphate (mg/dL)"},y2:{min:2,max:9,step:1,label:"K (mmol/L)"},
+    series:[{id:"u",name:"Urate",color:A.accent,data:[],width:2.6},{id:"p",name:"Phosphate",color:A.gold,data:[],width:2.2},{id:"k",name:"K",color:A.red,data:[],width:1.8,axis:"y2",dash:[4,3]}],
+    hlines:[{y:8,label:"Urate 8",color:A.accent,dash:[2,3]},{y:4.5,label:"P 4.5",color:A.gold,dash:[2,3]},{y:6,label:"K 6",color:A.red,dash:[2,3],axis:"y2"}]});
+  else chart.update({x:{min:0,max:30,step:5,label:"Days"},y:{min:50,max:20000,log:true,label:"Serum FLC (mg/L)"},y2:{min:0,max:10,step:2,label:"Creatinine (mg/dL)"},
+    series:[{id:"f",name:"Involved FLC",color:A.accent,data:[],width:2.6},{id:"c",name:"Cr",color:A.red,data:[],width:2,axis:"y2"}],
+    hlines:[{y:500,label:"FLC 500",color:A.accent,dash:[3,3]}]});
+}
+function tlsModel(){
+  var b=C.burden.get(), cr0=C.cr0.get(), hyd=C.hyd.get();
+  var allo=on("allo")||on("feb"), ras=on("ras"), alk=on("alk"), g6=on("g6pd"), hd=on("hd");
+  var R={1:[0.02,0.03,0.06],2:[0.05,0.08,0.16],3:[0.12,0.16,0.26]}[b]; /* K, P, urate per hour at peak */
+  var u=6.5+(b-1)*1.2, k=4.1, p=3.8, ca=9.2, gfr0=100/Math.pow(cr0,1.1), gfr=gfr0, cr=cr0, xan=0, hb=12;
+  var U=[],K=[],PH=[],ev=[], umax=0,kmax=0,pmax=0,camin=99, hdOn=false, hdAt=null, hemol=false, crit={u:null,k:null,p:null,ca:null};
+  var flow=Math.min(1.3,hyd/3)*(gfr0/100<0.5?0.8:1);
+  if(ras&&g6){ hemol=true; }
+  for(var h=0;h<=120;h++){
+    var t=h/24, f=(h/30)*Math.exp(1-h/30); /* release profile peak 30 h */
+    var gf=gfr/100, fl=flow*Math.max(0.3,gf*1.2);
+    var prodU=R[2]*f*(allo?0.25:1)+0.01; if(allo) xan+=R[2]*f*0.75;
+    if(ras){ prodU=0; u=Math.max(0.5,u*Math.exp(-0.7)); }
+    u+=prodU-0.035*gf*fl*Math.max(0,u-3);
+    k+=R[0]*f-0.05*gf*Math.max(0,k-4)-(hdOn?0.25*(k-4):0);
+    p+=R[1]*f-0.035*gf*Math.max(0,p-3.5)-(hdOn?0.12*(p-3.5):0);
+    var prod=ca*p; ca=Math.max(5.5,9.2-0.42*Math.max(0,p-4.5)*(alk?1.2:1));
+    /* kidney injury */
+    var uInj=Math.max(0,u-10)*(alk?0.4:1)/Math.max(0.5,fl), cpInj=Math.max(0,prod-(alk?40:55))*(alk?1.8:1)/Math.max(0.5,fl)/20, xInj=xan>25?0.02*(xan-25):0, hInj=hemol&&h>4&&h<30?0.6:0;
+    gfr=Math.max(8,gfr-Math.min(3,(0.08*uInj+0.18*cpInj+xInj+hInj))*gfr/100*1.5);
+    if(!hdOn&&hd&&(k>=6.5||p>=10||gfr<gfr0*0.3)&&h>6){ hdOn=true; hdAt=t; ev.push({t:t,kind:"rx",text:"เริ่ม HD: "+(k>=6.5?"K "+k.toFixed(1):p>=10?"P "+p.toFixed(1):"TLS-AKI oliguria")}); }
+    var tgt=cr0*gfr0/gfr; cr+=(tgt-cr)/30;
+    umax=Math.max(umax,u); kmax=Math.max(kmax,k); pmax=Math.max(pmax,p); camin=Math.min(camin,ca);
+    if(crit.u===null&&u>=8) crit.u=t; if(crit.k===null&&k>=6) crit.k=t; if(crit.p===null&&p>=4.5) crit.p=t; if(crit.ca===null&&ca<=7) crit.ca=t;
+    if(h%2===0){ U.push([t,u]); K.push([t,k]); PH.push([t,p]); }
+  }
+  var nlab=["u","k","p","ca"].filter(function(x){ return crit[x]!==null; }).length;
+  var cls=nlab>=2?(cr>=1.5*Math.max(1,cr0)||kmax>=7?"Clinical TLS":"Laboratory TLS"):"No TLS";
+  if(crit.u!==null) ev.push({t:crit.u,kind:"warn",text:"Urate ≥ 8 mg/dL"});
+  if(crit.k!==null) ev.push({t:crit.k,kind:"warn",text:"K ≥ 6 mmol/L ทำ ECG"});
+  if(crit.p!==null) ev.push({t:crit.p,kind:"warn",text:"Phosphate ≥ 4.5 mg/dL"});
+  if(crit.ca!==null) ev.push({t:crit.ca,kind:"warn",text:"Ca ≤ 7 mg/dL (ไม่ให้ Ca ถ้าไม่มีอาการ)"});
+  if(ras) ev.push({t:0.05,kind:"rx",text:"Rasburicase 0.2 mg/kg urate ลดภายใน 4 ชม."+(g6?" แต่ผู้ป่วยเป็น G6PD deficiency":"")});
+  if(allo) ev.push({t:0,kind:"rx",text:"Xanthine oxidase inhibitor เริ่มก่อนเคมีบำบัด ลดการสร้าง urate ใหม่"});
+  if(hemol) ev.push({t:0.2,kind:"warn",text:"Hemolysis + methemoglobinemia จาก rasburicase ใน G6PD deficiency"});
+  if(alk) ev.push({t:0.1,kind:"warn",text:"Urine pH > 7: CaP และ xanthine ละลายน้อยลง"});
+  if(allo&&xan>25) ev.push({t:2,kind:"warn",text:"Xanthine สะสมสูง เสี่ยง xanthine crystal nephropathy"});
+  ev.push({t:0,kind:"phys",text:"เริ่มเคมีบำบัด tumor burden "+["","low","intermediate","high"][b]+" IV fluid "+hyd+" L/m²/วัน"});
+  ev.push({t:5,kind:cls==="No TLS"?"ok":"warn",text:"วันที่ 5: "+cls+" Cr "+cr.toFixed(1)});
+  return {U:U,K:K,PH:PH,ev:ev,umax:umax,kmax:kmax,pmax:pmax,camin:camin,cr:cr,cr0:cr0,cls:cls,nlab:nlab,ras:ras,g6:g6,alk:alk,allo:allo,hyd:hyd,b:b,hdOn:hdOn,xan:xan};
+}
+function castModel(){
+  var f0=C.flc.get(), cr0=C.cr0m.get();
+  var chemo=on("chemo"), hco=on("hco"), hyd=on("hyd"), fur=on("fur"), hca=on("ca"), ctr=on("ctr");
+  var gfr0=100/Math.pow(cr0,1.1)*1.0, gfr=gfr0, krr=0.25, kr=0.6;
+  var prod0=f0*(krr+kr*gfr0/100), f=f0, cr=cr0, F=[], Cc=[], ev=[], f21=null, crmax=cr0;
+  var prec=1+0.5*(fur?1:0)+0.6*(hca?1:0)+0.4*(ctr?1:0)-(hyd?0.35:0); prec=Math.max(0.4,prec);
+  if(chemo) ev.push({t:0,kind:"rx",text:"Bortezomib + dexamethasone เริ่มทันที"});
+  if(hyd) ev.push({t:0,kind:"rx",text:"Hydration ให้ UO > 3 L/วัน (ถ้าไม่มีน้ำเกิน)"});
+  if(fur) ev.push({t:0,kind:"warn",text:"Furosemide เพิ่ม Na และ Cl ที่ TAL เร่ง FLC-uromodulin aggregation"});
+  if(hca) ev.push({t:0,kind:"warn",text:"Hypercalcemia ลด GFR และส่งเสริม cast ให้ fluid + bisphosphonate/denosumab ปรับขนาดตาม GFR"});
+  if(ctr) ev.push({t:0,kind:"warn",text:"Contrast/NSAID เป็น precipitant"});
+  var dt=0.05;
+  for(var n=0;n<=30/dt;n++){
+    var t=n*dt;
+    var prod=prod0*(chemo?Math.max(0.03,Math.exp(-t/4.5)):1);
+    var hdK=0; if(hco&&t>=1&&t<=21&&Math.floor(t)%2===1&&(t%1)<0.25) hdK=7.0; /* 6 h sessions on alternate days */
+    f+=(prod-(krr+kr*gfr/100+hdK)*f)*dt;
+    var dmg=Math.min(1.5,Math.max(0,(f-500)/3000))*prec, rec=f<500?1:0;
+    gfr=Math.max(9,Math.min(gfr0*1.8,gfr+(-dmg*gfr*0.07+rec*(gfr0*1.8-gfr)*0.05)*dt));
+    var tgt=cr0*gfr0/gfr; cr+=(tgt-cr)*dt/1.2; crmax=Math.max(crmax,cr);
+    if(n%5===0){ F.push([+t.toFixed(2),f]); Cc.push([+t.toFixed(2),cr]); }
+    if(Math.abs(t-21)<dt/2) f21=f;
+  }
+  var red=(1-f21/f0)*100;
+  var x5=Live.cross(F,500,-1); if(x5!==null) ev.push({t:x5,kind:"ok",text:"FLC ต่ำกว่า 500 mg/L cast formation ลดลง"});
+  ev.push({t:21,kind:red>=60?"ok":"warn",text:"วันที่ 21: FLC ลดลง "+red.toFixed(0)+"%"+(red>=60?" สัมพันธ์กับโอกาสฟื้นตัวของไตที่ดีขึ้น":"")});
+  if(hco) ev.push({t:1,kind:"rx",text:"High cut-off HD 6 ชม. วันเว้นวัน (rebound ระหว่างรอบ)"});
+  var risk=prec*Math.min(3,f0/2000);
+  return {F:F,Cc:Cc,ev:ev,red:red,f30:f,crmax:crmax,cr:cr,cr0:cr0,risk:risk,chemo:chemo,hco:hco,fur:fur,hca:hca,ctr:ctr,hyd:hyd,f0:f0};
+}
+function cbBadges(M,t){
+  var el=document.getElementById("cb"); el.innerHTML="";
+  if(mode!=="tls") return;
+  var i=Math.min(M.U.length-1,Math.round(t*12)), u=0,k=0,p=0; for(var j=0;j<=i;j++){ u=Math.max(u,M.U[j][1]); k=Math.max(k,M.K[j][1]); p=Math.max(p,M.PH[j][1]); }
+  var ca=9.2-0.42*Math.max(0,p-4.5)*(M.alk?1.2:1);
+  [["Urate ≥ 8",u>=8],["K ≥ 6",k>=6],["P ≥ 4.5",p>=4.5],["Ca ≤ 7",ca<=7]].forEach(function(x){ el.appendChild(Sim.h("span",{class:x[1]?"on":"",text:x[0]})); });
+}
+function onFrame(t,done){
+  var M=LAST;
+  if(mode==="tls"){ cbBadges(M,t);
+    Sim.ro("r1",done?M.umax.toFixed(1):"…",done?(M.umax>=8?"flag":"ok"):null); Sim.ro("r2",done?M.kmax.toFixed(1):"…",done?(M.kmax>=6?"flag":"ok"):null);
+    Sim.ro("r3",done?M.pmax.toFixed(1):"…",done?(M.pmax>=4.5?"flag":"ok"):null); Sim.ro("r4",done?Math.max(5.5,M.camin).toFixed(1):"…",done?(M.camin<=7?"flag":"ok"):null);
+    Sim.ro("r5",done?M.cr.toFixed(1):"…",done?(M.cr>=1.5*M.cr0?"flag":"ok"):null); Sim.ro("r6",done?M.cls:"…",done?(M.cls==="No TLS"?"ok":"flag"):null);
+  } else {
+    Sim.ro("r1",t>=21?M.red.toFixed(0)+"%":"…",t>=21?(M.red>=60?"ok":"flag"):null); Sim.ro("r2",done?M.f30.toFixed(0):"…",done?(M.f30<500?"ok":"flag"):null);
+    Sim.ro("r3",done?M.crmax.toFixed(1):"…","flag"); Sim.ro("r4",done?M.cr.toFixed(1):"…",done?(M.cr<M.cr0?"ok":"flag"):null);
+    Sim.ro("r5",M.risk>2?"high":M.risk>1?"moderate":"low",M.risk>1?"flag":"ok"); Sim.ro("r6",done?(M.red>=60&&M.cr<M.cr0*1.1?"likely":"unlikely"):"…",done?(M.red>=60&&M.cr<M.cr0*1.1?"ok":"flag"):null);
+  }
+  var a=document.getElementById("act");
+  if(done){ a.innerHTML=M.act; a.className=M.actCls; } else { a.innerHTML="<b>กำลังจำลอง</b> วันที่ "+t.toFixed(1); a.className="act"; }
+}
+function update(deb){
+  var M, m, bad=true;
+  if(mode==="tls"){
+    M=tlsModel();
+    chart.update({y:{min:0,max:Math.max(16,Math.ceil(Math.max(M.umax,M.pmax)*1.15/4)*4),step:4,label:"Urate, phosphate (mg/dL)"}});
+    chart.setSeries("u",M.U); chart.setSeries("p",M.PH); chart.setSeries("k",M.K);
+    if(M.ras&&M.g6) m="<b>หยุด rasburicase ทันที</b> ใช้ allopurinol แทน รักษา hemolysis ตรวจ methemoglobin ห้ามให้ methylene blue ให้ O2 และพิจารณา transfusion";
+    else if(M.alk) m="<b>หยุด bicarbonate</b> alkalinization เพิ่ม CaP precipitation ใช้ isotonic saline ให้ UO 80–100 mL/m²/h ลด phosphate ด้วย binder และ HD ถ้า P สูงมาก";
+    else if(M.cls==="Clinical TLS") m="<b>Clinical TLS</b> ECG monitoring, รักษา hyperK, phosphate binder, rasburicase ถ้า urate สูง (ตรวจ G6PD) ปรึกษา nephrology เรื่อง KRT (ข้อบ่งชี้: K ดื้อการรักษา, P สูงมาก, hypocalcemia มีอาการ, oliguria, น้ำเกิน)"+(M.hdOn?" HD เริ่มแล้ว อาจต้อง CRRT/ฟอกถี่เพราะ release ยังต่อเนื่อง":"");
+    else if(M.cls==="Laboratory TLS") m="<b>Laboratory TLS</b> เพิ่ม IV fluid, ตรวจ electrolyte ทุก 6–8 ชม. ปรับ prophylaxis "+(M.allo&&M.umax>=8?"เปลี่ยนเป็น rasburicase (ตรวจ G6PD)":"ตามความเสี่ยง")+" หลีกเลี่ยง K และ P ใน IV fluid";
+    else if(M.b===3&&!M.ras) m="<b>ความเสี่ยงสูง</b> ใช้ rasburicase (ตรวจ G6PD ก่อน) + hydration 3 L/m²/วัน monitor ใน ward ที่ตรวจ lab ได้ทุก 6 ชม.";
+    else { bad=false; m="<b>ไม่เกิด TLS</b> ให้ hydration และ prophylaxis ต่อ ตรวจ lab ทุก 8–12 ชม. ใน 72 ชม. แรก"; }
+  } else {
+    M=castModel();
+    chart.setSeries("f",M.F); chart.setSeries("c",M.Cc);
+    chart.update({y2:{min:0,max:Math.max(6,Math.ceil(M.crmax*1.2)),step:2,label:"Creatinine (mg/dL)"}});
+    if(!M.chemo) m="<b>เริ่ม bortezomib-based therapy ทันที</b> ไม่ต้องรอ biopsy ถ้า FLC > 1,500 mg/L และ clinical เข้าได้ หยุด precipitant ทั้งหมด"+(M.fur?" หยุด furosemide":"")+(M.hca?" แก้ hypercalcemia":"");
+    else if(M.fur||M.hca||M.ctr) m="<b>ยังมี precipitant</b> หยุด loop diuretic, contrast, NSAID แก้ hypercalcemia และให้ hydration";
+    else if(M.red>=60){ bad=M.cr>M.cr0; m="<b>FLC ลด "+M.red.toFixed(0)+"% ที่วันที่ 21</b> ทำ chemotherapy ต่อ ติดตาม FLC ทุกรอบ และ Cr"+(M.hco?" HCO-HD หยุดได้เมื่อ FLC ต่ำ ไม่จำเป็นต้องใช้ routine":""); }
+    else m="<b>FLC ลดไม่พอ</b> ปรึกษา hematology เปลี่ยนหรือเพิ่ม regimen (เช่น daratumumab) พิจารณา biopsy ยืนยัน"+(M.hco?"":" HCO-HD เป็นทางเลือกในศูนย์ที่มี แต่หลักฐานไม่แน่น");
+  }
+  M.act="<b>Next step:</b> "+m; M.actCls="act"+(bad?" bad":"");
+  LAST=M;
+  var tMax=mode==="tls"?5:30;
+  live.load({tMax:tMax,unit:"วัน",ms:8000,debounce:deb===true,num:function(x){ return x.toFixed(1); },events:M.ev.sort(function(a,b){ return a.t-b.t; }),onFrame:onFrame,
+    cursorLabel:function(t){ return mode==="tls"?"Urate "+Live.valueAt(M.U,t).toFixed(1):"FLC "+Live.valueAt(M.F,t).toFixed(0); }});
+}
+setMode("tls");
+Sim.mount({code:"AKI-06", title:"Tumor Lysis Syndrome and Myeloma Cast Nephropathy", lead:"โหมด TLS: ตั้ง tumor burden และ prophylaxis ดู urate, K, P, Ca และ Cairo-Bishop ใน 5 วัน โหมด cast nephropathy: ดู serum FLC กับ Cr ใน 30 วันเมื่อแก้ precipitant, เริ่ม bortezomib หรือเพิ่ม high cut-off HD",
+  scenarios:S, order:ORDER, captureMs:1000,
+  onChange:function(k,s){ setMode(s.p.mode); ["burden","cr0","hyd","flc","cr0m"].forEach(function(x){ C[x].set(s.p[x]); }); Object.keys(T).forEach(function(x){ T[x].setAttribute("aria-pressed",s.p.rx.indexOf(x)>=0?"true":"false"); }); update(); },
+  refs:["Cairo MS, Bishop M. Tumour lysis syndrome: new therapeutic strategies and classification. Br J Haematol 2004, 127(1): 3-11",
+        "Howard SC, Jones DP, Pui CH. The tumor lysis syndrome. N Engl J Med 2011, 364(19): 1844-1854",
+        "Cairo MS, Coiffier B, Reiter A, Younes A. Recommendations for the evaluation of risk and prophylaxis of tumour lysis syndrome (TLS): an expert TLS panel consensus. Br J Haematol 2010, 149(4): 578-586",
+        "Wilson FP, Berns JS. Tumor lysis syndrome: new challenges and recent advances. Adv Chronic Kidney Dis 2014, 21(1): 18-26",
+        "Hutchison CA, Cockwell P, Moroz V, et al (EuLITE). High cutoff versus high-flux haemodialysis for myeloma cast nephropathy. Lancet Haematol 2019, 6(4): e217-e228",
+        "Bridoux F, Carron PL, Pegourie B, et al (MYRE). Effect of high-cutoff hemodialysis vs conventional hemodialysis on hemodialysis independence among patients with myeloma cast nephropathy. JAMA 2017, 318(21): 2099-2110",
+        "Leung N, Bridoux F, Nasr SH. Monoclonal gammopathy of renal significance. N Engl J Med 2021, 384(20): 1931-1941",
+        "Dimopoulos MA, Merlini G, Bridoux F, et al (IMWG). Management of multiple myeloma-related renal impairment: recommendations from the International Myeloma Working Group. Lancet Oncol 2023, 24(7): e293-e311"],
+  note:"Model เพื่อการสอน: TLS release ของ K, P, urate ตาม profile ที่สูงสุดราว 30 ชม. ขนาดตาม burden การขับออกขึ้นกับ GFR และ urine flow ไตบาดเจ็บจาก urate > 10 mg/dL, Ca x P > 55 (alkalinization เพิ่ม CaP), xanthine และ hemolysis Ca ลดตาม P Cast: FLC สร้างจาก clone (bortezomib ลดด้วย τ 4.5 วัน) กำจัดโดย reticuloendothelial 0.25/วัน + ไต 0.6/วันที่ GFR 100 + HCO-HD ระหว่างฟอก การบาดเจ็บ ∝ (FLC − 500) x precipitant ฟื้นเมื่อ FLC < 500"
+});
+})();
+</script>
+</body>
+</html>

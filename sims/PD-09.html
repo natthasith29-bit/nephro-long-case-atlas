@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[PD-09] Peritonitis and Cloudy Effluent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(120px,160px) 1fr 100px}
+.sel{display:grid;grid-template-columns:minmax(120px,160px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.readout{grid-template-columns:repeat(3,1fr)}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,1fr)}}
+.rx{margin-top:12px;border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:13.5px}
+.rx div{display:grid;grid-template-columns:118px 1fr;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line)}
+.rx div:last-child{border-bottom:0}
+.rx b{font-weight:500;color:var(--muted)}
+.rx .warn{background:#FFF6F6}
+.rx .warn span{color:var(--red);font-weight:600}
+.crit{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.crit span{font-size:12.5px;border:1px solid var(--line-strong);border-radius:999px;padding:3px 10px;color:var(--muted)}
+.crit span.y{border-color:var(--red);color:var(--red);background:#FFF6F6}
+body.present .bench{grid-template-columns:1.25fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:16px 20px}
+body.present .ctls{gap:4px 18px;grid-template-columns:1fr 1fr}
+body.present .ctl{grid-template-columns:90px 1fr 60px;gap:6px;font-size:12.5px}
+body.present .ctl output{font-size:12.5px}
+body.present .sel{grid-template-columns:90px minmax(0,1fr);gap:6px;font-size:12.5px}
+body.present select{font-size:12px;padding:3px 6px}
+body.present .ro{padding:8px 12px}
+body.present .rx{font-size:12.5px;margin-top:8px}
+body.present .rx div{padding:4px 10px}
+body.present .rx div:nth-child(n+5){display:none}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Effluent WBC ระหว่างรักษา</h2>
+      <div id="chart"></div>
+      <div class="crit" id="crit"></div>
+      <div class="rx" id="rx"></div>
+      <p class="hint no-present">แกน y เป็น log เส้นแดงคือ 100/µL ถ้า effluent ยังไม่ใส (WBC ยังไม่ต่ำกว่านี้) หลังได้ยาที่เหมาะสม 5 วัน = refractory peritonitis (สังเกตต่อได้ถ้า WBC กำลังลดลงเข้าหาปกติ) ขนาดยาเป็น intermittent IP ใน long dwell ≥ 6 ชม. สำหรับ CAPD</p>
+    </div>
+    <div class="card">
+      <h2>ข้อมูลผู้ป่วยและน้ำยา</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roDx"><b>-</b><span>Diagnosis</span></div>
+        <div class="ro" id="roD5"><b>-</b><span>WBC วันที่ 5 (/µL)</span></div>
+        <div class="ro" id="roCath"><b>-</b><span>Catheter</span></div>
+      </div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script>
+(function(){
+"use strict";
+/* org: กลุ่มเชื้อ  dur: สัปดาห์  rx: การรักษาเฉพาะ  remove: 'always'|'if' */
+var ORG={
+  pending:{name:"รอผล culture",rx:"Empirical ต่อไปจนได้ผล",dur:null},
+  cons:{name:"CoNS",rx:"ตาม sensitivity (cefazolin หรือ vancomycin)",dur:2},
+  strep:{name:"Streptococcus",rx:"Ampicillin หรือ cefazolin IP",dur:2},
+  sa:{name:"S. aureus (MSSA)",rx:"Cefazolin IP (MRSA ใช้ vancomycin) ± rifampicin สั้นๆ",dur:3,exit:true},
+  ent:{name:"Enterococcus",rx:"Oral amoxicillin ถ้า ampicillin-susceptible หรือ vancomycin IP (VRE ใช้ linezolid หรือ daptomycin)",dur:3},
+  pseudo:{name:"Pseudomonas",rx:"ยา 2 ตัวที่ไวและกลไกต่างกัน (เช่น ceftazidime IP + ciprofloxacin oral หรือ aminoglycoside)",dur:3,exit:true},
+  gn:{name:"Gram-negative อื่น",rx:"ยาตัวเดียวที่ไว (ESBL ใช้ carbapenem)",dur:3},
+  poly:{name:"Polymicrobial enteric",rx:"Metronidazole + vancomycin + gram-negative coverage ปรึกษาศัลยกรรมด่วน (หา intra-abdominal pathology)",dur:3,surg:true},
+  fungal:{name:"Fungus",rx:"ถอดสายทันที antifungal ตามเชื้อ (fluconazole หรือ echinocandin) ต่อ ≥ 2 สัปดาห์หลังถอดสาย",dur:2,remove:"always"},
+  neg:{name:"Culture negative",rx:"ถ้าดีขึ้นใน 3 วัน หยุด aminoglycoside ให้ gram-positive coverage ต่อ ถ้าไม่ดีขึ้นส่ง culture พิเศษ (mycobacteria, fungus)",dur:2},
+  chyl:{name:"Non-infectious: chylous (CCB)",rx:"ไม่ใช่ peritonitis หยุด dihydropyridine CCB น้ำยาใสภายใน 24–72 ชม.",dur:0,nonInf:true},
+  eos:{name:"Non-infectious: eosinophilic",rx:"มักเกิดช่วงแรกหลังใส่สาย หายเองเป็นส่วนใหญ่ ถ้านานใช้ antihistamine หรือ steroid IP",dur:0,nonInf:true}
+};
+function P(o){ var d={org:"cons",wbc:2400,pmn:85,eos:2,dwell:8,resp:"good",w:60,ru:"yes",exit:false,relapse:"none",tg:false}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  cons:{name:"CoNS (touch contamination)", p:P({}),
+    rows:[["อาการ","ปวดท้อง น้ำยาขุ่น หลังทำ exchange ผิดขั้นตอน"],["ผล","WBC 2,400/µL PMN 85% culture CoNS"],["รักษา","empirical แล้วปรับตาม sensitivity 2 สัปดาห์ retrain technique"]],
+    take:["Peritonitis: มี 2 ใน 3 ข้อ (อาการ, WBC > 100/µL และ PMN > 50% หลัง dwell ≥ 2 ชม., culture บวก)","เริ่ม empirical IP ทันทีหลังเก็บตัวอย่าง ครอบคลุมทั้ง gram-positive และ gram-negative","CoNS และ Streptococcus รักษา 2 สัปดาห์"]},
+  sa:{name:"S. aureus + exit-site infection", p:P({org:"sa",wbc:6800,exit:true,resp:"slow"}),
+    rows:[["อาการ","exit site แดงมีหนอง น้ำยาขุ่น"],["ผล","S. aureus ทั้งที่ exit site และน้ำยา"],["รักษา","cefazolin 3 สัปดาห์ เชื้อเดียวกับ exit-site/tunnel infection มีแนวโน้มต้องถอดสาย"]],
+    take:["S. aureus มักมาจาก exit site หรือ tunnel ต้องตรวจทุกราย","Peritonitis ร่วมกับ exit-site/tunnel infection เชื้อเดียวกันมักต้องถอดสาย","ป้องกันด้วย topical antibiotic ที่ exit site ทุกวัน"]},
+  pseudo:{name:"Pseudomonas", p:P({org:"pseudo",wbc:9500,exit:true,resp:"slow"}),
+    rows:[["ผล","Pseudomonas aeruginosa มี tunnel infection ร่วม"],["รักษา","ยา 2 ตัวที่ไวและกลไกต่างกัน 3 สัปดาห์"],["Catheter","มี exit/tunnel infection ร่วม ให้ถอดสายพร้อมให้ยาต่อ"]],
+    take:["Pseudomonas ต้องใช้ยา 2 ตัวและรักษา 3 สัปดาห์","ถ้ามี exit-site หรือ tunnel infection ร่วม ควรถอดสาย","ใส่สายใหม่หลังหายแล้วอย่างน้อย 2 สัปดาห์"]},
+  fungal:{name:"Fungal peritonitis", p:P({org:"fungal",wbc:3200,resp:"none"}),
+    rows:[["ประวัติ","เพิ่งได้ broad-spectrum antibiotic รักษา peritonitis ครั้งก่อน"],["ผล","Gram stain เห็น yeast"],["รักษา","ถอดสายทันที antifungal ต่อ ≥ 2 สัปดาห์หลังถอด"]],
+    take:["Fungal peritonitis ต้องถอดสายทันที","ป้องกันด้วย antifungal prophylaxis (nystatin หรือ fluconazole) ระหว่างได้ antibiotic","มี mortality สูงและหลายรายกลับมาทำ PD ไม่ได้"]},
+  refr:{name:"Refractory", p:P({org:"gn",wbc:7200,resp:"none"}),
+    rows:[["ผล","E. coli ได้ยาที่ไวแล้ว 5 วัน น้ำยายังขุ่น WBC ยัง > 100/µL"],["นิยาม","refractory peritonitis"],["รักษา","ถอดสายเพื่อรักษา membrane และชีวิต ไม่ควรรอนาน (ยกเว้น effluent WBC กำลังลดลงเข้าหาปกติ สังเกตต่อได้)"]],
+    take:["Refractory = effluent ไม่ใสหลังได้ antibiotic ที่เหมาะสม 5 วัน ให้ถอดสาย (ถ้า effluent WBC กำลังลดลงเข้าหาปกติ สังเกตต่อได้)","ถอดสายเมื่อ refractory แทนการเปลี่ยนยาไปเรื่อยๆ","การดื้อดึงรักษาต่อเพิ่ม mortality และ membrane เสีย"]},
+  poly:{name:"Polymicrobial enteric", p:P({org:"poly",wbc:12000,resp:"slow"}),
+    rows:[["ผล","Gram stain หลายชนิดรวม anaerobe"],["นัย","อาจมี bowel perforation, diverticulitis, cholecystitis"],["รักษา","metronidazole + coverage กว้าง CT abdomen ปรึกษาศัลยกรรม"]],
+    take:["เชื้อลำไส้หลายชนิดหรือ anaerobe ให้หา surgical cause","มักต้อง laparotomy และถอดสาย","รักษา 3 สัปดาห์"]},
+  chyl:{name:"น้ำยาขุ่นจาก CCB", p:P({org:"chyl",wbc:20,pmn:10,tg:true,resp:"good"}),
+    rows:[["ประวัติ","เพิ่งเริ่ม lercanidipine น้ำยาขุ่นแต่ไม่ปวดท้อง"],["ผล","WBC 20/µL effluent triglyceride สูง culture ไม่ขึ้น"],["รักษา","หยุด CCB ไม่ต้องใช้ antibiotic"]],
+    take:["น้ำยาขุ่นไม่ใช่ peritonitis เสมอ ต้องดู cell count","Dihydropyridine CCB ทำให้น้ำยาขุ่นแบบ chylous (triglyceride สูง ไม่มี cell)","DDx อื่น: eosinophilic, hemoperitoneum, malignancy, ตัวอย่างจาก dry abdomen"]}
+};
+var ORDER=["cons","sa","pseudo","fungal","refr","poly","chyl"];
+
+var box=document.getElementById("ctls"), C={}, SEL={};
+function sel(k,label,opts){ var s=Sim.h("select",{id:"s"+k},opts.map(function(o){ return Sim.h("option",{value:o[0],text:o[1]}); })); s.addEventListener("change",update); box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"s"+k,text:label}),s])); SEL[k]=s; return s; }
+function sl(k,o){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); box.appendChild(C[k].el); return C[k]; }
+sel("org","เชื้อ/สาเหตุ",Object.keys(ORG).map(function(k){ return [k,ORG[k].name]; }));
+sl("wbc",{label:"Effluent WBC",min:10,max:20000,step:10,value:2400,unit:"/µL"});
+sl("pmn",{label:"PMN",min:0,max:100,step:1,value:85,unit:"%"});
+sl("dwell",{label:"Dwell ก่อนเก็บ",min:0.5,max:12,step:0.5,value:8,unit:"ชม."});
+sel("resp","การตอบสนอง",[["good","ดีขึ้นใน 48–72 ชม."],["slow","ดีขึ้นช้า"],["none","ไม่ดีขึ้น"]]);
+sl("w",{label:"น้ำหนัก",min:35,max:100,step:1,value:60,unit:"kg"});
+sel("ru","ปัสสาวะ > 100 ml/วัน",[["yes","มี (RKF)"],["no","ไม่มี"]]);
+sel("relapse","ประวัติ 4 สัปดาห์ก่อน",[["none","ไม่มี"],["same","หายจากเชื้อเดียวกัน"],["diff","หายจากเชื้ออื่น"]]);
+var exitT=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:"Exit-site/tunnel infection เชื้อเดียวกัน"});
+exitT.addEventListener("click",function(){ exitT.setAttribute("aria-pressed",exitT.getAttribute("aria-pressed")==="true"?"false":"true"); update(); });
+box.appendChild(Sim.h("div",{class:"tools"},[exitT]));
+
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?210:240,aria:"Effluent white cell count during treatment",
+  x:{min:0,max:10,step:1,label:"Day of antibiotics"},y:{min:10,max:30000,log:true,label:"WBC /µL",fmt:function(v){ return v>=1000?(v/1000)+"k":String(v); }},
+  series:[{id:"w",name:"Effluent WBC",color:A.accent,data:[],width:2.6,points:true}]});
+
+function params(){ var o={}; for(var k in C) o[k]=C[k].get(); for(var j in SEL) o[j]=SEL[j].value; o.exit=exitT.getAttribute("aria-pressed")==="true"; return o; }
+function update(){
+  var p=params(), o=ORG[p.org];
+  /* trajectory */
+  var w0=Math.max(p.wbc,120), k=o.nonInf?0:p.resp==="good"?Math.log(w0/60)/2.5:p.resp==="slow"?Math.log(w0/85)/4.6:Math.log(1/0.45)/5, data=[];
+  for(var d=0;d<=10;d++){ var v=o.nonInf?p.wbc:Math.max(15,p.wbc*Math.exp(-k*d)); data.push([d,v]); }
+  chart.setSeries("w",data);
+  chart.update({hlines:[{y:100,label:"100/µL",color:A.red,dash:[5,4]}],vlines:o.nonInf?[]:[{x:5,label:"day 5"}]});
+  /* criteria: WBC > 100 PMN > 50% (dwell ≥ 2 ชม.) หรือ PMN > 50% ถ้า dwell สั้น */
+  var cellPos=p.dwell>=2?(p.wbc>100&&p.pmn>50):(p.pmn>50);
+  var sym=!o.nonInf||p.org==="eos"?true:false, cul=!o.nonInf&&p.org!=="neg"&&p.org!=="pending";
+  var n=(sym?1:0)+(cellPos?1:0)+(cul?1:0), dx=!o.nonInf&&n>=2;
+  var cr=document.getElementById("crit"); cr.innerHTML="";
+  [["อาการ/น้ำยาขุ่น",sym],["Cell count"+(p.dwell<2?" (dwell สั้น ใช้ PMN > 50%)":" > 100, PMN > 50%"),cellPos],["Culture บวก",cul]].forEach(function(c){ cr.appendChild(Sim.h("span",{class:c[1]?"y":"",text:(c[1]?"✓ ":"")+c[0]})); });
+  var d5=data[5][1], refractory=dx&&d5>100&&p.org!=="pending";
+  var remove=o.remove==="always"?"ถอดทันที":refractory?"ถอด (refractory)":p.relapse==="same"&&dx?"พิจารณาถอด (relapsing)":(p.exit&&o.exit)?"ควรถอด":p.exit?"พิจารณาถอด":o.surg?"มักต้องถอด":"เก็บไว้";
+  var label=o.nonInf?"ไม่ใช่ peritonitis":!dx?"ยังไม่เข้าเกณฑ์":p.relapse==="same"?"Relapsing":p.relapse==="diff"?"Recurrent":refractory?"Refractory":"Peritonitis";
+  Sim.ro("roDx",label,o.nonInf?"ok":dx?"flag":false);
+  Sim.ro("roD5",o.nonInf?"-":Math.round(d5).toLocaleString(),refractory?"flag":dx?"ok":false);
+  Sim.ro("roCath",remove,/ถอด/.test(remove)&&remove!=="เก็บไว้"?"flag":"ok");
+  /* regimen */
+  var w=p.w, ru=p.ru==="yes";
+  var vanc=Math.round(w*(ru?25:20)/50)*50, cef=Math.round(w*15/50)*50, gent=Math.round(w*0.6);
+  var rows=[];
+  if(o.nonInf){ rows.push(["Empirical","ไม่ต้องให้ antibiotic ถ้า cell count ไม่เข้าเกณฑ์ (ถ้าไม่แน่ใจให้ empirical ระหว่างรอ culture ได้)"]); }
+  else {
+    rows.push(["Empirical","Gram-positive: cefazolin "+cef+" mg IP วันละครั้ง หรือ vancomycin "+vanc+" mg IP ทุก 5–7 วัน (ให้ซ้ำเมื่อระดับ ≤ 15 mg/L) ร่วมกับ gram-negative: ceftazidime "+(w<50?1000:1500)+" mg IP วันละครั้ง หรือ gentamicin "+gent+" mg IP วันละครั้ง (เลี่ยงใช้นานถ้ามี RKF)"]);
+  }
+  rows.push(["เฉพาะเชื้อ",o.rx]);
+  if(o.dur) rows.push(["ระยะเวลา",o.dur+" สัปดาห์"+(p.org==="fungal"?" หลังถอดสาย":"")]);
+  if(refractory) rows.push(["!","Refractory: ถอดสายเพื่อป้องกัน membrane เสียและ mortality (ถ้า effluent WBC กำลังลดลงเข้าหาปกติ สังเกตต่อได้)",true]);
+  if(p.relapse==="same"&&dx) rows.push(["!","Relapsing (เชื้อเดียวกันภายใน 4 สัปดาห์) สงสัย biofilm ในสาย พิจารณาเปลี่ยนสาย",true]);
+  if(p.exit&&!o.nonInf) rows.push(["!","Exit-site/tunnel infection เชื้อเดียวกัน"+(o.exit?" ควรถอดสาย":" พิจารณาถอดสายถ้าไม่หาย"),true]);
+  if(p.org==="neg") rows.push(["คุณภาพ","Culture-negative ควร < 15% ใช้ blood culture bottle 5–10 ml หรือปั่น 50 ml"]);
+  if(!o.nonInf) rows.push(["ป้องกัน","Antifungal prophylaxis ระหว่างได้ antibiotic ทบทวน technique และ exit-site care"]);
+  var rx=document.getElementById("rx"); rx.innerHTML="";
+  rows.forEach(function(r){ var e=Sim.h("div",{class:r[2]?"warn":""}); e.appendChild(Sim.h("b",{text:r[0]==="!"?"ข้อควรทำ":r[0]})); e.appendChild(Sim.h("span",{text:r[1]})); rx.appendChild(e); });
+}
+Sim.mount({code:"PD-09", title:"Peritonitis and Cloudy Effluent", lead:"ใส่ cell count, ผล culture และการตอบสนอง แล้วดูว่าเข้าเกณฑ์ peritonitis หรือไม่ empirical IP ขนาดเท่าไร รักษากี่สัปดาห์ และเมื่อไรต้องถอดสาย",
+  scenarios:S, order:ORDER, captureMs:1600,
+  onChange:function(k,s){ var p=s.p; ["org","resp","ru","relapse"].forEach(function(x){ SEL[x].value=p[x]; }); ["wbc","pmn","dwell","w"].forEach(function(x){ C[x].set(p[x]); }); exitT.setAttribute("aria-pressed",p.exit?"true":"false"); update(); },
+  refs:["Li PKT, Chow KM, Cho Y, et al. ISPD peritonitis guideline recommendations: 2022 update on prevention and treatment. Perit Dial Int 2022, 42(2): 110-153",
+        "Chow KM, Li PKT, Cho Y, et al. ISPD catheter-related infection recommendations: 2023 update. Perit Dial Int 2023, 43(3): 201-219"],
+  note:"Model เพื่อการสอน: WBC ลดแบบ exponential ตามการตอบสนองที่เลือก ขนาดยาเป็น intermittent IP สำหรับ CAPD ตามตาราง ISPD และปัดเศษ vancomycin เพิ่มราว 25% เมื่อมี RKF APD และ continuous dosing ใช้ขนาดต่างจากนี้ ตรวจสอบกับแนวทางของหน่วยและ sensitivity เสมอ"
+});
+})();
+</script>
+</body>
+</html>

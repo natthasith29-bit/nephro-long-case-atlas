@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[AKI-11] Obstructive Uropathy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.3fr 1fr}}
+.sel{display:grid;grid-template-columns:minmax(80px,170px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.two{display:grid;grid-template-columns:0.75fr 1.25fr;gap:12px;align-items:center}
+@media (max-width:700px){.two{grid-template-columns:1fr}}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:14px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .ro{padding:6px 12px}
+body.present .ro b{font-size:19px}
+body.present .ctls{gap:2px}
+body.present .ctl{font-size:13px}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+body.present .svgwrap svg{max-height:290px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>ทางเดินปัสสาวะและ GFR</h2>
+      <div class="two">
+        <div class="svgwrap"><svg id="vis" viewBox="0 0 240 320" role="img" aria-label="Urinary tract with obstruction"></svg></div>
+        <div id="chart"></div>
+      </div>
+      <div id="live"></div>
+      <p class="hint no-present">แรงดันในท่อไตขึ้นทันทีหลังอุดตัน (ช่วงแรก RBF เพิ่มจาก prostaglandin แล้วลดลงจาก Ang II และ thromboxane) GFR ของไตข้างที่อุดลดลง ถ้าไตอีกข้างปกติ Cr แทบไม่ขึ้น เส้นเขียวหลังแก้การอุดตันคือ urine output (แกนขวา)</p>
+    </div>
+    <div class="card">
+      <h2>ตำแหน่ง ระดับ และเวลา</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roP"><b>-</b><span>Intratubular P 24 ชม. (mmHg)</span></div>
+        <div class="ro" id="roG"><b>-</b><span>GFR รวมก่อนแก้ (mL/min)</span></div>
+        <div class="ro" id="roPk"><b>-</b><span>Cr สูงสุด</span></div>
+        <div class="ro" id="roRec"><b>-</b><span>ส่วนที่ฟื้นได้ของไตข้างที่อุด</span></div>
+        <div class="ro" id="roEnd"><b>-</b><span>Cr ท้ายช่วง</span></div>
+        <div class="ro" id="roUO"><b>-</b><span>UO สูงสุดหลังแก้ (mL/h)</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/live.js"></script>
+<script>
+(function(){
+"use strict";
+var SITE={uni:"Unilateral ureter (ไตอีกข้างปกติ)",solo:"Solitary kidney",bil:"Bilateral/bladder outlet"};
+function P(o){ var d={site:"uni",deg:100,dur:3,cl:100,cr0:0.9}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  uni:{name:"Ureteric stone ข้างเดียว", p:P({site:"uni",deg:100,dur:3}),
+    rows:[["ผู้ป่วย","ปวดเอวซ้าย CT พบนิ่ว 6 mm ที่ UVJ"],["ไต","ข้างที่อุด GFR ลดมาก ข้างขวาปกติ"],["Cr","ขึ้นเล็กน้อยเท่านั้น"]],
+    take:["Unilateral obstruction ที่ไตอีกข้างปกติ Cr ขึ้นน้อย ไม่ควรใช้ Cr ตัดสินความรุนแรง","Ultrasound อาจไม่เห็น hydronephrosis ในชั่วโมงแรกหรือเมื่อ volume ต่ำ","Obstruction + infection (pyonephrosis) ต้องระบายด่วน (nephrostomy หรือ stent)"]},
+  solo:{name:"Solitary kidney อุดสนิท", p:P({site:"solo",deg:100,dur:3}),
+    rows:[["ผู้ป่วย","มีไตข้างเดียว นิ่วอุด ureter anuria"],["ผล","Cr ขึ้นเกือบเป็นเส้นตรงวันละราว 2 mg/dL"],["รักษา","ระบายด่วน"]],
+    take:["Anuria ทันทีใน solitary kidney หรือ bilateral obstruction ต้องคิดถึง obstruction ก่อน","ระบายภายใน 1 สัปดาห์ส่วนใหญ่ฟื้นเกือบครบ","หลังแก้มี post-obstructive diuresis ได้"]},
+  boo:{name:"BPH เรื้อรัง + post-obstructive diuresis", p:P({site:"bil",deg:75,dur:21,cr0:1.1}),
+    rows:[["ผู้ป่วย","ชาย 75 ปี ปัสสาวะไม่ออก bladder 1.8 L Cr 4.2 บวม"],["หลังใส่สาย","urine 300–500 mL/h ใน 24 ชม. แรก"],["กลไก","ขับน้ำ Na และ urea ที่สะสม (physiological) ร่วม concentrating defect"]],
+    take:["Post-obstructive diuresis: UO > 200 mL/h ติดต่อกัน 2 ชม. หรือ > 3 L ใน 24 ชม. หลังแก้ bilateral obstruction","ช่วงแรกเป็น physiological อย่าทดแทนทุก mL ที่ออก จะทำให้ diuresis ยืด ทดแทนราว 50–75% และตามสัญญาณชีพ","ตรวจ Na, K, Mg, Cr ทุก 6–12 ชม. ระยะที่เป็น pathological เกิดจาก ADH resistance และ Na wasting"]},
+  late:{name:"อุดสนิท 6 สัปดาห์", p:P({site:"uni",deg:100,dur:42}),
+    rows:[["ผู้ป่วย","ureteric stricture หลังผ่าตัด พบช้า"],["ผล","ไตข้างนั้นแทบไม่ฟื้นหลังระบาย"],["ทางเลือก","DMSA/MAG3 ดู split function ก่อนตัดสินใจ reconstruct หรือ nephrectomy"]],
+    take:["ระยะเวลาอุดตันเป็นตัวกำหนดการฟื้นตัว อุดสนิทเกิน 6–8 สัปดาห์มักฟื้นน้อย","ไตข้างที่ปกติจะโตชดเชย (compensatory hypertrophy) ทำให้ Cr ดูไม่แย่","Renal scintigraphy ช่วยตัดสินว่าคุ้มที่จะแก้หรือไม่"]},
+  part:{name:"Partial เรื้อรัง (type 4 RTA)", p:P({site:"bil",deg:45,dur:60,cr0:1.0}),
+    rows:[["ผู้ป่วย","neurogenic bladder residual 400 mL"],["Lab","K 5.9 HCO3 18 urine pH < 5.5 Uosm ต่ำ"],["กลไก","collecting duct เสีย: hyperkalemic dRTA และ NDI"]],
+    take:["Partial obstruction เรื้อรังอาจไม่มี oliguria แต่มี polyuria จาก concentrating defect","Hyperkalemic distal RTA (type 4 pattern) พบบ่อยใน obstruction เรื้อรัง","Clean intermittent catheterization ช่วยหยุดการเสื่อม"]}
+};
+var ORDER=["uni","solo","boo","late","part"];
+var box=document.getElementById("ctls"), C={};
+var ss=Sim.h("select",{id:"site"},Object.keys(SITE).map(function(k){ return Sim.h("option",{value:k,text:SITE[k]}); })); ss.addEventListener("change",function(){ update(); });
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"site",text:"ตำแหน่ง"}),ss]));
+function sl(k,o){ o.id="s"+k; o.onInput=function(){ update(true); }; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("deg",{label:"ระดับการอุดตัน",min:20,max:100,step:5,value:100,unit:" %"});
+sl("dur",{label:"ระยะเวลาก่อนแก้",min:1,max:60,step:1,value:3,unit:" วัน"});
+sl("cl",{label:"ไตอีกข้าง",min:30,max:100,step:5,value:100,unit:" %"});
+sl("cr0",{label:"Baseline Cr",min:0.6,max:2.5,step:0.1,value:0.9,unit:" mg/dL",fmt:function(v){ return v.toFixed(1); }});
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?260:280,aria:"Creatinine and urine output before and after relief of obstruction",
+  x:{min:0,max:30,step:5,label:"Days"},y:{min:0,max:6,label:"Creatinine (mg/dL)"},y2:{min:0,max:500,step:100,label:"Urine output (mL/h)"},
+  series:[{id:"uo",name:"Urine output",color:A.teal,data:[],width:1.2,fill:true,axis:"y2"},{id:"cr",name:"Cr",color:A.accent,data:[],width:2.8}],legend:true});
+var live=Live.player(chart,{mount:"live"}), LAST=null;
+function model(){
+  var site=ss.value, d=C.deg.get()/100, dur=C.dur.get(), cl=C.cl.get()/100, cr0=C.cr0.get();
+  var tEnd=dur+21, W=70, G=15*W*(cr0>1.3?0.85:1), V=420, aRel=1;
+  var g0=G/(cr0*14.4);
+  var shareO=site==="solo"?1:0.5, shareC=site==="solo"?0:0.5;
+  var bil=site==="bil";
+  var dmg=0, hyp=1, cr=cr0, CR=[], UO=[], fluid=0, urea=0, ev=[], peak=cr0, gPre=0, uoMax=0, pt24=0;
+  var dt=1/24;
+  for(var n=0;n<=tEnd/dt;n++){
+    var t=n*dt, obst=t<dur;
+    /* intratubular pressure (mmHg) */
+    var ptub=obst? (12+d*(55*Math.exp(-t/1.5)+18*(1-Math.exp(-t/1.5)))) : 12;
+    if(Math.abs(t-1)<dt/2) pt24=ptub;
+    /* fraction of function of obstructed kidney(s) */
+    var acute=obst? Math.max(0.05,1-d*(0.75+0.2*Math.min(1,t/2))) : 1;
+    if(obst) dmg+=d*d*dt*(2*t/400);
+    var rec=Math.exp(-Math.pow(dur*d*d/20,2));
+    if(obst) aRel=acute;
+    var fO=obst?acute:aRel+(Math.max(aRel,rec)-aRel)*Math.min(1,(t-dur)/5);
+    if(!bil&&site!=="solo"&&obst) hyp=Math.min(1.3,hyp+0.02*dt*d);
+    var gfr = bil ? g0*fO : g0*(shareO*fO+shareC*cl*hyp*(site==="solo"?0:1)/(cl>0?1:1));
+    if(!bil&&site!=="solo") gfr=g0*(0.5*fO+0.5*cl*hyp);
+    gfr=Math.max(1,gfr);
+    if(obst) gPre=gfr;
+    cr+=((G/(gfr*14.4))-cr)*dt/Math.max(0.3,V/(gfr*1.44*10));
+    peak=Math.max(peak,cr);
+    /* urine output and accumulation */
+    var uoBase=60*(gfr/g0)+ (bil&&!obst? 20*(1-rec) : 0)*1 ;
+    var uo=obst&&(bil||site==="solo")? 60*acute*(d>=0.95?0.05:1) : uoBase;
+    if((bil||site==="solo")&&obst&&d>=0.7){ fluid=Math.min(8,fluid+Math.max(0,1.6-uo*24/1000)*dt); urea+=dt; }
+    if(!obst&&(bil||site==="solo")){ var post=(fluid>0? Math.min(450,fluid*1000/30) : 0)*(1+ (bil?0.5*(1-rec):0)); var lose=post*dt*24/1000; fluid=Math.max(0,fluid-lose); uo+=post; }
+    uoMax=Math.max(uoMax,obst?0:uo);
+    if(n%3===0){ CR.push([+t.toFixed(3),cr]); UO.push([+t.toFixed(3),uo]); }
+  }
+  UO=UO.map(function(p){ return [p[0],p[1]===null?0:p[1]]; });
+  var recF=Math.exp(-Math.pow(dur*d*d/20,2));
+  ev.push({t:0,kind:"phys",text:"อุดตัน "+Math.round(d*100)+"% ที่ "+SITE[site]+" แรงดันในท่อไตขึ้นทันที RBF เพิ่มช่วงสั้น ๆ จาก prostaglandin"});
+  ev.push({t:0.2,kind:"phys",text:"ชั่วโมงที่ 3–5: afferent vasoconstriction (Ang II, thromboxane) RBF และ GFR ลด"});
+  if(site==="uni") ev.push({t:Math.min(dur,5),kind:"phys",text:"Cr แทบไม่ขึ้นเพราะไตอีกข้างทำงานแทน"});
+  if((site==="solo"||bil)&&d>=0.95) ev.push({t:0.1,kind:"warn",text:"Anuria"});
+  if(dur>14) ev.push({t:14,kind:"warn",text:"อุดตันนานเกิน 2 สัปดาห์ เริ่มเกิด fibrosis และ tubular atrophy"});
+  ev.push({t:dur,kind:"rx",text:"ระบาย ("+(bil?"Foley/suprapubic catheter":"ureteric stent หรือ percutaneous nephrostomy")+")"});
+  if(uoMax>200) ev.push({t:dur+0.1,kind:"warn",text:"Post-obstructive diuresis UO สูงสุด "+uoMax.toFixed(0)+" mL/h ทดแทน 50–75% ตรวจ Na, K, Mg ทุก 6–12 ชม."});
+  ev.push({t:tEnd,kind:recF>0.7?"ok":"warn",text:"สิ้นสุด: ไตข้างที่อุดฟื้นได้ราว "+Math.round(recF*100)+"% Cr "+CR[CR.length-1][1].toFixed(1)});
+  return {site:site,d:d,dur:dur,cl:cl,cr0:cr0,CR:CR,UO:UO,ev:ev,peak:peak,end:CR[CR.length-1][1],rec:recF,gPre:gPre,uoMax:uoMax,pt24:pt24,tEnd:tEnd,bil:bil};
+}
+var svg=document.getElementById("vis");
+function tx(x,y,s,o){ o=o||{}; return Sim.svg("text",{x:x,y:y,"text-anchor":o.a||"middle","font-family":o.mono?"Geist Mono, monospace":"IBM Plex Sans Thai, sans-serif","font-size":o.fs||11,"font-weight":o.fw||400,fill:o.fill||"#0B0B1F",text:s},svg); }
+function draw(M,t){
+  svg.innerHTML="";
+  var obst=t<M.dur, d=M.d, hyd=obst?Math.min(1,d*(0.4+0.6*Math.min(1,t/7))):Math.max(0,d*0.4*(1-(t-M.dur)/3));
+  function kidney(x,o,dil,label,fn){
+    Sim.svg("ellipse",{cx:x,cy:76,rx:34,ry:46,fill:"#E7C4BE",stroke:"#8E4B44","stroke-width":1.6},svg);
+    Sim.svg("ellipse",{cx:x+(x<120?14:-14),cy:72,rx:6+14*dil,ry:10+18*dil,fill:"#D6ECF5",stroke:"#5B8FB0","stroke-width":1.2},svg);
+    tx(x,10,label,{fs:10.5,fill:"#5E6075"}); tx(x,24,fn,{fs:11,fw:600,mono:true,fill:"#0B0B1F"});
+  }
+  var leftOb=true, rightOb=M.site==="bil";
+  var solo=M.site==="solo";
+  kidney(60,leftOb,hyd,"Obstructed",obst?"GFR ↓":"Relieved");
+  if(!solo) kidney(180,rightOb,rightOb?hyd:0,rightOb?"Obstructed":"Contralateral",rightOb?(obst?"GFR ↓":"Relieved"):Math.round(M.cl*100)+"%");
+  else { Sim.svg("ellipse",{cx:180,cy:70,rx:30,ry:44,fill:"none",stroke:"#D3D5E2","stroke-dasharray":"4 4"},svg); tx(180,74,"Absent",{fs:10.5,fill:"#9A9CB2"}); tx(180,10,"Solitary",{fs:10.5,fill:"#9A9CB2"}); }
+  /* ureters */
+  var uw=4+6*(M.site!=="bil"?hyd:0);
+  Sim.svg("path",{d:"M64 118 C70 170 92 210 108 250",stroke:"#5B8FB0","stroke-width":uw,fill:"none","stroke-linecap":"round"},svg);
+  if(!solo) Sim.svg("path",{d:"M176 118 C170 170 148 210 132 250",stroke:"#5B8FB0","stroke-width":rightOb?4+6*hyd*0.6:4,fill:"none","stroke-linecap":"round"},svg);
+  /* bladder */
+  var bv=M.bil&&obst?0.4+0.6*d:0.15;
+  Sim.svg("ellipse",{cx:120,cy:272,rx:26+22*bv,ry:16+14*bv,fill:"#D6ECF5",stroke:"#5B8FB0","stroke-width":1.6},svg);
+  Sim.svg("path",{d:"M120 "+(288+14*bv)+" L120 316",stroke:"#5B8FB0","stroke-width":4},svg);
+  /* obstruction marker */
+  if(obst){ var mx=M.bil?120:96, my=M.bil?304+6*bv*0:226; if(M.bil) my=Math.min(312,292+14*bv);
+    Sim.svg("rect",{x:mx-10,y:my-4,width:20,height:8,rx:3,fill:"#B4232A"},svg); tx(mx+(M.bil?40:-30),my+4,M.bil?"Outlet":"Stone",{fs:10.5,fill:"#B4232A",fw:600}); }
+  var pt=obst?(12+d*(55*Math.exp(-t/1.5)+18*(1-Math.exp(-t/1.5)))):12;
+  tx(4,206,"Tubular P",{a:"start",fs:10.5,fill:"#5E6075"}); tx(4,220,pt.toFixed(0)+" mmHg",{a:"start",fs:11.5,fw:600,mono:true,fill:pt>30?"#B4232A":"#0B0B1F"});
+}
+function onFrame(t,done){
+  var M=LAST; draw(M,t);
+  Sim.ro("roP",M.pt24.toFixed(0),M.pt24>30?"flag":"ok"); Sim.ro("roG",t>=M.dur?M.gPre.toFixed(0):"…",t>=M.dur?(M.gPre<40?"flag":null):null);
+  Sim.ro("roPk",t>=M.dur||done?M.peak.toFixed(1):"…",M.peak>=M.cr0*1.5?"flag":"ok");
+  Sim.ro("roRec",Math.round(M.rec*100)+"%",M.rec<0.5?"flag":M.rec>0.8?"ok":null);
+  Sim.ro("roEnd",done?M.end.toFixed(1):"…",done?(M.end>M.cr0*1.25?"flag":"ok"):null);
+  Sim.ro("roUO",t>M.dur?M.uoMax.toFixed(0):"…",t>M.dur?(M.uoMax>200?"flag":null):null);
+  var a=document.getElementById("act");
+  if(done){ a.innerHTML=M.act; a.className=M.actCls; } else { a.innerHTML="<b>กำลังจำลอง</b> วันที่ "+t.toFixed(1)+" Cr "+Live.valueAt(M.CR,t).toFixed(2); a.className="act"; }
+}
+function update(deb){
+  var M=model();
+  chart.update({x:{min:0,max:M.tEnd,step:M.tEnd>40?10:5,label:"Days"},y:{min:0,max:Math.max(3,Math.ceil(M.peak*1.15)),label:"Creatinine (mg/dL)"},vlines:[{x:M.dur,label:"Relief",color:A.ink}],
+    y2:{min:0,max:Math.max(200,Math.ceil(M.uoMax/100+0.5)*100),step:100,label:"Urine output (mL/h)"}});
+  chart.setSeries("cr",M.CR); chart.setSeries("uo",M.UO);
+  var m, bad=true;
+  if(M.d<0.6&&M.dur>30) m="<b>Partial obstruction เรื้อรัง</b> ระบาย (clean intermittent catheterization หรือ catheter) แก้ hyperK และ acidosis ติดตาม Cr และ urine concentrating ability";
+  else if(M.uoMax>200) m="<b>Post-obstructive diuresis</b> ให้ IV fluid ราว 50–75% ของ UO ชั่วโมงก่อน (0.45% NaCl ถ้า Na สูง) ตรวจ Na, K, Mg, Cr ทุก 6–12 ชม. ชั่งน้ำหนักทุกวัน";
+  else if(M.rec<0.4) m="<b>ฟื้นน้อย</b> ทำ MAG3/DMSA ดู split function ถ้าไตข้างนั้นทำงาน < 10–15% พิจารณาไม่ reconstruct หรือ nephrectomy ถ้ามี infection/pain ติดตาม CKD";
+  else if(M.site==="uni"&&M.cl>=0.9){ bad=M.rec<0.8; m="<b>Unilateral obstruction</b> Cr ไม่สะท้อนความรุนแรง ระบายด่วนถ้ามีไข้/infection, ไตข้างเดียว, หรือ AKI นิ่ว < 10 mm ที่ distal ลอง medical expulsive therapy ได้ถ้าไม่มีข้อห้าม"; }
+  else { bad=M.end>M.cr0*1.25; m="<b>ระบายแล้ว</b> Cr ควรลดภายใน 48–72 ชม. ถ้าไม่ลดหาสาเหตุอื่น (ATN, contrast, infection) ติดตาม UO และ electrolyte"; }
+  M.act="<b>Next step:</b> "+m; M.actCls="act"+(bad?" bad":"");
+  LAST=M; draw(M,0);
+  live.load({tMax:M.tEnd,unit:"วัน",ms:8000,debounce:deb===true,num:function(x){ return x.toFixed(1); },events:M.ev.sort(function(a,b){ return a.t-b.t; }),onFrame:onFrame,baseVlines:[{x:M.dur,label:"Relief",color:A.ink}],
+    cursorLabel:function(t){ return "Cr "+Live.valueAt(M.CR,t).toFixed(1); }});
+}
+Sim.mount({code:"AKI-11", title:"Obstructive Uropathy", lead:"เลือกตำแหน่ง ระดับ และระยะเวลาของการอุดตัน ดูแรงดันในท่อไต, GFR, Cr, การฟื้นตัวหลังระบาย และ post-obstructive diuresis ในกรณี bilateral หรือ solitary kidney",
+  scenarios:S, order:ORDER, captureMs:1000,
+  onChange:function(k,s){ ss.value=s.p.site; C.deg.set(s.p.deg); C.dur.set(s.p.dur); C.cl.set(s.p.cl); C.cr0.set(s.p.cr0); update(); },
+  refs:["Klahr S, Morrissey J. Obstructive nephropathy and renal fibrosis. Am J Physiol Renal Physiol 2002, 283(5): F861-F875",
+        "Chevalier RL, Forbes MS, Thornhill BA. Ureteral obstruction as a model of renal interstitial fibrosis and obstructive nephropathy. Kidney Int 2009, 75(11): 1145-1152",
+        "Vaughan ED Jr, Gillenwater JY. Recovery following complete chronic unilateral ureteral occlusion: functional, radiographic and pathologic alterations. J Urol 1971, 106(1): 27-35",
+        "Halbgewachs C, Domes T. Postobstructive diuresis: pay close attention to urinary retention. Can Fam Physician 2015, 61(2): 137-142",
+        "Batlle DC, Arruda JA, Kurtzman NA. Hyperkalemic distal renal tubular acidosis associated with obstructive uropathy. N Engl J Med 1981, 304(7): 373-380",
+        "Türk C, Petřík A, Sarica K, et al (EAU). EAU guidelines on diagnosis and conservative management of urolithiasis. Eur Urol 2016, 69(3): 468-474"],
+  note:"Model เพื่อการสอน: แรงดันในท่อไตขึ้นถึงราว 65 mmHg แล้วลดเหลือราว 30 ในอุดสนิท ไตข้างที่อุดเหลือการทำงาน 5–25% ระหว่างอุด ส่วนที่ฟื้นได้หลังระบาย = exp(−(วัน x ระดับ² / 20)²) ไตอีกข้างโตชดเชยสูงสุด 30% post-obstructive diuresis คิดจากน้ำที่สะสมระหว่างอุด (bilateral/solitary) และ concentrating defect ตามระยะเวลา"
+});
+})();
+</script>
+</body>
+</html>

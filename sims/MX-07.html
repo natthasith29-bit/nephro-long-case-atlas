@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[MX-07] Pregnancy and the Kidney: Physiology, Preeclampsia and TMA Timing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.25fr 1fr}}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:8px}
+.sub{font-size:12.5px;color:var(--muted);margin:12px 0 4px}
+.gap{height:8px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:12px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .ro{padding:5px 12px}
+body.present .ro b{font-size:16px}
+body.present .ctls{gap:0}
+body.present .ctl{font-size:12.5px}
+body.present .tog{padding:3px 8px;font-size:11.5px}
+body.present .tools{margin-top:3px;gap:4px}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+body.present .sub{margin:4px 0 1px}
+body.present .svgwrap svg{max-height:210px}
+body.present .gap{height:2px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>สรีรวิทยาตามอายุครรภ์</h2>
+      <div id="chart"></div>
+      <div class="gap"></div>
+      <div class="svgwrap"><svg id="tl" viewBox="0 0 640 230" role="img" aria-label="Timing of pregnancy-related kidney disorders by gestational week"></svg></div>
+      <p class="hint no-present">กราฟบน: % เปลี่ยนจากก่อนตั้งครรภ์ของ GFR, renal plasma flow, plasma volume และ MAP สัปดาห์ 40–52 คือหลังคลอด 0–12 สัปดาห์ ภาพล่าง: ช่วงเวลาที่โรคแต่ละชนิดมักเกิด เส้นตั้งคืออายุครรภ์ที่เลือก ใช้แยก TMA ในครรภ์จากเวลาที่เกิด</p>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วย</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="sub">อาการและ lab เพิ่มเติม</div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roCr"><b>-</b><span>Cr ที่คาดในสัปดาห์นี้</span></div>
+        <div class="ro" id="roPt"><b>-</b><span>Cr ผู้ป่วย</span></div>
+        <div class="ro" id="roNa"><b>-</b><span>Na และ Posm ปกติ</span></div>
+        <div class="ro" id="roAB"><b>-</b><span>pCO2 / HCO3 ปกติ</span></div>
+        <div class="ro" id="roDx"><b>-</b><span>นึกถึง</span></div>
+        <div class="ro" id="roSev"><b>-</b><span>Severe features</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script>
+(function(){
+"use strict";
+function SV(t,a,p){ var b={}; for(var k in a) if(a[k]!==null&&a[k]!==undefined) b[k]=a[k]; return Sim.svg(t,b,p); }
+function P(o){ var d={wk:12,cr:0.5,sbp:105,upcr:0.1,plt:250,rx:[]}; for(var k in o) d[k]=o[k]; return d; }
+var TG={hemo:"Hemolysis (schistocyte, LDH สูง)",ast:"AST/ALT สูง",adam:"ADAMTS13 < 10%",liver:"Hypoglycemia, INR สูง",neuro:"ปวดหัว ตามัว",chtn:"HT ก่อนตั้งครรภ์"};
+var S={
+  t1:{name:"ปกติ 12 สัปดาห์", p:P({}),
+    rows:[["GFR","เพิ่มราว 40–50% ตั้งแต่ไตรมาสแรก"],["Cr","0.5 mg/dL ปกติในครรภ์"],["อื่น","Posm ลดราว 10 Na ราว 135 pCO2 ราว 30"]],
+    take:["GFR และ renal plasma flow เพิ่มตั้งแต่ไตรมาสแรก Cr ในครรภ์ปกติราว 0.4–0.6","Osmostat reset: Posm และ Na ต่ำลงราว 10 และ 4–5 เป็นภาวะปกติ","Progesterone กระตุ้นการหายใจ ทำให้ respiratory alkalosis ชดเชยด้วย HCO3 ราว 20"]},
+  t3:{name:"ปกติ 32 สัปดาห์", p:P({wk:32,cr:0.55,sbp:112,upcr:0.2}),
+    rows:[["MAP","ต่ำสุดกลางไตรมาสสอง กลับขึ้นช่วงท้าย"],["Plasma volume","เพิ่มราว 45%"],["Proteinuria","สูงสุดปกติ 300 mg/วัน"]],
+    take:["BP ลดต่ำสุดราวสัปดาห์ที่ 20 แล้วกลับสู่ระดับก่อนตั้งครรภ์ใกล้คลอด","Hydronephrosis ข้างขวาพบได้ปกติจากมดลูกกดและ progesterone","Proteinuria เพิ่มได้แต่ไม่ควรเกิน 300 mg/วัน (UPCR 0.3)"]},
+  crhi:{name:"Cr 0.9 ที่ 24 สัปดาห์", p:P({wk:24,cr:0.9,sbp:118,upcr:0.4}),
+    rows:[["Cr","0.9 ดูปกติในคนไม่ตั้งครรภ์"],["คาด","ราว 0.5 ในสัปดาห์นี้"],["แปลผล","GFR ลดลงจริง ต้องหาสาเหตุ"]],
+    take:["Cr ที่ 'ปกติ' ตามเกณฑ์ทั่วไปอาจผิดปกติในครรภ์","eGFR equation ใช้ไม่ได้ในครรภ์ ใช้ Cr เทียบค่าที่คาดหรือ 24-h CrCl","Cr ≥ 0.9 หรือขึ้นเกิน 50% จากค่าก่อนหน้าในครรภ์ควรประเมินโรคไต"]},
+  pe:{name:"Preeclampsia severe 34 สัปดาห์", p:P({wk:34,cr:1.2,sbp:166,upcr:1.8,plt:130,rx:["neuro"]}),
+    rows:[["BP","166/108 ปวดหัวตามัว"],["Lab","UPCR 1.8 Cr 1.2 platelet 130"],["ต่อ","MgSO4 คุม BP เร่งคลอด"]],
+    take:["Preeclampsia: HT หลัง 20 สัปดาห์ร่วมกับ proteinuria หรือ organ dysfunction","Severe features: SBP ≥ 160, Cr > 1.1, platelet < 100, liver, neuro, pulmonary edema","การรักษาที่แท้จริงคือคลอด severe ≥ 34 สัปดาห์คลอดหลังทำให้ stable"]},
+  hellp:{name:"HELLP 32 สัปดาห์", p:P({wk:32,cr:1.0,sbp:150,upcr:0.8,plt:70,rx:["hemo","ast"]}),
+    rows:[["Lab","platelet 70 AST 240 LDH 900 schistocyte"],["BP","150/95"],["ต่อ","คลอด MgSO4 ประคับประคอง"]],
+    take:["HELLP: hemolysis, elevated liver enzymes, low platelet เป็น severe preeclampsia ชนิดหนึ่ง","ราว 15–20% ไม่มี HT หรือ proteinuria ชัด และราว 30% เกิดหลังคลอด","ADAMTS13 ไม่ต่ำ และดีขึ้นใน 48–72 ชม. หลังคลอด ถ้าไม่ดีขึ้นให้นึกถึง TTP หรือ aHUS"]},
+  ttp:{name:"TTP 26 สัปดาห์", p:P({wk:26,cr:1.1,sbp:120,upcr:0.3,plt:18,rx:["hemo","adam","neuro"]}),
+    rows:[["Lab","platelet 18 schistocyte LDH สูง ADAMTS13 < 10%"],["Kidney","Cr ขึ้นเล็กน้อย"],["ต่อ","PLEX ทันที caplacizumab steroid"]],
+    take:["TTP มักเกิดไตรมาสสองถึงสาม platelet ต่ำมาก อาการทางสมองเด่น ไตเสียน้อย","ADAMTS13 < 10% ยืนยัน congenital TTP มักแสดงครั้งแรกตอนตั้งครรภ์","เริ่ม PLEX ทันทีเมื่อสงสัย ไม่ต้องรอผล ADAMTS13 (PLASMIC ช่วย)"]},
+  ahus:{name:"aHUS หลังคลอด 2 สัปดาห์", p:P({wk:42,cr:4.2,sbp:150,upcr:1.5,plt:60,rx:["hemo"]}),
+    rows:[["เวลา","หลังคลอด 2 สัปดาห์ ไม่ดีขึ้นหลังคลอด"],["Lab","Cr 4.2 platelet 60 ADAMTS13 ปกติ"],["ต่อ","C5 inhibitor ตรวจ complement genetics"]],
+    take:["Pregnancy-associated aHUS เกิดหลังคลอดเป็นส่วนใหญ่ AKI รุนแรง","ADAMTS13 ปกติ และไม่ดีขึ้นหลังคลอดเหมือน HELLP","C5 inhibitor ให้เร็วช่วยให้ไตฟื้น ส่วนใหญ่พบ complement variant"]},
+  aflp:{name:"AFLP 36 สัปดาห์", p:P({wk:36,cr:2.0,sbp:125,upcr:0.3,plt:110,rx:["ast","liver"]}),
+    rows:[["อาการ","คลื่นไส้ อาเจียน ปวดท้อง polydipsia"],["Lab","glucose ต่ำ INR สูง bilirubin สูง Cr 2.0"],["ต่อ","คลอดทันที ประคับประคองตับและไต"]],
+    take:["Acute fatty liver of pregnancy เกิดไตรมาสสาม ตับวาย hypoglycemia coagulopathy และ AKI","สัมพันธ์กับ fetal LCHAD deficiency","แยกจาก HELLP ด้วย hypoglycemia และ coagulopathy เด่น รักษาด้วยการคลอด"]}
+};
+var ORDER=["t1","t3","crhi","pe","hellp","ttp","ahus","aflp"];
+var box=document.getElementById("ctls"), C={};
+function wkLbl(v){ return v<=40?"GA "+v:"PP +"+(v-40); }
+function sl(k,o){ o.id="s"+k; o.onInput=function(){ update(); }; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("wk",{label:"อายุครรภ์ (สัปดาห์, PP = หลังคลอด)",min:0,max:52,step:1,value:12,unit:"",fmt:wkLbl});
+sl("cr",{label:"Cr ผู้ป่วย (mg/dL)",min:0.3,max:6,step:0.05,value:0.5,unit:"",fmt:function(v){ return v.toFixed(2); }});
+sl("sbp",{label:"SBP (mmHg)",min:90,max:200,step:1,value:105,unit:""});
+sl("upcr",{label:"UPCR (g/g)",min:0,max:6,step:0.05,value:0.1,unit:"",fmt:function(v){ return v.toFixed(2); }});
+sl("plt",{label:"Platelet (x10⁹/L)",min:5,max:400,step:5,value:250,unit:""});
+var T={}, tb=document.getElementById("tools");
+Object.keys(TG).forEach(function(k){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:TG[k]}); b.addEventListener("click",function(){ b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); tb.appendChild(b); T[k]=b; });
+function on(k){ return T[k].getAttribute("aria-pressed")==="true"; }
+/* physiology as fraction of pre-pregnancy; postpartum returns with tau 2 weeks */
+function pp(w,f){ if(w<=40) return f(w); var v40=f(40); return 1+(v40-1)*Math.exp(-(w-40)/2); }
+function gfr(w){ return pp(w,function(x){ return 1+0.5*(1-Math.exp(-x/4.5))-(x>34?0.1*(x-34)/6:0); }); }
+function rpf(w){ return pp(w,function(x){ return 1+0.75*(1-Math.exp(-x/5))-(x>20?0.25*(x-20)/20:0); }); }
+function pv(w){ return pp(w,function(x){ return 1+0.45/(1+Math.exp(-(x-18)/4.5)); }); }
+function map(w){ return pp(w,function(x){ return 1-0.10*Math.exp(-Math.pow((x-20)/10,2)); }); }
+function shift(w){ return w<=40?Math.min(1,w/10):Math.exp(-(w-40)/1.5); }
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?225:250,aria:"Renal and hemodynamic changes across pregnancy",
+  x:{min:0,max:52,step:4,label:"Gestational week (40+ = postpartum)"},y:{min:-15,max:80,step:15,label:"Change from baseline (%)"},
+  series:[{id:"rpf",name:"Renal plasma flow",color:A.teal,data:[],width:2.2},{id:"gfr",name:"GFR",color:A.accent,data:[],width:2.6},{id:"pv",name:"Plasma volume",color:A.gold,data:[],width:2,dash:[6,4]},{id:"map",name:"MAP",color:A.red,data:[],width:2,dash:[2,3]}],
+  xbands:[{x0:40,x1:52,label:"Postpartum",color:"rgba(94,96,117,0.08)"}],legend:true});
+(function(){ var G=[],R=[],V=[],M=[]; for(var w=0;w<=52;w+=0.5){ G.push([w,(gfr(w)-1)*100]); R.push([w,(rpf(w)-1)*100]); V.push([w,(pv(w)-1)*100]); M.push([w,(map(w)-1)*100]); } chart.setSeries("gfr",G); chart.setSeries("rpf",R); chart.setSeries("pv",V); chart.setSeries("map",M); })();
+var svg=document.getElementById("tl"), INK="#0B0B1F", MUT="#5E6075", RED="#B4232A";
+var DZ=[["Hyperemesis, prerenal AKI",6,16,"#9A9CB2"],["Preeclampsia",20,46,"#5B4BFF"],["HELLP",27,41,"#5B4BFF"],["TTP",14,40,"#B4232A"],["AFLP",30,40,"#A8842C"],["aHUS",36,52,"#1F7A72"],["Septic abortion, cortical necrosis",8,24,"#9A9CB2"]];
+function timeline(wk,dx){
+  svg.innerHTML=""; var X0=210,X1=620; function X(w){ return X0+w/52*(X1-X0); }
+  SV("text",{x:20,y:16,"font-family":"IBM Plex Sans Thai, sans-serif","font-size":12.5,"font-weight":600,fill:INK,text:"When each disorder typically appears"},svg);
+  SV("rect",{x:X(40),y:24,width:X(52)-X(40),height:180,fill:"#F4F5F9"},svg);
+  DZ.forEach(function(d,i){ var y=34+i*24, hot=dx&&d[0].indexOf(dx)===0;
+    SV("text",{x:20,y:y+12,"font-family":"IBM Plex Sans Thai, sans-serif","font-size":11.5,"font-weight":hot?700:400,fill:hot?d[3]:MUT,text:d[0]},svg);
+    SV("rect",{x:X(d[1]),y:y+2,width:X(d[2])-X(d[1]),height:13,rx:6.5,fill:d[3],opacity:hot?0.95:0.35},svg); });
+  [0,10,20,30,40,46,52].forEach(function(w){ SV("text",{x:X(w),y:220,"text-anchor":"middle","font-family":"Geist Mono, monospace","font-size":10.5,fill:MUT,text:w<=40?String(w):"+"+(w-40)},svg); });
+  SV("line",{x1:X(wk),y1:24,x2:X(wk),y2:206,stroke:INK,"stroke-width":1.6,"stroke-dasharray":"4 3"},svg);
+}
+function update(){
+  var wk=C.wk.get(), cr=C.cr.get(), sbp=C.sbp.get(), up=C.upcr.get(), plt=C.plt.get(), o={}; Object.keys(TG).forEach(function(k){ o[k]=on(k); });
+  var g=gfr(wk), crE=0.7/g, sh=shift(wk), na=140-4.5*sh, posm=285-10*sh, pco2=40-10*Math.min(1,wk<=40?wk/12:sh), hco3=24-4*Math.min(1,wk<=40?wk/12:sh);
+  chart.update({vlines:[{x:wk,label:wk<=40?"GA "+wk:"PP +"+(wk-40)}]});
+  var crHigh=cr>=crE*1.45||(wk>=12&&wk<=40&&cr>=0.9);
+  var after20=wk>=20, post=wk>40, ht=sbp>=140, sev=[];
+  if(sbp>=160) sev.push("SBP ≥ 160"); if(cr>1.1) sev.push("Cr > 1.1"); if(plt<100) sev.push("Plt < 100"); if(o.ast) sev.push("LFT ×2"); if(o.neuro) sev.push("Neuro");
+  var tma=o.hemo&&plt<150, dx="", m="", bad=true;
+  if(o.adam&&tma){ dx="TTP"; m="<b>TTP</b> เริ่ม PLEX ทันที + steroid (caplacizumab ข้อมูลในครรภ์ยังจำกัด) ตรวจ ADAMTS13 inhibitor แยก congenital TTP (ต้องให้ plasma ตลอดการตั้งครรภ์ครั้งต่อไป)"; }
+  else if(o.liver&&wk>=28&&wk<=41){ dx="AFLP"; m="<b>Acute fatty liver of pregnancy</b> คลอดทันทีหลังทำให้ stable แก้ glucose และ coagulopathy ตรวจ fetal LCHAD"; }
+  else if(post&&tma&&cr>=2){ dx="aHUS"; m="<b>Postpartum aHUS</b> ADAMTS13 ปกติและไม่ดีขึ้นหลังคลอด เริ่ม C5 inhibitor (ให้ meningococcal vaccine) ตรวจ complement และ genetics (ดู GN-05)"; }
+  else if(tma&&o.ast&&after20){ dx="HELLP"; m="<b>HELLP</b> MgSO4 คุม BP และคลอดหลังทำให้แม่ stable (ถ้า < 34 สัปดาห์และแม่ stable อาจรอ 24–48 ชม. เพื่อให้ corticosteroid) ถ้าไม่ดีขึ้นใน 48–72 ชม. หลังคลอดให้นึกถึง TTP หรือ aHUS"; }
+  else if(after20&&wk<=46&&ht&&(up>=0.3||sev.length)){ dx="Preeclampsia"; m=sev.length?"<b>Preeclampsia with severe features</b> MgSO4 ป้องกันชัก ลด SBP ให้ < 160 ด้วย labetalol, nifedipine หรือ hydralazine คลอดเมื่อ ≥ 34 สัปดาห์ หรือแม่/ทารกไม่ stable":"<b>Preeclampsia</b> ไม่มี severe feature ติดตามใกล้ชิด คลอดที่ 37 สัปดาห์ ใช้ sFlt-1/PlGF ช่วยพยากรณ์ (ดู HT-08)"; }
+  else if(o.chtn||(ht&&!after20)){ dx="Chronic HT"; m="<b>Chronic hypertension</b> เป้า BP < 140/90 ให้ aspirin ขนาดต่ำตั้งแต่ 12–16 สัปดาห์ เลี่ยง ACEi/ARB ตรวจ baseline UPCR และ Cr เพื่อเทียบภายหลัง"; }
+  else if(crHigh){ dx="AKI/CKD"; m="<b>Cr สูงกว่าค่าที่คาด</b> หาสาเหตุ: prerenal, sepsis, obstruction, GN, lupus ตรวจ urinalysis, UPCR, ultrasound ไต eGFR equation ใช้ไม่ได้ในครรภ์"; }
+  else { dx="Normal"; bad=false; m="<b>สรีรวิทยาปกติของการตั้งครรภ์</b> Cr "+cr.toFixed(2)+" เทียบค่าที่คาด "+crE.toFixed(2)+" Na "+na.toFixed(0)+" และ pCO2 "+pco2.toFixed(0)+" ถือว่าปกติในสัปดาห์นี้"; }
+  timeline(wk,dx==="AKI/CKD"||dx==="Normal"||dx==="Chronic HT"?"":dx);
+  Sim.ro("roCr",crE.toFixed(2),null);
+  Sim.ro("roPt",cr.toFixed(2),crHigh?"flag":"ok");
+  Sim.ro("roNa",na.toFixed(0)+" / "+posm.toFixed(0),null);
+  Sim.ro("roAB",pco2.toFixed(0)+" / "+hco3.toFixed(0),null);
+  Sim.ro("roDx",dx,dx==="Normal"?"ok":"flag");
+  Sim.ro("roSev",dx==="Preeclampsia"||dx==="HELLP"?(sev.length?sev.join(", "):"ไม่มี"):"–",sev.length&&(dx==="Preeclampsia"||dx==="HELLP")?"flag":null);
+  var a=document.getElementById("act"); a.innerHTML="<b>Next step:</b> "+m; a.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"MX-07", title:"Pregnancy and the Kidney: Physiology, Preeclampsia and TMA Timing", lead:"เลื่อนอายุครรภ์เพื่อดู GFR, renal plasma flow, plasma volume, BP และค่า lab ที่ปกติในแต่ละช่วง แล้วใส่ BP, Cr, UPCR, platelet และ clue เพื่อแยก preeclampsia, HELLP, TTP, aHUS และ AFLP ตามเวลาที่เกิด",
+  scenarios:S, order:ORDER, captureMs:600,
+  onChange:function(k,s){ ["wk","cr","sbp","upcr","plt"].forEach(function(x){ C[x].set(s.p[x]); }); Object.keys(T).forEach(function(x){ T[x].setAttribute("aria-pressed",s.p.rx.indexOf(x)>=0?"true":"false"); }); update(); },
+  refs:["Cheung KL, Lafayette RA. Renal physiology of pregnancy. Adv Chronic Kidney Dis 2013, 20(3): 209-214",
+        "Odutayo A, Hladunewich M. Obstetric nephrology: renal hemodynamic and metabolic physiology in normal pregnancy. Clin J Am Soc Nephrol 2012, 7(12): 2073-2080",
+        "American College of Obstetricians and Gynecologists. Gestational hypertension and preeclampsia: ACOG Practice Bulletin No. 222. Obstet Gynecol 2020, 135(6): e237-e260",
+        "Magee LA, Brown MA, Hall DR, et al. The 2021 International Society for the Study of Hypertension in Pregnancy classification, diagnosis and management recommendations for international practice. Pregnancy Hypertens 2022, 27: 148-169",
+        "Fakhouri F, Scully M, Provôt F, et al. Management of thrombotic microangiopathy in pregnancy and postpartum: report from an international working group. Blood 2020, 136(19): 2103-2117",
+        "Bruel A, Kavanagh D, Noris M, et al. Hemolytic uremic syndrome in pregnancy and postpartum. Clin J Am Soc Nephrol 2017, 12(8): 1237-1247",
+        "Wiles K, Bramham K, Seed PT, et al. Serum creatinine in pregnancy: a systematic review. Kidney Int Rep 2019, 4(3): 408-419"],
+  note:"เส้นสรีรวิทยาเป็นค่าเฉลี่ยโดยประมาณเพื่อการสอน (GFR +50%, RPF +75% แล้วลดลงช่วงท้าย, plasma volume +45%, MAP ต่ำสุดราว −10% ที่ 20 สัปดาห์) Cr ที่คาด = 0.7/GFR fraction การแยกโรคเป็น heuristic ตามเกณฑ์ที่อ้างอิง ไม่ใช้แทนการประเมินทางสูติกรรม"
+});
+})();
+</script>
+</body>
+</html>

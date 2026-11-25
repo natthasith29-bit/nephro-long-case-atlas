@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[HD-16] Nutrition in HD and IDPN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(120px,160px) 1fr 104px}
+.grp{font:500 11.5px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:6px 0 -2px}
+.readout{grid-template-columns:repeat(3,1fr)}
+.pew{display:grid;gap:6px;margin-top:12px;font-size:13.5px}
+.pew div{display:flex;gap:8px;align-items:center}
+.pew i{width:14px;height:14px;border-radius:4px;border:1.5px solid var(--line-strong);display:inline-block;flex:none}
+.pew .on i{background:var(--red);border-color:var(--red)}
+body.present .bench{grid-template-columns:1.3fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present #steps{display:none}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Protein และ energy เทียบเป้า (ต่อวัน)</h2>
+      <div id="chart"></div>
+      <div class="grp" style="margin-top:12px">ISRNM criteria ของ PEW (ต้องมี ≥ 3 ใน 4 หมวด)</div>
+      <div class="pew" id="pew"></div>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วยและ IDPN</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roNPCR"><b>-</b><span>nPCR (g/kg/d)</span></div>
+        <div class="ro" id="roProt"><b>-</b><span>Protein รวม (g/kg/d)</span></div>
+        <div class="ro" id="roKcal"><b>-</b><span>Energy รวม (kcal/kg/d)</span></div>
+        <div class="ro" id="roGIR"><b>-</b><span>Glucose infusion rate</span></div>
+        <div class="ro" id="roIns"><b>-</b><span>Insulin</span></div>
+        <div class="ro" id="roPEW"><b>-</b><span>PEW</span></div>
+      </div>
+      <details class="secondary" style="margin-top:12px" id="steps"><summary style="cursor:pointer;color:var(--accent);font-weight:500">Worked steps (nPCR และ IDPN)</summary><div id="st1"></div><div id="st2"></div></details>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/calc.js"></script>
+<script>
+(function(){
+"use strict";
+function P(o){ var d={w:60,bunPre:65,bunPost:20,idwg:2,prot:1.1,kcal:30,alb:4.0,bmiLoss:0,aa:0,dex:0,lip:0,dm:false,muscle:false}; for(var k in o) d[k]=o[k]; return d; }
+var S = {
+  adequate:{name:"Intake เพียงพอ", p:P({}),
+    rows:[["Intake","protein 1.1 g/kg/d energy 30 kcal/kg/d"],["nPCR","ราว 1.1 สอดคล้องกับ intake"],["Albumin","4.0 g/dL"]],
+    take:["เป้า DPI 1.0–1.2 g/kg/d และ energy 25–35 kcal/kg/d ในผู้ป่วย HD","nPCR (nPNA) ใช้ประเมิน protein intake เมื่อ steady state","HD เสีย amino acid ราว 6–12 g ต่อ session"],
+    quiz:[{q:"ผู้ป่วย HD น้ำหนัก 60 kg nPCR 1.1 albumin 4.0 ข้อใดเหมาะที่สุด",opts:["ให้คำแนะนำโภชนาการตามปกติ ติดตาม","เริ่ม IDPN","จำกัด protein ให้ต่ำกว่า 0.8 g/kg/d","ให้ oral supplement ทุกมื้อ"],ans:0,why:"intake อยู่ในเป้าแล้ว"}]},
+  lowIntake:{name:"Intake ต่ำ PEW", p:P({bunPre:45,bunPost:14,prot:0.7,kcal:20,alb:3.2,bmiLoss:7,muscle:true}),
+    rows:[["Intake","protein 0.7 g/kg/d energy 20 kcal/kg/d เบื่ออาหาร"],["Lab","albumin 3.2 nPCR ราว 0.7 น้ำหนักลด 7% ใน 3 เดือน"],["Diagnosis","Protein-energy wasting"]],
+    take:["PEW วินิจฉัยเมื่อผิดปกติ ≥ 3 ใน 4 หมวด: biochemistry, body mass, muscle mass, dietary intake","ขั้นแรก: dietary counseling + oral nutritional supplement (ONS) ระหว่างหรือหลังฟอก","หาสาเหตุ: dialysis ไม่พอ, inflammation, acidosis, depression, ฟัน, GI"],
+    quiz:[{q:"ผู้ป่วย HD albumin 3.2 nPCR 0.7 น้ำหนักลด 7% ใน 3 เดือน กินได้ราว 60% ของเป้า ลำไส้ทำงานปกติ ข้อใดเหมาะเป็นขั้นแรก",opts:["IDPN ทันที","Dietary counseling และ oral nutritional supplement","TPN ทาง central line","ลด dialysis dose"],ans:1,why:"ONS เป็นขั้นแรกเมื่อลำไส้ใช้ได้ IDPN ใช้เมื่อ ONS ไม่พอหรือทนไม่ได้"}]},
+  idpn:{name:"เพิ่ม IDPN", p:P({bunPre:45,bunPost:14,prot:0.75,kcal:21,alb:3.3,bmiLoss:6,muscle:true,aa:50,dex:70,lip:25}),
+    rows:[["IDPN","amino acid 50 g, dextrose 70 g, lipid 25 g ต่อ session 3 ครั้ง/สัปดาห์"],["ผลต่อวัน","protein เพิ่มราว 0.36 g/kg/d energy เพิ่มราว 5 kcal/kg/d GIR ต่ำกว่า 5 mg/kg/min"],["ข้อจำกัด","ให้ได้แค่ 3 ครั้งต่อสัปดาห์ ไม่ทดแทน intake ทั้งหมด"]],
+    take:["IDPN เหมาะเมื่อ spontaneous intake ≥ ราว 50–70% ของเป้า แต่ยังขาด","ให้ได้เฉลี่ยราว 0.3–0.4 g/kg/d ของ protein","IDPN เพิ่มจาก ONS ไม่ลด mortality ใช้เพื่อปิดช่องว่าง intake"],
+    quiz:[{q:"ข้อใดถูกต้องเกี่ยวกับ IDPN",opts:["ใช้ทดแทน nutrition ทั้งหมดได้","ให้ protein เฉลี่ยราว 0.3–0.4 g/kg/d เป็นการเสริม oral intake","ไม่ต้องติดตาม glucose","ไม่มีผลต่อ UF goal"],ans:1,why:"IDPN ให้ได้เฉพาะช่วงฟอก 3 ครั้ง/สัปดาห์ จึงเป็นการเสริม ต้องคิดปริมาตรใน UF และติดตาม glucose"}]},
+  dmIDPN:{name:"IDPN ใน DM", p:P({w:50,bunPre:48,bunPost:15,prot:0.75,kcal:22,alb:3.3,bmiLoss:6,muscle:true,aa:50,dex:150,lip:0,dm:true}),
+    rows:[["ผู้ป่วย","DM น้ำหนัก 50 kg"],["IDPN","dextrose 150 g ใน 4 ชั่วโมง GIR ราว 12.5 mg/kg/min"],["ปัญหา","hyperglycemia ระหว่างฟอกและ rebound hypoglycemia หลังหยุด"]],
+    take:["GIR > 5 mg/kg/min เสี่ยง hyperglycemia ให้ insulin ใน IDPN หรือ SC","ลด dextrose และเพิ่ม lipid เพื่อลด glucose load","เจาะ glucose ระหว่างและ 30–60 นาทีหลังหยุด IDPN"],
+    quiz:[{q:"ผู้ป่วย DM น้ำหนัก 50 kg ได้ IDPN dextrose 150 g ใน 4 ชั่วโมง glucose ระหว่างฟอก 380 mg/dL ข้อใดเหมาะที่สุด",opts:["หยุด IDPN ถาวร","ลด dextrose เพิ่ม lipid และให้ insulin ตาม protocol","เพิ่ม dextrose","ให้ IDPN เร็วขึ้นในชั่วโมงแรก"],ans:1,why:"GIR ราว 12.5 mg/kg/min สูงเกิน ลด glucose load และให้ insulin"}]},
+  inflamed:{name:"Albumin ต่ำจาก inflammation", p:P({prot:1.1,kcal:30,alb:3.1,bunPre:68,bunPost:21}),
+    rows:[["ผู้ป่วย","catheter infection CRP 85"],["Intake","protein 1.1 g/kg/d nPCR ปกติ"],["Albumin","3.1 g/dL จาก negative acute-phase"]],
+    take:["Albumin ต่ำไม่ได้แปลว่าขาดอาหารเสมอ inflammation เป็นสาเหตุสำคัญ","ดู nPCR และ intake ร่วมด้วย","รักษาต้นเหตุ inflammation ก่อนเพิ่ม nutrition support"],
+    quiz:[{q:"ผู้ป่วย HD albumin 3.1 nPCR 1.15 CRP 85 มี catheter tunnel infection ข้อใดเหมาะที่สุด",opts:["เริ่ม IDPN","รักษาการติดเชื้อและติดตาม albumin","จำกัด protein","ให้ albumin IV"],ans:1,why:"intake ปกติ albumin ต่ำจาก inflammation ต้องแก้ต้นเหตุ"}]}
+};
+var ORDER=["adequate","lowIntake","idpn","dmIDPN","inflamed"];
+
+var box=document.getElementById("ctls"), C={};
+function grp(t){ box.appendChild(Sim.h("div",{class:"grp",text:t})); }
+function sl(k,o){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); box.appendChild(C[k].el); return C[k]; }
+var f1=function(v){return v.toFixed(1);}, f2=function(v){return v.toFixed(2);};
+grp("ผู้ป่วย");
+sl("w",{label:"น้ำหนัก",min:35,max:100,step:1,value:60,unit:"kg"});
+sl("prot",{label:"Oral protein",min:0.4,max:1.6,step:0.05,value:1.1,unit:"g/kg/d",fmt:f2});
+sl("kcal",{label:"Oral energy",min:12,max:40,step:1,value:30,unit:"kcal/kg/d"});
+sl("alb",{label:"Albumin",min:2.5,max:4.6,step:0.1,value:4,unit:"g/dL",fmt:f1});
+sl("bmiLoss",{label:"น้ำหนักลด (3 เดือน)",min:0,max:15,step:1,value:0,unit:"%"});
+sl("bunPre",{label:"BUN pre",min:30,max:110,step:1,value:65,unit:"mg/dL"}).el.classList.add("secondary");
+sl("bunPost",{label:"BUN post",min:8,max:45,step:1,value:20,unit:"mg/dL"}).el.classList.add("secondary");
+grp("IDPN ต่อ session (3 ครั้ง/สัปดาห์ 4 ชั่วโมง)");
+sl("aa",{label:"Amino acid",min:0,max:80,step:5,value:0,unit:"g"});
+sl("dex",{label:"Dextrose",min:0,max:200,step:10,value:0,unit:"g"});
+sl("lip",{label:"Lipid",min:0,max:50,step:5,value:0,unit:"g"});
+var st={dm:false,muscle:false};
+
+var A=Plot.colors, chart=Plot.chart(document.getElementById("chart"),{height:240,aria:"Protein and energy versus target",
+  x:{min:0,max:4,step:1,label:"",fmt:function(v){ return ["","Protein","","Energy",""][Math.round(v)]||""; }},
+  y:{min:0,max:150,step:25,label:"% of target"},
+  series:[{id:"oral",name:"Oral",color:A.ink,data:[],step:false,width:16,hover:false},{id:"total",name:"Oral + IDPN",color:A.accent,data:[],width:16}],
+  hlines:[{y:100,label:"Target",color:A.teal,dash:[5,4]}],legend:true});
+
+function update(){
+  var w=C.w.get(), V=0.55*w, prot=C.prot.get(), kcal=C.kcal.get();
+  var np=Calc.npcr({bunPost:C.bunPost.get(),bunPre:C.bunPre.get(),v:V,idwg:2,tMin:2*1440+240});
+  var id=Calc.idpn({aaG:C.aa.get(),dexG:C.dex.get(),lipidG:C.lip.get(),tMin:240,w:w,sessions:3});
+  var useI=C.aa.get()+C.dex.get()+C.lip.get()>0;
+  var pTot=prot+(useI?id.protPerKgDay:0), kTot=kcal+(useI?id.kcalPerKgDay:0);
+  var pT=1.1, kT=30;
+  chart.update({series:[{id:"oral",name:"Oral",color:A.ink,data:[[0.8,0],[0.8,prot/pT*100],[0.8,null],[2.8,0],[2.8,kcal/kT*100]],width:22,hover:false},{id:"total",name:"Oral + IDPN",color:A.accent,data:[[1.2,0],[1.2,pTot/pT*100],[1.2,null],[3.2,0],[3.2,kTot/kT*100]],width:22,hover:false}]});
+  var gir=useI?id.gir:0;
+  var crit={bio:C.alb.get()<3.8, mass:C.bmiLoss.get()>=5, muscle:st.muscle||C.bmiLoss.get()>=7, intake:prot<0.8||kcal<25};
+  var n=0; for(var k in crit) if(crit[k]) n++;
+  var pew=document.getElementById("pew"); pew.innerHTML="";
+  [["bio","Biochemistry: albumin < 3.8 g/dL"],["mass","Body mass: น้ำหนักลด ≥ 5% ใน 3 เดือน หรือ BMI < 23"],["muscle","Muscle mass ลด (mid-arm circumference, creatinine ต่ำ)"],["intake","Intake: DPI < 0.8 g/kg/d หรือ DEI < 25 kcal/kg/d"]].forEach(function(x){ pew.appendChild(Sim.h("div",{class:crit[x[0]]?"on":""},[Sim.h("i"),x[1]])); });
+  Sim.ro("roNPCR",Calc.f(np.value,2),np.flag);
+  Sim.ro("roProt",Calc.f(pTot,2),pTot<1.0?"flag":"ok");
+  Sim.ro("roKcal",Calc.f(kTot,0),kTot<25?"flag":"ok");
+  Sim.ro("roGIR",useI?Calc.f(gir,1)+" mg/kg/min":"-",gir>5?"flag":(useI?"ok":false));
+  var dm=Sim.current()==="dmIDPN";
+  Sim.ro("roIns",gir>5||(dm&&gir>3)?"ควรให้":"-",gir>5?"flag":false);
+  Sim.ro("roPEW",n>=3?"มี ("+n+"/4)":n+"/4",n>=3?"flag":"ok");
+  Calc.renderSteps(document.getElementById("st1"),np,{title:"nPCR (Depner, interdialytic period 2 วัน)"});
+  if(useI) Calc.renderSteps(document.getElementById("st2"),id,{title:"IDPN"}); else document.getElementById("st2").innerHTML="";
+}
+Sim.mount({code:"HD-16", title:"Nutrition in HD and IDPN", lead:"ปรับ oral intake, albumin, น้ำหนัก และสูตร IDPN แล้วดู nPCR, protein และ energy เทียบเป้า, GIR และเกณฑ์ PEW",
+  scenarios:S, order:ORDER, captureMs:2000,
+  onChange:function(k,s){ var p=s.p; ["w","prot","kcal","alb","bmiLoss","bunPre","bunPost","aa","dex","lip"].forEach(function(x){ C[x].set(p[x]); }); st.dm=p.dm; st.muscle=p.muscle; update(); },
+  refs:["Ikizler TA, Burrowes JD, Byham-Gray LD, et al. KDOQI Clinical Practice Guideline for Nutrition in CKD: 2020 Update. Am J Kidney Dis 2020, 76(3 Suppl 1): S1-S107",
+        "Fouque D, Kalantar-Zadeh K, Kopple J, et al. A proposed nomenclature and diagnostic criteria for protein-energy wasting in acute and chronic kidney disease. Kidney Int 2008, 73(4): 391-398",
+        "Cano NJ, Fouque D, Roth H, et al (FineS). Intradialytic parenteral nutrition does not improve survival in malnourished hemodialysis patients: a 2-year multicenter, prospective, randomized study. J Am Soc Nephrol 2007, 18(9): 2583-2591",
+        "Depner TA, Daugirdas JT. Equations for normalized protein catabolic rate based on two-point modeling of hemodialysis urea kinetics. J Am Soc Nephrol 1996, 7(5): 780-785"],
+  note:"เป้าในกราฟใช้ protein 1.1 g/kg/d และ energy 30 kcal/kg/d nPCR คำนวณจาก Calc.npcr (G จาก interdialytic BUN rise) IDPN จาก Calc.idpn"
+});
+})();
+</script>
+</body>
+</html>

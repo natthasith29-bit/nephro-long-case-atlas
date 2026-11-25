@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[HD-09] Dialysate Prescription</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(120px,160px) 1fr 104px}
+.readout{grid-template-columns:repeat(3,1fr)}
+.ro.pair b{font-size:20px}
+.grp{font:500 11.5px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:6px 0 -2px}
+.risk{margin-top:12px;height:10px;border-radius:6px;background:linear-gradient(90deg,#1F7A72,#A8842C,#B4232A);position:relative}
+.risk i{position:absolute;top:-5px;width:4px;height:20px;background:var(--ink);border-radius:2px}
+.risklbl{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:4px}
+body.present .bench{grid-template-columns:1.4fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Serum K และ HCO3 ระหว่างฟอกและหลังฟอก</h2>
+      <div id="chart"></div>
+      <div class="tools no-present"><button class="tog" type="button" id="tDig" aria-pressed="false">ได้ digoxin</button></div>
+      <p class="hint no-present">K ลดเร็วช่วงแรกแล้ว rebound หลังฟอก (K จากในเซลล์ออกมา) HCO3 เพิ่มขึ้นตาม dialysate</p>
+      <div class="grp" style="margin-top:14px">Arrhythmia risk (relative)</div>
+      <div class="risk" id="risk"><i id="riskI"></i></div>
+      <div class="risklbl"><span>Low</span><span>High</span></div>
+    </div>
+    <div class="card">
+      <h2>Dialysate และผู้ป่วย</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro pair" id="roK"><b>-</b><span>K post / 2 h หลัง</span></div>
+        <div class="ro" id="roKg"><b>-</b><span>K gradient (pre − bath)</span></div>
+        <div class="ro" id="roNa"><b>-</b><span>Na gradient (bath − serum)</span></div>
+        <div class="ro" id="roIDWG"><b>-</b><span>IDWG ที่คาด (kg)</span></div>
+        <div class="ro pair" id="roCa"><b>-</b><span>Ca balance</span></div>
+        <div class="ro" id="roHC"><b>-</b><span>HCO3 post</span></div>
+      </div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script>
+(function(){
+"use strict";
+function P(o){ var d={kd:2,cad:1.5,nad:138,hcd:32,kpre:5.5,nas:138,hcs:20,ica:1.1,dig:false}; for(var k in o) d[k]=o[k]; return d; }
+var S = {
+  standard:{name:"Prescription มาตรฐาน", p:P({}),
+    rows:[["Dialysate","K 2, Ca 1.5 mmol/L (3 mEq/L), Na 138, HCO3 32"],["ผู้ป่วย","K ก่อนฟอก 5.5, Na 138, HCO3 20"],["ผล","K หลังฟอกราว 3.4 rebound ราว 4 Na gradient 0 HCO3 หลังฟอกราว 27"]],
+    take:["Dialysate Ca 1.25–1.50 mmol/L","หลีกเลี่ยง dialysate K < 2 mEq/L โดยเฉพาะผู้ป่วยหัวใจหรือได้ digoxin","ตั้ง dialysate Na ใกล้ serum Na ของผู้ป่วย ลด Na loading","HCO3 หลังฟอกไม่ควรสูงเกินราว 28"],
+    quiz:[{q:"ผู้ป่วย HD K ก่อนฟอก 5.4 Na 137 HCO3 21 ไม่มีโรคหัวใจ ใช้ K 2 Ca 1.5 Na 138 HCO3 32 ข้อใดเหมาะที่สุด",opts:["คง prescription เดิม","ลด dialysate K เป็น 1","เพิ่ม dialysate Na เป็น 145","เพิ่ม HCO3 เป็น 40"],ans:0,why:"ทุกค่าอยู่ในช่วงที่เหมาะสม ไม่มีเหตุให้ปรับ"}]},
+  hyperK:{name:"K สูงมาก + bath K 1", p:P({kd:1,kpre:7.2}),
+    rows:[["ผู้ป่วย","ขาดฟอก K 7.2"],["Dialysate","K 1 mEq/L ทำให้ K ลดเร็วมาก gradient 6.2"],["ความเสี่ยง","arrhythmia ช่วงต้นการฟอกและหลังฟอก K อาจต่ำเกิน"]],
+    take:["K gradient ที่สูงมากและ K ที่ลดเร็วสัมพันธ์กับ arrhythmia","Dialysate K < 2 สัมพันธ์กับ sudden cardiac death","ใช้ K 2 แล้วพึ่งเวลาฟอก หรือใช้ K profiling, monitor ECG"],
+    quiz:[{q:"ผู้ป่วยขาดฟอก K 7.2 ECG peaked T ไม่มี arrhythmia ได้ calcium gluconate แล้ว ข้อใดคือ dialysate K ที่เหมาะสมที่สุด",opts:["0 mEq/L","1 mEq/L","2 mEq/L และ monitor ECG","4 mEq/L"],ans:2,why:"K 2 ยังลด K ได้ดีโดยไม่ลดเร็วเกินไป K 0–1 เพิ่มความเสี่ยง arrhythmia และ post-dialysis hypokalemia"}]},
+  digoxin:{name:"Digoxin + K bath ต่ำ", p:P({kd:1,kpre:4.6,dig:true}),
+    rows:[["ผู้ป่วย","AF ได้ digoxin K ก่อนฟอก 4.6"],["Dialysate","K 1 ทำให้ K หลังฟอกราว 2.4"],["ความเสี่ยง","hypokalemia เพิ่มพิษ digoxin เกิด ventricular arrhythmia"]],
+    take:["Digoxin + hypokalemia หลังฟอก = arrhythmia","ผู้ป่วยได้ digoxin ใช้ dialysate K 3 ขึ้นไปตาม K ก่อนฟอก","ทบทวนความจำเป็นของ digoxin ใน ESKD"],
+    quiz:[{q:"ผู้ป่วย ESKD ได้ digoxin มี VT ช่วงชั่วโมงที่ 3 ของการฟอก K ก่อนฟอก 4.5 dialysate K 1 ข้อใดเป็นการปรับที่สำคัญที่สุด",opts:["เพิ่ม dialysate K เป็น 3 ขึ้นไป","ลด dialysate Ca","เพิ่ม HCO3","เพิ่ม Qb"],ans:0,why:"hypokalemia จาก K bath ต่ำเสริมพิษ digoxin ต้องใช้ K bath สูงขึ้น"}]},
+  highNa:{name:"Dialysate Na สูง", p:P({nad:144,nas:135}),
+    rows:[["ผู้ป่วย","serum Na 135"],["Dialysate","Na 144 gradient +9"],["ผล","Na loading กระหาย IDWG เพิ่ม BP สูง"]],
+    take:["Na gradient บวกทำให้ Na เข้าตัว กระหาย IDWG และ BP เพิ่ม","Na profiling หรือ high Na ใช้กัน IDH แต่แลกกับ IDWG","ตั้ง dialysate Na ตาม serum Na ของผู้ป่วย (individualized)"],
+    quiz:[{q:"ผู้ป่วย serum Na 134 ใช้ dialysate Na 142 IDWG 4 kg ทุกครั้งและ BP สูง ข้อใดเหมาะที่สุด",opts:["เพิ่ม dialysate Na เพื่อกัน IDH","ลด dialysate Na ให้ใกล้ serum Na ร่วมกับจำกัด Na ในอาหาร","เพิ่ม dialysate K","ลด HCO3"],ans:1,why:"Na gradient +8 ทำให้ Na loading และกระหาย ลด dialysate Na ช่วยลด IDWG และ BP"}]},
+  lowCa:{name:"Dialysate Ca ต่ำ", p:P({cad:1.25,ica:1.05}),
+    rows:[["Dialysate","Ca 1.25 mmol/L (2.5 mEq/L)"],["ผล","Ca balance ติดลบ QT ยาวขึ้น contractility ลด เกิด IDH ได้"],["ข้อดี","ใช้ใน hypercalcemia หรือ adynamic bone"]],
+    take:["Low Ca bath ลด myocardial contractility และ vascular tone","Dialysate Ca < 2.5 mEq/L สัมพันธ์กับ sudden cardiac death","Ca bath สูง (1.75) เสี่ยง positive Ca balance และ vascular calcification"],
+    quiz:[{q:"ผู้ป่วย HD มี IDH บ่อยและ QTc 500 ms ใช้ dialysate Ca 1.25 mmol/L iCa ก่อนฟอก 1.05 ข้อใดเหมาะที่สุด",opts:["ลด dialysate Ca เป็น 1.0","เพิ่ม dialysate Ca เป็น 1.5","เพิ่ม dialysate Na เป็น 148","ลด dialysate K"],ans:1,why:"low Ca bath ทำให้ IDH และ QT ยาว การเพิ่มเป็น 1.5 mmol/L อยู่ในช่วงที่แนะนำ"}]},
+  alkalosis:{name:"HCO3 bath สูง", p:P({hcd:40,hcs:26}),
+    rows:[["ผู้ป่วย","HCO3 ก่อนฟอก 26 (ไม่ได้ acidotic)"],["Dialysate","HCO3 40"],["ผล","post-dialysis alkalosis HCO3 > 30 ทำให้ K เข้าเซลล์ iCa ลด arrhythmia"]],
+    take:["ตั้ง HCO3 bath ตาม pre-dialysis HCO3 ไม่ใช่ค่าเดียวทุกคน","เป้า pre-dialysis HCO3 ราว 22–24 (ไม่ต่ำเกินและไม่สูงเกิน)","Alkalosis หลังฟอกสัมพันธ์กับ mortality"],
+    quiz:[{q:"ผู้ป่วย HCO3 ก่อนฟอก 27 ใช้ dialysate HCO3 38 หลังฟอก HCO3 33 มีตะคริวและใจสั่น ข้อใดเหมาะที่สุด",opts:["เพิ่ม dialysate HCO3","ลด dialysate HCO3 เป็นราว 30–32","ให้ oral NaHCO3","เพิ่ม Qd"],ans:1,why:"pre-dialysis HCO3 ไม่ต่ำ การใช้ bath สูงทำให้ post-dialysis alkalosis ลด bath ลง"}]}
+};
+var ORDER=["standard","hyperK","digoxin","highNa","lowCa","alkalosis"];
+
+var box=document.getElementById("ctls"), C={};
+function grp(t){ box.appendChild(Sim.h("div",{class:"grp",text:t})); }
+function sl(k,o){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); box.appendChild(C[k].el); return C[k]; }
+var f1=function(v){return v.toFixed(1);}, f2=function(v){return v.toFixed(2);};
+grp("Dialysate");
+sl("kd",{label:"K",min:0,max:4,step:1,value:2,unit:"mEq/L"});
+sl("cad",{label:"Ca",min:1.0,max:1.75,step:0.25,value:1.5,unit:"mmol/L",fmt:f2});
+sl("nad",{label:"Na",min:132,max:148,step:1,value:138,unit:"mmol/L"});
+sl("hcd",{label:"HCO3",min:26,max:40,step:1,value:32,unit:"mmol/L"});
+grp("ผู้ป่วยก่อนฟอก");
+sl("kpre",{label:"K",min:3,max:8,step:0.1,value:5.5,unit:"mmol/L",fmt:f1});
+sl("nas",{label:"Na",min:128,max:145,step:1,value:138,unit:"mmol/L"});
+sl("hcs",{label:"HCO3",min:12,max:30,step:1,value:20,unit:"mmol/L"});
+sl("ica",{label:"iCa",min:0.9,max:1.4,step:0.05,value:1.1,unit:"mmol/L",fmt:f2}).el.classList.add("secondary");
+var dig=false, tDig=document.getElementById("tDig");
+tDig.addEventListener("click",function(){ dig=!dig; tDig.setAttribute("aria-pressed",dig?"true":"false"); update(); });
+
+var A=Plot.colors, chart=Plot.chart(document.getElementById("chart"),{height:270,aria:"Serum potassium and bicarbonate",
+  x:{min:0,max:360,step:60,label:"Time (min), HD 0–240"}, y:{min:2,max:8,step:1,label:"K (mmol/L)"}, y2:{min:10,max:40,step:5,label:"HCO3"},
+  series:[{id:"k",name:"K",color:A.accent,data:[],width:2.6},{id:"hc",name:"HCO3",color:A.teal,data:[],axis:"y2",width:1.8}],
+  xbands:[{x0:0,x1:240,label:"HD",color:Plot.alpha(A.accent,0.06)}], legend:true});
+
+function params(){ var o={}; ["kd","cad","nad","hcd","kpre","nas","hcs","ica"].forEach(function(k){ o[k]=C[k].get(); }); o.dig=dig; return o; }
+function update(){
+  var p=params(), tau=262, ks=[], hs=[];
+  var kpost=p.kd+(p.kpre-p.kd)*Math.exp(-240/tau), drop=p.kpre-kpost;
+  var hpost=p.hcd-(p.hcd-p.hcs)*Math.exp(-240/260);
+  for(var m=0;m<=360;m+=5){
+    var k= m<=240 ? p.kd+(p.kpre-p.kd)*Math.exp(-m/tau) : kpost+drop*0.3*(1-Math.exp(-(m-240)/45));
+    var h= m<=240 ? p.hcd-(p.hcd-p.hcs)*Math.exp(-m/260) : hpost-(hpost-p.hcs)*0.15*(1-Math.exp(-(m-240)/60));
+    ks.push([m,k]); hs.push([m,h]);
+  }
+  var k2=ks[ks.length-1][1];
+  chart.update({hlines:[{y:3.5,label:"K 3.5",color:A.red,dash:[4,4]}]});
+  chart.setSeries("k",ks); chart.setSeries("hc",hs);
+  var kg=p.kpre-p.kd, nag=p.nad-p.nas, idwg=2.2+0.18*Math.max(0,nag)-0.05*Math.max(0,-nag);
+  var caBal=(p.cad-(p.ica+0.25))*72-3; // mmol per session (teaching: diffusible Ca, dialysance 0.6, UF loss)
+  var risk=0; risk+=Math.max(0,kg-3)*0.12; if(p.kd<2) risk+=0.18; if(p.dig) risk+= (kpost<3.5?0.3:0.12); if(p.cad<1.5) risk+=0.15; if(hpost>28) risk+=(hpost-28)*0.04; if(kpost<3.5) risk+=0.12;
+  risk=Math.max(0.03,Math.min(0.97,risk));
+  document.getElementById("riskI").style.left=(risk*100)+"%";
+  Sim.ro("roK",Sim.fmt(kpost,1)+" / "+Sim.fmt(k2,1),kpost<3.5?"flag":"ok");
+  Sim.ro("roKg",Sim.fmt(kg,1),kg>4?"flag":false);
+  Sim.ro("roNa",(nag>0?"+":"")+nag,Math.abs(nag)>3?"flag":"ok");
+  Sim.ro("roIDWG",Sim.fmt(idwg,1),idwg>3?"flag":false);
+  Sim.ro("roCa",(caBal>0?"+":"")+Sim.fmt(caBal,0)+" mmol",(caBal<-4||caBal>15)?"flag":"ok");
+  Sim.ro("roHC",Sim.fmt(hpost,0),hpost>28?"flag":"ok");
+}
+Sim.mount({code:"HD-09", title:"Dialysate Prescription", lead:"ปรับ K, Ca, Na และ HCO3 ของ dialysate ตามผู้ป่วย แล้วดู K curve, Na loading, Ca balance และความเสี่ยง arrhythmia",
+  scenarios:S, order:ORDER, captureMs:2000,
+  onChange:function(k,s){ var p=s.p; ["kd","cad","nad","hcd","kpre","nas","hcs","ica"].forEach(function(x){ C[x].set(p[x]); }); dig=!!p.dig; tDig.setAttribute("aria-pressed",dig?"true":"false"); update(); },
+  refs:["Kidney Disease: Improving Global Outcomes (KDIGO) CKD-MBD Update Work Group. KDIGO 2017 Clinical Practice Guideline Update for CKD-MBD. Kidney Int Suppl 2017, 7(1): 1-59",
+        "Pun PH, Lehrich RW, Honeycutt EF, Herzog CA, Middleton JP. Modifiable risk factors associated with sudden cardiac arrest within hemodialysis clinics. Kidney Int 2011, 79(2): 218-227",
+        "Pun PH, Horton JR, Middleton JP. Dialysate calcium concentration and the risk of sudden cardiac arrest in hemodialysis patients. Clin J Am Soc Nephrol 2013, 8(5): 797-803",
+        "Munoz Mendoza J, Sun S, Chertow GM, et al. Dialysate sodium and sodium gradient in maintenance hemodialysis: a neglected sodium restriction approach? Nephrol Dial Transplant 2011, 26(4): 1281-1287",
+        "Tentori F, Karaboyas A, Robinson BM, et al. Association of dialysate bicarbonate concentration with mortality in the DOPPS. Am J Kidney Dis 2013, 62(4): 738-746"],
+  note:"Model เพื่อการสอน: K ลดแบบ exponential (τ ราว 260 นาที) rebound 30% ใน 2 ชั่วโมง, IDWG เพิ่มราว 0.18 kg ต่อ Na gradient 1 mmol/L, risk bar เป็นค่าสัมพัทธ์"
+});
+})();
+</script>
+</body>
+</html>

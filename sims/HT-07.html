@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[HT-07] Secondary Hypertension Navigator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.25fr 1fr}}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:8px}
+.sub{font-size:12.5px;color:var(--muted);margin:12px 0 2px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:14px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .ro{padding:6px 12px}
+body.present .ro b{font-size:16px}
+body.present .tog{padding:3px 8px;font-size:11.5px}
+body.present .tools{margin-top:3px;gap:4px}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+body.present .sub{margin:5px 0 1px;font-size:11.5px}
+body.present .svgwrap svg{max-height:440px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Differential และ work-up path</h2>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 640 466" role="img" aria-label="Ranked differential of secondary hypertension and stepwise work-up"></svg></div>
+      <p class="hint no-present">แถบคือความน่าจะเป็นหลังรวม clue ทุกข้อ (ค่า prior ตามความชุกในผู้ป่วย HT คูณ likelihood ratio โดยประมาณ) แตะแถบเพื่อดู work-up path ของโรคนั้น ค่าเริ่มต้นแสดง path ของโรคที่น่าจะเป็นที่สุดที่ไม่ใช่ essential HT</p>
+    </div>
+    <div class="card">
+      <h2>Clinical clues</h2>
+      <div id="groups"></div>
+      <div class="readout">
+        <div class="ro" id="roTop"><b>-</b><span>นำมากที่สุด</span></div>
+        <div class="ro" id="roP"><b>-</b><span>Probability</span></div>
+        <div class="ro" id="roEss"><b>-</b><span>Essential HT</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script>
+(function(){
+"use strict";
+function SV(t,a,p){ var b={}; for(var k in a) if(a[k]!==null&&a[k]!==undefined) b[k]=a[k]; return Sim.svg(t,b,p); }
+var DX={
+  ess:{n:"Essential HT",prior:70,path:["Lifestyle and risk review","Confirm with ABPM or HBPM","Baseline: K, eGFR, UACR, ECG","Two-drug single pill"]},
+  osa:{n:"Obstructive sleep apnea",prior:10,path:["STOP-BANG questionnaire","Home sleep test or PSG","Grade by AHI","CPAP and weight loss"]},
+  pa:{n:"Primary aldosteronism",prior:8,path:["Aldosterone, renin, ARR","Saline or captopril test","Adrenal CT, then AVS","Adrenalectomy or MRA"]},
+  ckd:{n:"Renal parenchymal disease",prior:4,path:["eGFR, UACR, urinalysis","Kidney ultrasound","Biopsy if indicated","RAASi, SGLT2i, low salt"]},
+  drug:{n:"Drug or substance induced",prior:3,path:["Full medication history","Stop or substitute agent","Recheck BP in 2–4 weeks","Treat residual HT"]},
+  aras:{n:"Atherosclerotic RAS",prior:2,path:["Duplex: PSV, RAR, RI","CTA or MRA","Viability: size, RI","Medical therapy, select revasc"]},
+  fmd:{n:"Fibromuscular dysplasia",prior:0.5,path:["Duplex or CTA renal","CTA head to pelvis","Look for aneurysm, dissection","Balloon angioplasty, aspirin"]},
+  hyper:{n:"Hyperthyroidism",prior:0.5,path:["TSH, free T4","TRAb, uptake scan","Identify cause","β-blocker, antithyroid drug"]},
+  hypo:{n:"Hypothyroidism",prior:0.5,path:["TSH","Free T4","Anti-TPO","Levothyroxine"]},
+  cush:{n:"Cushing syndrome",prior:0.2,path:["1 mg DST, LNSC or UFC","Second positive test","ACTH, then MRI or CT","Surgery of the source"]},
+  pheo:{n:"Pheochromocytoma or PGL",prior:0.2,path:["Plasma free metanephrines","CT or MRI adrenal","Functional imaging, genetics","α-blockade, then surgery"]},
+  phpt:{n:"Primary hyperparathyroidism",prior:0.2,path:["Ca, PTH, 25-OH vit D","24-h urine Ca (rule out FHH)","Sestamibi and neck US","Parathyroidectomy"]},
+  coarc:{n:"Coarctation of aorta",prior:0.1,path:["Four-limb BP","Echocardiography","CT or MR angiography","Stent or surgical repair"]},
+  mono:{n:"Monogenic HT",prior:0.1,path:["K, HCO3, renin, aldosterone","Pattern on renin x aldo","Targeted genetic panel","Amiloride, thiazide or steroid"]}
+};
+var DXK=Object.keys(DX);
+var CL=[
+ {g:"ประวัติและอายุ",items:[
+  {k:"young",n:"เริ่มเป็นก่อนอายุ 30",lr:{fmd:4,coarc:6,mono:8,ckd:2,pa:1.5,ess:0.4,aras:0.2}},
+  {k:"old",n:"เริ่มเป็นหลังอายุ 55",lr:{aras:3,ess:1.2,fmd:0.3,mono:0.1,coarc:0.2}},
+  {k:"woman",n:"หญิงอายุน้อยกว่า 50",lr:{fmd:3,aras:0.4}},
+  {k:"fam",n:"ญาติเป็น HT อายุน้อยหรือ stroke เร็ว",lr:{mono:6,pa:1.5,ess:1.2}},
+  {k:"drug",n:"NSAID, OCP, decongestant, CNI, VEGFi, ชะเอม",lr:{drug:15,ess:0.7}},
+  {k:"res",n:"HT ดื้อยา",lr:{pa:3,osa:2.5,aras:2.5,ckd:2,drug:2,cush:2,pheo:1.5,ess:0.4}}]},
+ {g:"อาการและตรวจร่างกาย",items:[
+  {k:"parox",n:"ปวดหัว เหงื่อออก ใจสั่นเป็นพักๆ",lr:{pheo:40,hyper:2,pa:0.7,ess:0.5}},
+  {k:"snore",n:"กรน ง่วงกลางวัน อ้วน",lr:{osa:8,cush:1.5,hypo:1.5,ess:0.8}},
+  {k:"cush",n:"Cushingoid: striae, proximal weakness",lr:{cush:20,ess:0.5}},
+  {k:"thy",n:"มือสั่น น้ำหนักลด ขี้ร้อน",lr:{hyper:20,pheo:1.5}},
+  {k:"hypo",n:"น้ำหนักขึ้น ขี้หนาว",lr:{hypo:10}},
+  {k:"leg",n:"BP แขนสูงกว่าขา, radio-femoral delay",lr:{coarc:40,ess:0.3}},
+  {k:"bruit",n:"Abdominal bruit",lr:{aras:4,fmd:5,ess:0.6}},
+  {k:"flash",n:"Flash pulmonary edema",lr:{aras:10,ess:0.4}}]},
+ {g:"Lab และภาพ",items:[
+  {k:"hypok",n:"K ต่ำโดยไม่มีสาเหตุ",lr:{pa:6,cush:4,mono:5,aras:2,drug:1.5,ess:0.3}},
+  {k:"hyperk",n:"K สูง + acidosis, GFR ปกติ",lr:{mono:10,ckd:3,ess:0.5,pa:0.1}},
+  {k:"acei",n:"Cr ขึ้น > 30% หลัง ACEi",lr:{aras:8,ckd:1.5,ess:0.5}},
+  {k:"kid",n:"ไตสองข้างยาวต่างกัน > 1.5 cm",lr:{aras:5,fmd:2,ckd:2,ess:0.5}},
+  {k:"prot",n:"Proteinuria, hematuria หรือ eGFR ต่ำ",lr:{ckd:10,aras:1.5,ess:0.4}},
+  {k:"nod",n:"Adrenal nodule",lr:{pa:4,cush:4,pheo:4,ess:0.6}},
+  {k:"ca",n:"Hypercalcemia",lr:{phpt:30}}]}
+];
+var ALL={}; CL.forEach(function(g){ g.items.forEach(function(it){ ALL[it.k]=it; }); });
+function P(c){ return {c:c}; }
+var S={
+  pa:{name:"HT ดื้อยา + K ต่ำ", p:P(["res","hypok"]),
+    rows:[["Clue","ได้ยา 3 ตัวยังสูง K 3.2 ไม่ได้ใช้ diuretic"],["นำ","primary aldosteronism"],["ต่อ","aldosterone, renin, ARR"]],
+    take:["PA คือสาเหตุ endocrine ที่พบบ่อยที่สุดของ secondary HT โดยเฉพาะใน HT ดื้อยา","K ต่ำโดยไม่มีสาเหตุเป็น clue ที่แรง แต่ผู้ป่วย PA ส่วนใหญ่ K ปกติ","ARR ตรวจได้ขณะใช้ยาส่วนใหญ่ แปลผลตามยา (ดู HT-04)"]},
+  fmd:{name:"หญิงอายุน้อย + bruit", p:P(["young","woman","bruit"]),
+    rows:[["Clue","หญิง 26 ปี HT ใหม่ abdominal bruit"],["นำ","fibromuscular dysplasia"],["ต่อ","duplex หรือ CTA renal artery"]],
+    take:["HT ในหญิงอายุน้อยกว่า 30 ปีที่ไม่มีปัจจัยเสี่ยงให้นึกถึง FMD","FMD เป็นโรคทั้งระบบ ตรวจหลอดเลือดสมองและคอด้วย","Angioplasty โดยไม่ใส่ stent มักได้ผลดี"]},
+  pheo:{name:"Paroxysm + adrenal nodule", p:P(["parox","nod"]),
+    rows:[["Clue","ปวดหัว เหงื่อแตก ใจสั่นเป็นพักๆ adrenal mass 3 cm"],["นำ","pheochromocytoma"],["ต่อ","plasma free metanephrines"]],
+    take:["Adrenal incidentaloma ทุกรายต้องตรวจ metanephrines, PA screen และ dexamethasone suppression","Pheochromocytoma ต้องได้ α-blocker ก่อน β-blocker และก่อนผ่าตัด","ราว 30–40% มี germline mutation ควรตรวจพันธุกรรม"]},
+  osa:{name:"อ้วน กรน ดื้อยา", p:P(["snore","res"]),
+    rows:[["Clue","BMI 34 กรนดัง ง่วงกลางวัน HT ดื้อยา"],["นำ","OSA"],["ต่อ","STOP-BANG, sleep study"]],
+    take:["OSA พบบ่อยมากใน HT ดื้อยาและทำให้ BP กลางคืนไม่ลด","CPAP ลด BP ได้เล็กน้อยถึงปานกลาง ได้ผลดีในคนที่ใช้สม่ำเสมอ","OSA กับ PA พบร่วมกันบ่อย ควร screen PA ด้วย"]},
+  aras:{name:"Flash edema + Cr ขึ้นหลัง ACEi", p:P(["old","flash","acei","kid"]),
+    rows:[["Clue","อายุ 70 สูบบุหรี่ flash pulmonary edema Cr ขึ้น 40% หลัง ACEi ไตไม่เท่ากัน"],["นำ","atherosclerotic RAS (bilateral)"],["ต่อ","duplex, viability"]],
+    take:["Flash pulmonary edema และ Cr ขึ้นมากหลัง ACEi ชี้ bilateral RAS หรือ RAS ในไตเดียว","ประเมิน viability ก่อน revascularize (ดู HT-05)","ARAS ส่วนใหญ่ใช้ยา revascularize เฉพาะข้อบ่งชี้ชัด"]},
+  coarc:{name:"BP แขน > ขา", p:P(["young","leg"]),
+    rows:[["Clue","ชาย 19 ปี ชีพจรขาเบาและช้ากว่าแขน"],["นำ","coarctation of aorta"],["ต่อ","four-limb BP, echocardiography"]],
+    take:["วัด BP ขาในผู้ป่วย HT อายุน้อยทุกราย","Coarctation มักมี bicuspid aortic valve ร่วม","หลังซ่อมแล้วยังเป็น HT ได้ ต้องติดตามระยะยาว"]},
+  gordon:{name:"K สูง + acidosis ครอบครัว", p:P(["young","fam","hyperk"]),
+    rows:[["Clue","HT อายุ 22 K 6.0 HCO3 18 eGFR ปกติ พ่อเป็นเหมือนกัน"],["นำ","monogenic HT (Gordon)"],["ต่อ","renin, aldosterone, genetic panel"]],
+    take:["Monogenic HT พบน้อยแต่ออกสอบบ่อย แยกด้วย K, HCO3, renin และ aldosterone","Gordon ตอบสนองต่อ thiazide, Liddle ตอบสนองต่อ amiloride, GRA ตอบสนองต่อ glucocorticoid","มีประวัติครอบครัวและเริ่มเป็นตั้งแต่อายุน้อย"]},
+  drug:{name:"ยาเพิ่ม BP", p:P(["drug","res"]),
+    rows:[["Clue","กิน NSAID ปวดข้อ และ pseudoephedrine"],["นำ","drug-induced HT"],["ต่อ","หยุดยาแล้ววัดซ้ำ"]],
+    take:["ถามยาทุกตัวรวมยาซื้อเอง สมุนไพร และสารกระตุ้น","ยาที่พบบ่อย: NSAID, decongestant, OCP, CNI, steroid, VEGF inhibitor, erythropoietin, ชะเอม","หยุดหรือเปลี่ยนยาก่อนเพิ่มยาลด BP"]},
+  ess:{name:"ไม่มี clue", p:P(["old"]),
+    rows:[["Clue","อายุ 58 HT ระดับ 1 ไม่มีอาการ"],["นำ","essential HT"],["ต่อ","baseline tests และ PA screen"]],
+    take:["HT ส่วนใหญ่เป็น essential แต่ทุกรายควรมี baseline tests: K, eGFR, UACR, urinalysis, glucose, lipid, ECG","แนวทางใหม่แนะนำให้ screen PA ในผู้ป่วย HT ทุกรายเมื่อทำได้","ค้นหาสาเหตุเพิ่มเมื่อมี clue, อายุน้อย, ดื้อยา หรือ HT รุนแรงเฉียบพลัน"]}
+};
+var ORDER=["pa","fmd","pheo","osa","aras","coarc","gordon","drug","ess"];
+var G=document.getElementById("groups"), T={};
+CL.forEach(function(g){ G.appendChild(Sim.h("div",{class:"sub",text:g.g})); var tb=Sim.h("div",{class:"tools"}); G.appendChild(tb);
+  g.items.forEach(function(it){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:it.n}); b.addEventListener("click",function(){ b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")==="true"?"false":"true"); pick=null; update(); }); tb.appendChild(b); T[it.k]=b; }); });
+function on(k){ return T[k].getAttribute("aria-pressed")==="true"; }
+var pick=null;
+function post(){
+  var sc={}, tot=0;
+  DXK.forEach(function(d){ var v=DX[d].prior; Object.keys(ALL).forEach(function(k){ if(on(k)&&ALL[k].lr[d]) v*=ALL[k].lr[d]; }); sc[d]=v; tot+=v; });
+  DXK.forEach(function(d){ sc[d]=sc[d]/tot*100; });
+  return sc;
+}
+var svg=document.getElementById("vis"), INK="#0B0B1F", MUT="#5E6075", ACC="#5B4BFF", RED="#B4232A", TEAL="#1F7A72";
+function tx(x,y,s,o){ o=o||{}; return SV("text",{x:x,y:y,"text-anchor":o.a||"middle","font-family":o.mono?"Geist Mono, monospace":"IBM Plex Sans Thai, sans-serif","font-size":o.fs||12,"font-weight":o.fw||400,fill:o.fill||INK,text:s},svg); }
+function draw(sc,sel){
+  svg.innerHTML="";
+  var rank=DXK.slice().sort(function(a,b){ return sc[b]-sc[a]; }).slice(0,8);
+  tx(20,20,"Post-test probability",{a:"start",fs:13,fw:600});
+  rank.forEach(function(d,i){ var y=36+i*26, w=Math.max(2,sc[d]/100*360), isSel=d===sel;
+    var g=SV("g",{style:"cursor:pointer",tabindex:"0",role:"button","aria-label":DX[d].n},svg);
+    g.addEventListener("click",function(){ pick=d; update(); });
+    g.addEventListener("keydown",function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); pick=d; update(); } });
+    SV("rect",{x:20,y:y-1,width:600,height:24,rx:8,fill:isSel?"#EFEDFF":"transparent"},g);
+    SV("text",{x:30,y:y+15,"font-family":"IBM Plex Sans Thai, sans-serif","font-size":12.5,"font-weight":isSel?600:500,fill:INK,text:DX[d].n},g);
+    SV("rect",{x:230,y:y+4,width:360,height:14,rx:7,fill:"#F4F5F9"},g);
+    SV("rect",{x:230,y:y+4,width:w,height:14,rx:7,fill:d==="ess"?"#9A9CB2":isSel?ACC:INK},g);
+    SV("text",{x:614,y:y+15,"text-anchor":"end","font-family":"Geist Mono, monospace","font-size":12,fill:MUT,text:(sc[d]<1?sc[d].toFixed(1):sc[d].toFixed(0))+"%"},g);
+  });
+  /* path */
+  var py=272, path=DX[sel].path;
+  tx(20,py-14,"Work-up path: "+DX[sel].n,{a:"start",fs:13,fw:600});
+  var labels=["Screen","Confirm","Localize or grade","Treat"];
+  path.forEach(function(s,i){ var x=20+i*155, w=140;
+    SV("rect",{x:x,y:py,width:w,height:92,rx:14,fill:i===3?INK:"#fff",stroke:i===3?INK:"#D3D5E2","stroke-width":1.2},svg);
+    tx(x+12,py+20,labels[i],{a:"start",fs:10.5,fw:600,fill:i===3?"#19C8E6":ACC});
+    var words=s.split(" "), lines=[""]; words.forEach(function(wd){ if((lines[lines.length-1]+" "+wd).length>17) lines.push(wd); else lines[lines.length-1]=(lines[lines.length-1]?lines[lines.length-1]+" ":"")+wd; });
+    lines.slice(0,4).forEach(function(l,j){ tx(x+12,py+40+j*15,l,{a:"start",fs:12,fill:i===3?"#fff":INK}); });
+    if(i<3) SV("path",{d:"M"+(x+w+2)+" "+(py+46)+" L"+(x+w+13)+" "+(py+46),stroke:MUT,"stroke-width":1.6,"marker-end":"url(#ah)"},svg);
+  });
+  var defs=SV("defs",{},svg), mk=SV("marker",{id:"ah",viewBox:"0 0 10 10",refX:9,refY:5,markerWidth:6,markerHeight:6,orient:"auto"},defs); SV("path",{d:"M0 0 L10 5 L0 10 z",fill:MUT},mk);
+  /* baseline box */
+  var by=378;
+  SV("rect",{x:20,y:by,width:600,height:84,rx:14,fill:"#F4F5F9"},svg);
+  tx(36,by+22,"Every patient with hypertension",{a:"start",fs:12,fw:600});
+  tx(36,by+42,"Na, K, creatinine and eGFR, UACR, urinalysis, glucose or HbA1c, lipids, ECG",{a:"start",fs:11.5,fill:MUT});
+  tx(36,by+60,"Aldosterone and renin: now suggested for all, essential if resistant, low K, nodule or OSA",{a:"start",fs:11.5,fill:MUT});
+  tx(36,by+78,"Confirm the diagnosis with out-of-office BP before a costly work-up",{a:"start",fs:11.5,fill:MUT});
+}
+function update(){
+  var sc=post(), rank=DXK.slice().sort(function(a,b){ return sc[b]-sc[a]; });
+  var topSec=rank.filter(function(d){ return d!=="ess"; })[0];
+  var sel=pick&&DX[pick]?pick:(sc.ess>85?"ess":topSec);
+  draw(sc,sel);
+  var nOn=Object.keys(ALL).filter(on).length;
+  Sim.ro("roTop",DX[rank[0]].n,rank[0]==="ess"?"ok":"flag");
+  Sim.ro("roP",sc[rank[0]].toFixed(0)+"%",null);
+  Sim.ro("roEss",sc.ess.toFixed(0)+"%",sc.ess<50?"flag":"ok");
+  var urgent=on("parox")&&on("nod"), a=document.getElementById("act"), m, bad=sc.ess<50;
+  if(urgent) m="<b>สงสัย pheochromocytoma</b> ตรวจ plasma free metanephrines ก่อนทำหัตถการหรือผ่าตัด adrenal ห้ามให้ β-blocker เดี่ยวก่อน α-blocker";
+  else if(nOn===0) m="<b>ยังไม่ได้เลือก clue</b> ลองเลือก clue จากประวัติ ตรวจร่างกาย และ lab แล้วดู differential เปลี่ยน";
+  else if(sel==="ess") m="<b>น่าจะเป็น essential HT</b> ทำ baseline tests ยืนยันด้วย out-of-office BP และพิจารณา screen PA";
+  else m="<b>"+DX[sel].n+"</b> เริ่มที่ "+DX[sel].path[0]+" แล้ว "+DX[sel].path[1]+(sc[sel]<20?" (ยังไม่สูงมาก ใช้เป็นการ screen)":"");
+  a.innerHTML="<b>Next step:</b> "+m; a.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"HT-07", title:"Secondary Hypertension Navigator", lead:"เลือก clue จากประวัติ ตรวจร่างกาย และ lab ดูความน่าจะเป็นของสาเหตุรองแต่ละโรคเปลี่ยนตาม likelihood ratio แล้วแตะโรคเพื่อดูลำดับการตรวจจาก screen, confirm, localize ถึง treat",
+  scenarios:S, order:ORDER, captureMs:600,
+  onChange:function(k,s){ pick=null; Object.keys(T).forEach(function(x){ T[x].setAttribute("aria-pressed",s.p.c.indexOf(x)>=0?"true":"false"); }); update(); },
+  refs:["Rossi GP, Bisogni V, Rossitto G, et al. Practice recommendations for diagnosis and treatment of the most common forms of secondary hypertension. High Blood Press Cardiovasc Prev 2020, 27(6): 547-560",
+        "Mancia G, Kreutz R, Brunström M, et al. 2023 ESH Guidelines for the management of arterial hypertension. J Hypertens 2023, 41(12): 1874-2071",
+        "Jones DW, Ferdinand KC, Taler SJ, et al. 2025 AHA/ACC and multisociety guideline for the prevention, detection, evaluation and management of high blood pressure in adults. Hypertension 2025, 82(10): e212-e316",
+        "Adler GK, Stowasser M, Correa RR, et al. Primary aldosteronism: an Endocrine Society clinical practice guideline. J Clin Endocrinol Metab 2025, 110(9): 2453-2495",
+        "Lenders JWM, Duh QY, Eisenhofer G, et al. Pheochromocytoma and paraganglioma: an Endocrine Society clinical practice guideline. J Clin Endocrinol Metab 2014, 99(6): 1915-1942",
+        "Nieman LK, Biller BMK, Findling JW, et al. The diagnosis of Cushing's syndrome: an Endocrine Society clinical practice guideline. J Clin Endocrinol Metab 2008, 93(5): 1526-1540",
+        "Gornik HL, Persu A, Adlam D, et al. First international consensus on the diagnosis and management of fibromuscular dysplasia. Vasc Med 2019, 24(2): 164-189"],
+  note:"Model เพื่อการสอน: prior = ความชุกโดยประมาณในผู้ใหญ่ที่เป็น HT (essential 70%, OSA 10%, PA 8%, renal parenchymal 4%, drug 3%, ARAS 2%, FMD, thyroid ราว 0.5%, Cushing, pheochromocytoma, PHPT ราว 0.2%, coarctation และ monogenic ราว 0.1%) คูณด้วย likelihood ratio โดยประมาณของ clue ที่เลือก (สมมติว่าเป็นอิสระต่อกัน) แล้ว normalize ใช้เพื่อเห็นทิศทางการคิด ไม่ใช่ค่าความน่าจะเป็นจริง"
+});
+})();
+</script>
+</body>
+</html>

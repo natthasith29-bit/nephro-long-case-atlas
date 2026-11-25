@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[CKD-06] Anemia in CKD: EPO, Iron and Hepcidin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(110px,140px) 1fr 118px}
+.sel{display:grid;grid-template-columns:minmax(110px,140px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:10px}
+.lim{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px}
+.lim div{border:1px solid var(--line);border-radius:10px;padding:6px 8px;font-size:12px;color:var(--muted)}
+.lim div b{display:block;font:500 15px var(--mono);color:var(--ink)}
+.lim div.on{border-color:var(--red);background:var(--pink)}
+.lim div.on b{color:var(--red)}
+body.present .bench{grid-template-columns:1.35fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:14px 18px}
+body.present .ctls{gap:1px}
+body.present .ctl,body.present .sel{font-size:13px}
+body.present .tools{margin-top:6px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .ro{padding:6px 10px}
+body.present .ro b{font-size:18px}
+body.present .readout{margin-top:8px}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+body.present .take li{font-size:14px}
+body.present .lim{margin-top:6px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Hb และ TSAT 24 สัปดาห์</h2>
+      <div id="chart"></div>
+      <div id="live"></div>
+      <div class="lim" id="lim"></div>
+      <p class="hint no-present">Hb เปลี่ยนช้าตามอายุเม็ดเลือดแดง ใช้เวลาราว 4–8 สัปดาห์กว่าจะเห็นผลเต็มที่ แถบสี่ช่องใต้กราฟบอกว่าอะไรจำกัดการสร้างเม็ดเลือด: EPO, iron ที่ไขกระดูกใช้ได้ (TSAT), hepcidin หรือการตอบสนองของไขกระดูก</p>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วยและการรักษา</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roHb"><b>-</b><span>Hb สัปดาห์ 24 (g/dL)</span></div>
+        <div class="ro" id="roTs"><b>-</b><span>TSAT (%)</span></div>
+        <div class="ro" id="roFe"><b>-</b><span>Ferritin (ng/mL)</span></div>
+        <div class="ro" id="roHe"><b>-</b><span>Hepcidin (relative)</span></div>
+        <div class="ro" id="roEr"><b>-</b><span>ERI (IU/kg/wk per g/dL)</span></div>
+        <div class="ro" id="roIv"><b>-</b><span>IV iron รวม (mg)</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/live.js"></script>
+<script>
+(function(){
+"use strict";
+function P(o){ var d={dial:false,hb0:9.5,fer0:200,crp:3,esa:0,iron:"none",hif:false,pthx:2,prca:false}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  abs:{name:"Absolute iron deficiency", p:P({hb0:9.0,fer0:40,iron:"iv"}),
+    rows:[["ผู้ป่วย","CKD G4 Hb 9.0 ferritin 40 TSAT 14% ยังไม่ได้ ESA"],["การรักษา","IV iron 1 g ครั้งเดียว"],["ผล","Hb เพิ่มราว 0.5–1 g/dL โดยไม่ต้องใช้ ESA"]],
+    take:["แก้ iron deficiency ก่อนเริ่ม ESA เพราะ Hb อาจขึ้นได้เองและลดขนาด ESA ที่ต้องใช้","CKD ไม่ฟอก: ให้ iron เมื่อ ferritin < 100 (TSAT < 40%) หรือ ferritin 100–299 ร่วม TSAT < 25% ferritin < 45 คือ iron deficiency รุนแรง","หา blood loss ทาง GI ในผู้ป่วย iron deficiency ทุกราย"]},
+  func:{name:"Inflammation (functional ID)", p:P({dial:true,hb0:9.2,fer0:800,crp:40,esa:150,iron:"iv"}),
+    rows:[["ผู้ป่วย","HD ใช้ AV graft ติดเชื้อเรื้อรัง CRP 40"],["Lab","ferritin 800 TSAT 16% Hb ไม่ขึ้นแม้ ESA 150 IU/kg/wk"],["กลไก","IL-6 → hepcidin สูง → ferroportin ถูกทำลาย iron ติดใน macrophage"]],
+    take:["Ferritin สูงแต่ TSAT ต่ำคือ functional iron deficiency จาก hepcidin ไม่ใช่ iron เกิน","ESA hyporesponsiveness ให้หาสาเหตุ: infection, inflammation, access ติดเชื้อ, under-dialysis","เพิ่ม ESA ขนาดสูงมากไม่ช่วยและเพิ่มความเสี่ยง CV"]},
+  shpt:{name:"Hyporesponse จาก SHPT", p:P({dial:true,hb0:9.4,fer0:500,esa:200,pthx:15,iron:"iv"}),
+    rows:[["ผู้ป่วย","HD PTH 15 เท่า ULN ALP สูง"],["Lab","ferritin 500 TSAT 35% Hb 9 แม้ ESA 200 IU/kg/wk"],["กลไก","marrow fibrosis จาก PTH สูง"]],
+    take:["SHPT รุนแรงทำให้ marrow fibrosis และดื้อ ESA คุม PTH แล้ว Hb ดีขึ้น","ตรวจ iron, B12, folate, hemolysis, aluminum และ dialysis adequacy ร่วมด้วย","ERI สูงต่อเนื่องสัมพันธ์กับ mortality"]},
+  prca:{name:"PRCA จาก anti-EPO", p:P({dial:true,hb0:10.8,fer0:500,esa:150,prca:true}),
+    rows:[["ผู้ป่วย","HD ใช้ ESA ใต้ผิวหนังมา 9 เดือน Hb ลดเร็ว"],["Lab","reticulocyte < 10,000/µL platelet และ WBC ปกติ"],["ยืนยัน","anti-EPO antibody และ marrow ไม่มี erythroid precursor"]],
+    take:["Hb ลดราว 0.5–1 g/dL ต่อสัปดาห์ร่วมกับ reticulocyte ต่ำมาก ต้องคิดถึง PRCA","หยุด ESA ทุกชนิด (cross-react) ให้เลือดตามจำเป็น และพิจารณา immunosuppression","HIF-PHI ใช้ได้เพราะไม่ cross-react กับ anti-EPO"]},
+  pro:{name:"HD + proactive IV iron", p:P({dial:true,hb0:9.5,fer0:300,esa:80,iron:"iv"}),
+    rows:[["ผู้ป่วย","HD Hb 9.5 ferritin 300 TSAT 22%"],["การรักษา","IV iron 400 mg/เดือน หยุดเมื่อ ferritin > 700 หรือ TSAT ≥ 40% + ESA 80 IU/kg/wk"],["ผล","Hb ถึงเป้า ใช้ ESA น้อยกว่าแบบ reactive"]],
+    take:["Proactive IV iron ขนาดสูงใน HD ลดขนาด ESA และ transfusion โดยไม่เพิ่ม infection","กฎหยุดให้ iron: ferritin > 700 ng/mL หรือ TSAT ≥ 40%","เป้า Hb เมื่อใช้ ESA ราว 10–11.5 g/dL ไม่ใช้ ESA คง Hb ≥ 11.5 (เกิน 13 เพิ่ม stroke และ thrombosis ชัด)"]},
+  hif:{name:"HIF-PHI ใน CKD ไม่ dialysis", p:P({hb0:9.3,fer0:150,hif:true,iron:"oral"}),
+    rows:[["ผู้ป่วย","CKD G4 Hb 9.3 ferritin 150 ไม่อยากฉีดยา"],["การรักษา","HIF-PHI ทางปาก + oral iron"],["กลไก","เพิ่ม endogenous EPO และลด hepcidin ทำให้ดูดซึม iron ทางปากได้ดีขึ้น"]],
+    take:["HIF-PHI กระตุ้น EPO ภายในร่างกายและลด hepcidin เป็นทางเลือกแทน ESA","ระวัง thrombosis, hyperkalemia และหลีกเลี่ยงในมะเร็งที่ยัง active และ proliferative retinopathy","ยังต้องเติม iron ให้พอเหมือน ESA"]}
+};
+var ORDER=["abs","func","shpt","prca","pro","hif"];
+var box=document.getElementById("ctls"), C={}, ST={dial:false,hif:false,prca:false};
+function sl(k,o){ o.id="s"+k; o.onInput=function(){ update(true); }; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("hb0",{label:"Hb ตั้งต้น",min:7,max:12,step:0.1,value:9.5,unit:"g/dL",fmt:function(v){ return v.toFixed(1); }});
+sl("fer0",{label:"Ferritin",min:15,max:1200,step:5,value:200,unit:"ng/mL"});
+sl("crp",{label:"CRP",min:1,max:100,step:1,value:3,unit:"mg/L"});
+sl("esa",{label:"ESA",min:0,max:300,step:10,value:0,unit:"IU/kg/wk"});
+sl("pthx",{label:"PTH",min:1,max:20,step:0.5,value:2,unit:"x ULN",fmt:function(v){ return v.toFixed(1); }});
+var is=Sim.h("select",{id:"iron"},[["none","ไม่ได้ iron"],["oral","Oral iron"],["iv","IV iron (ND: 1 g ครั้งเดียว, HD: 400 mg/เดือน)"]].map(function(o){ return Sim.h("option",{value:o[0],text:o[1]}); }));
+is.addEventListener("change",function(){ update(); });
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"iron",text:"Iron"}),is]));
+var tb=document.getElementById("tools"), BT={};
+[["dial","Hemodialysis"],["hif","HIF-PHI"],["prca","Anti-EPO PRCA"]].forEach(function(t){ BT[t[0]]=Sim.toggle(t[1],function(on){ ST[t[0]]=on; update(); },false); tb.appendChild(BT[t[0]]); });
+function v(k){ return C[k].get(); }
+function model(){
+  var o={hb0:v("hb0"),fer0:v("fer0"),crp:v("crp"),esa:v("esa"),iron:is.value,hif:ST.hif,pthx:v("pthx"),prca:ST.prca,dial:ST.dial};
+  var S0=o.fer0*8/(1+o.crp/20), S=S0, Hb=o.hb0, hb=[],ts=[],fe=[],hp=[],ev=[],lim=[];
+  var R=(1/(1+o.crp/60))*(1/(1+0.12*Math.max(0,o.pthx-6)))*(o.prca?0.03:1);
+  var lossFe=o.dial?6:1.2, iv=0;
+  for(var d=0;d<=168;d++){
+    var H=30*Math.pow(Math.max(S,20)/1600,0.5)*(1+o.crp/10)*(o.hif?0.55:1);
+    var tsat=Math.max(3,Math.min(60,30*Math.pow(Math.max(S,10)/1600,0.7)*Math.pow(30/H,0.45)));
+    var fer=S/8*(1+o.crp/20);
+    var abs=1.2*Math.pow(30/H,1.2);
+    if(o.iron==="oral") abs+=Math.min(5,4*Math.pow(30/H,1.2));
+    abs=Math.min(abs,25);
+    if(o.iron==="iv"){
+      if(o.dial){ if(d%28===0){ if(fer<700&&tsat<40){ S+=400; iv+=400; ev.push({t:d/7,kind:"rx",text:"สัปดาห์ "+(d/7)+": IV iron 400 mg"}); } else ev.push({t:d/7,kind:"phys",text:"สัปดาห์ "+(d/7)+": งด IV iron (ferritin "+Math.round(fer)+", TSAT "+Math.round(tsat)+"%)"}); } }
+      else if(d===0){ S+=1000; iv+=1000; ev.push({t:0,kind:"rx",text:"IV iron 1,000 mg ครั้งเดียว"}); }
+    }
+    var epo=(o.dial?0.25:0.4)+o.esa/80+(o.hif?1.0:0);
+    var D=epo/(epo+0.4), L=Math.min(1.08,(tsat/(tsat+12))/0.714);
+    var hss=6+7*D*R*L, dHb=(hss-Hb)/28;
+    if(o.prca) dHb=-Hb/80*0.97;
+    Hb+=dHb;
+    if(Hb<7){ Hb+=2; ev.push({t:d/7,kind:"warn",text:"สัปดาห์ "+(d/7).toFixed(1)+": Hb < 7 ให้เลือด 2 units"}); }
+    S+=abs-lossFe-Math.max(0,dHb)*170; if(S<10) S=10;
+    var w=+(d/7).toFixed(3); hb.push([w,Hb]); ts.push([w,tsat]); fe.push([w,fer]); hp.push(H);
+    lim.push({epo:D,iron:L,hep:H,marrow:R});
+  }
+  return {o:o,hb:hb,ts:ts,fe:fe,hp:hp,ev:ev,lim:lim,iv:iv,R:R};
+}
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?260:290,aria:"Hemoglobin and transferrin saturation over 24 weeks",
+  x:{min:0,max:24,step:4,label:"Weeks"},y:{min:6,max:14,step:1,label:"Hb (g/dL)"},y2:{min:0,max:60,step:10,label:"TSAT (%)"},
+  series:[{id:"hb",name:"Hb",color:A.accent,data:[],width:2.8},{id:"ts",name:"TSAT",color:A.gold,data:[],width:1.6,axis:"y2"}],
+  bands:[{y0:10,y1:11.5,color:"rgba(31,122,114,0.08)",label:"Hb target on ESA"}],
+  hlines:[{y:13,label:"Avoid > 13",color:A.red,dash:[4,3]}],legend:true});
+var live=Live.player(chart,{mount:"live"}), LAST=null;
+function drawLim(M,i){
+  var L=M.lim[Math.min(i,M.lim.length-1)], el=document.getElementById("lim"); el.innerHTML="";
+  var items=[["EPO drive",Math.round(L.epo*100)+"%",L.epo<0.55],["Iron to marrow",Math.round(Math.min(1,L.iron)*100)+"%",L.iron<0.8],["Hepcidin",(L.hep/30).toFixed(1)+"x",L.hep>60],["Marrow response",Math.round(L.marrow*100)+"%",L.marrow<0.7]];
+  items.forEach(function(x){ el.appendChild(Sim.h("div",{class:x[2]?"on":""},[Sim.h("b",{text:x[1]}),document.createTextNode(x[0])])); });
+}
+function onFrame(t,done){
+  var M=LAST, i=Math.round(t*7);
+  drawLim(M,i);
+  var ts=Live.valueAt(M.ts,t), fe=Live.valueAt(M.fe,t), hp=M.hp[Math.min(i,M.hp.length-1)];
+  Sim.ro("roTs",Math.round(ts),ts<20?"flag":ts>=40?"flag":"ok"); Sim.ro("roFe",Math.round(fe),fe<100?"flag":fe>700?"flag":null);
+  Sim.ro("roHe",(hp/30).toFixed(1)+"x",hp>60?"flag":hp<20?"ok":null);
+  if(done){ var hb=M.hb[M.hb.length-1][1]; Sim.ro("roHb",hb.toFixed(1),hb<10||hb>13?"flag":"ok"); Sim.ro("roEr",M.o.esa>0?(M.o.esa/hb).toFixed(1):"-",M.o.esa/hb>15?"flag":null); }
+  else { Sim.ro("roHb","…"); Sim.ro("roEr","…"); }
+  var a=document.getElementById("act");
+  if(done){ a.innerHTML=M.act; a.className=M.actCls; } else { a.innerHTML="<b>กำลังจำลอง</b> สัปดาห์ "+t.toFixed(1)+" Hb "+Live.valueAt(M.hb,t).toFixed(1)+" TSAT "+Math.round(ts)+"%"; a.className="act"; }
+}
+function update(deb){
+  var M=model(), o=M.o, hbE=M.hb[M.hb.length-1][1], tsE=M.ts[M.ts.length-1][1], feE=M.fe[M.fe.length-1][1];
+  chart.setSeries("hb",M.hb); chart.setSeries("ts",M.ts);
+  Sim.ro("roIv",M.iv?M.iv.toLocaleString("en-US"):"0");
+  var m,bad=true, fe0=M.fe[0][1], ts0=M.ts[0][1];
+  if(o.prca) m="<b>สงสัย PRCA</b> ตรวจ reticulocyte, anti-EPO antibody, bone marrow หยุด ESA ทุกชนิด ให้เลือดเมื่อจำเป็น พิจารณา immunosuppression (steroid, cyclosporine) หรือ KT และใช้ HIF-PHI แทน";
+  else if(ts0<20&&fe0<300&&o.iron==="none") m="<b>Iron deficiency</b> ferritin "+Math.round(fe0)+" TSAT "+Math.round(ts0)+"% ให้ iron ก่อน (oral 1–3 เดือนใน ND-CKD หรือ IV) และหา GI blood loss เริ่ม ESA เมื่อ iron พอแล้ว Hb ยังต่ำกว่า 10";
+  else if(o.esa>=150&&hbE<10){ var cause=o.crp>=20?"inflammation/infection (CRP "+o.crp+")":o.pthx>8?"SHPT รุนแรง (PTH "+o.pthx+" เท่า ULN)":tsE<20?"iron ไม่พอ":"สาเหตุอื่น"; m="<b>ESA hyporesponsiveness</b> สาเหตุหลักในแบบจำลองนี้: "+cause+" หาและแก้: infection/access, dialysis adequacy, PTH, iron, B12/folate, hemolysis, aluminum ไม่เพิ่ม ESA เกินขนาดที่ตอบสนอง"; }
+  else if(hbE>11.5&&(o.esa>0||o.hif)) m="<b>Hb "+hbE.toFixed(1)+" เกินเป้า</b> ลดขนาด ESA หรือ HIF-PHI ราว 25% อย่าหยุดทันที ไม่ใช้ ESA คง Hb ≥ 11.5 และไม่ให้เกิน 13 เพราะเพิ่ม stroke, thrombosis";
+  else if(hbE<10&&o.esa===0&&!o.hif&&tsE>=20) m="<b>Hb ยังต่ำแม้ iron พอ</b> พิจารณาเริ่ม ESA หรือ HIF-PHI ตามอาการ ความเสี่ยง (stroke, มะเร็ง) และความชอบของผู้ป่วย เป้า Hb ราว 10–11.5";
+  else if(feE>700||tsE>=40) m="<b>Iron มากพอแล้ว</b> งด IV iron เมื่อ ferritin > 700 หรือ TSAT ≥ 40% ติดตามทุก 1–3 เดือน";
+  else { bad=false; m="<b>อยู่ในเป้า</b> ติดตาม Hb ทุกเดือน (dialysis) หรือทุก 3 เดือน (ND-CKD) ferritin และ TSAT ทุก 3 เดือน"; }
+  M.act="<b>Next step:</b> "+m; M.actCls="act"+(bad?" bad":"");
+  LAST=M;
+  var E=M.ev.slice(); var c10=Live.cross(M.hb,10,1); if(c10!==null&&o.hb0<10) E.push({t:c10,kind:"ok",text:"Hb ถึง 10 g/dL สัปดาห์ที่ "+c10.toFixed(1)});
+  var c13=Live.cross(M.hb,13,1); if(c13!==null) E.push({t:c13,kind:"warn",text:"Hb เกิน 13 g/dL"});
+  E.push({t:24,kind:"phys",text:"สัปดาห์ 24: Hb "+hbE.toFixed(1)+" ferritin "+Math.round(feE)+" TSAT "+Math.round(tsE)+"%"});
+  if(E.length>14) E=E.filter(function(e){ return e.kind!=="phys"||e.t>=24; });
+  live.load({tMin:0,tMax:24,unit:"สัปดาห์",ms:8000,debounce:deb===true,num:function(x){ return x.toFixed(1); },events:E.sort(function(a,b){ return a.t-b.t; }),onFrame:onFrame,
+    cursorLabel:function(t){ return "Hb "+Live.valueAt(M.hb,t).toFixed(1); }});
+}
+Sim.mount({code:"CKD-06", title:"Anemia in CKD: EPO, Iron and Hepcidin", lead:"ตั้ง iron status, inflammation, PTH และเลือก iron, ESA หรือ HIF-PHI ดู Hb ตอบสนองตลอด 24 สัปดาห์ และหาว่าอะไรจำกัดการสร้างเม็ดเลือดเมื่อดื้อ ESA",
+  scenarios:S, order:ORDER, captureMs:1000,
+  onChange:function(kk,s){ var p=s.p; C.hb0.set(p.hb0); C.fer0.set(p.fer0); C.crp.set(p.crp); C.esa.set(p.esa); C.pthx.set(p.pthx); is.value=p.iron;
+    ["dial","hif","prca"].forEach(function(x){ ST[x]=!!p[x]; BT[x].setState(ST[x]); }); update(); },
+  refs:["Babitt JL, Berns JS, Bozkurt B, et al. Executive summary of the KDIGO 2026 Clinical Practice Guideline for the Management of Anemia in CKD. Kidney Int 2026, 109(1): 44-56",
+        "Babitt JL, Eisenga MF, Haase VH, et al. Controversies in optimal anemia management: conclusions from a KDIGO Conference. Kidney Int 2021, 99(6): 1280-1295",
+        "Macdougall IC, White C, Anker SD, et al (PIVOTAL). Intravenous iron in patients undergoing maintenance hemodialysis. N Engl J Med 2019, 380(5): 447-458",
+        "Pfeffer MA, Burdmann EA, Chen CY, et al (TREAT). A trial of darbepoetin alfa in type 2 diabetes and CKD. N Engl J Med 2009, 361(21): 2019-2032",
+        "Singh AK, Carroll K, McMurray JJV, et al (ASCEND-ND). Daprodustat for the treatment of anemia in patients not undergoing dialysis. N Engl J Med 2021, 385(25): 2313-2324",
+        "Casadevall N, Nataf J, Viron B, et al. Pure red-cell aplasia and antierythropoietin antibodies in patients treated with recombinant erythropoietin. N Engl J Med 2002, 346(7): 469-475",
+        "Ganz T, Nemeth E. Iron balance and the role of hepcidin in CKD. Semin Nephrol 2016, 36(2): 87-93"],
+  note:"Model เพื่อการสอน: iron stores = ferritin x 8 mg (ปรับ acute phase ตาม CRP), hepcidin ∝ √stores x (1 + CRP/10) (HIF-PHI x 0.55), TSAT ∝ stores^0.7 x hepcidin^−0.45, Hb steady state = 6 + 7 x EPO drive x marrow response x iron availability (EPO drive = EPO/(EPO + 0.4), EPO endogenous 0.25–0.4 + ESA/80 + HIF-PHI 1.0), Hb เข้าหา steady state ด้วย τ 28 วัน ใช้ iron 170 mg ต่อ Hb ที่เพิ่ม 1 g/dL, iron loss HD 6 mg/วัน PRCA ไม่มีการสร้าง ให้เลือดเมื่อ Hb < 7"
+});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[HD-07] Water Treatment Plant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(120px,160px) 1fr 100px}
+.pgrid{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+@media (max-width:760px){.pgrid{grid-template-columns:1fr}}
+.std{width:100%;border-collapse:collapse;font-size:13px;margin-top:12px}
+.std th,.std td{padding:5px 8px;border-bottom:1px solid var(--line);text-align:left}
+.std th{font-weight:500;color:var(--muted)}
+.std td.v{font-family:var(--mono);text-align:right;white-space:nowrap}
+.std tr.bad td{color:var(--red)}
+.readout{grid-template-columns:repeat(3,1fr)}
+.pt{margin:10px 0 0;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.pt b{display:block;font-weight:600;margin-bottom:4px}
+.pt.bad{background:var(--pink)}
+body.present #bench{grid-template-columns:1.6fr 1fr}
+body.present .pgrid{grid-template-columns:1fr;gap:6px}
+body.present .find .card,body.present .std{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .readout{grid-template-columns:repeat(3,1fr)}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench one" id="bench">
+    <div class="card">
+      <h2>Water treatment loop</h2>
+      <div class="svgwrap"><svg id="plant" aria-label="Dialysis water treatment plant"></svg></div>
+      <p class="hint no-present">ลำดับมาตรฐาน: pre-treatment (softener, carbon 2 ถัง) → RO (± DI) → storage และ loop → endotoxin ultrafilter → เครื่องฟอก</p>
+    </div>
+    <div class="card">
+      <h2>Monitor และผลต่อผู้ป่วย</h2>
+      <div class="pgrid"><div>
+        <div class="ctls" id="ctls"></div>
+        <table class="std" id="std" aria-label="Water quality versus standard"></table>
+      </div><div>
+        <div class="readout">
+          <div class="ro" id="roCl"><b>-</b><span>Total chlorine (mg/L)</span></div>
+          <div class="ro" id="roRej"><b>-</b><span>RO rejection (%)</span></div>
+          <div class="ro" id="roRes"><b>-</b><span>DI resistivity (MΩ cm)</span></div>
+          <div class="ro" id="roCfu"><b>-</b><span>Bacteria (CFU/mL)</span></div>
+          <div class="ro" id="roEu"><b>-</b><span>Endotoxin (EU/mL)</span></div>
+          <div class="ro" id="roAct"><b>-</b><span>Action</span></div>
+        </div>
+        <div class="pt" id="pt"></div>
+      </div></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/circuit.js"></script>
+<script>
+(function(){
+"use strict";
+var S = {
+  normal:{name:"ระบบปกติ", p:{feedCl:1.5,ebct:10,spent:20,rej:98,di:true,diSpent:30,days:7},
+    rows:[["Carbon","2 ถัง worker + polisher EBCT รวม ≥ 10 นาที"],["Product water","total chlorine < 0.1 mg/L, conductivity ต่ำ, bacteria และ endotoxin ต่ำกว่า action level"],["การตรวจ","total chlorine หลัง worker ก่อนเริ่มทุก shift (หรือทุก 4 ชั่วโมง)"]],
+    take:["Total chlorine ≤ 0.1 mg/L","Bacteria ≤ 100 CFU/mL (action 50) endotoxin ≤ 0.25 EU/mL (action 0.125)","Ultrapure dialysate: < 0.1 CFU/mL และ < 0.03 EU/mL","Carbon เป็นด่านหลักที่กำจัด chloramine (ทางเสริมคือ sodium bisulfite หรือ ascorbic acid) RO กำจัดได้ไม่ดีเพราะโมเลกุลเล็กและไม่มีประจุ"],
+    quiz:[{q:"ก่อนเริ่ม shift เช้า ตรวจ total chlorine หลัง carbon worker ได้ 0.05 mg/L หลัง polisher 0.02 mg/L ข้อใดเหมาะที่สุด",opts:["เริ่มฟอกได้ตามปกติ","เปลี่ยน carbon worker ทันที","หยุดฟอกทั้งหน่วย","เพิ่มการตรวจ endotoxin"],ans:0,why:"ทั้งสองจุดต่ำกว่า 0.1 mg/L ตาม ISO 23500 จึงเริ่มฟอกได้"}]},
+  chloramine:{name:"Carbon exhaustion", p:{feedCl:2.5,ebct:10,spent:92,rej:98,di:true,diSpent:30,days:7},
+    rows:[["เหตุ","การประปาเพิ่ม chloramine และ carbon worker หมดอายุ"],["ผล","total chlorine หลัง carbon เกิน 0.1 mg/L ผ่าน RO เข้า dialysate"],["ผู้ป่วยหลายราย","hemolysis (Hb ลด, LDH สูง), methemoglobinemia, ESA resistance"]],
+    take:["Chloramine ทำให้เกิด oxidative hemolysis และ methemoglobinemia ถ้า anemia ดื้อ ESA พร้อมกันหลายรายในหน่วยให้นึกถึง chloramine","total chlorine หลัง worker > 0.1 ให้ตรวจหลัง polisher ถ้าเกินด้วยหยุดฟอก","เปลี่ยน carbon และเพิ่ม EBCT ประเมินผู้ป่วยด้วย Hb, LDH, haptoglobin, metHb"],
+    quiz:[{q:"ผู้ป่วยในหน่วยไต 6 ราย Hb ลดลงพร้อมกันและต้องเพิ่ม ESA LDH สูง haptoglobin ต่ำ การประปาเพิ่งเปลี่ยนเป็น chloramine ข้อใดเหมาะที่สุด",opts:["ให้ IV iron ทุกราย","ตรวจ total chlorine หลัง carbon ทันทีและแก้ carbon (เปลี่ยน, เพิ่ม EBCT)","เพิ่ม ESA เป็นสองเท่า","เปลี่ยน dialyzer ทุกราย"],ans:1,why:"hemolysis หลายรายพร้อมกันหลังการประปาใช้ chloramine ชี้ไปที่ carbon ไม่พอ ต้องตรวจ total chlorine และแก้ pre-treatment"}]},
+  roFail:{name:"RO membrane failure", p:{feedCl:1.5,ebct:10,spent:20,rej:78,di:true,diSpent:60,days:7},
+    rows:[["เหตุ","RO membrane รั่วหรือ fouling, DI รับภาระไอออนแทนและจะหมดเร็ว"],["Monitor","conductivity ของ product water สูงขึ้น rejection ลดลงจาก 98% เหลือราว 78%"],["ความเสี่ยง","สารละลายเช่น aluminum, fluoride, nitrate, sulfate, copper ผ่านเข้า dialysate"]],
+    take:["RO rejection = (feed − product) / feed conductivity ปกติ ≥ 90–95%","Aluminum: encephalopathy (dialysis dementia), microcytic anemia, osteomalacia","Fluoride: arrhythmia และ sudden death, nitrate: methemoglobinemia, copper: hemolysis","ตรวจ chemical contaminant อย่างน้อยปีละครั้งและเมื่อ RO ผิดปกติ"],
+    quiz:[{q:"Conductivity ของ RO product water เพิ่มจาก 8 เป็น 85 µS/cm rejection 79% ข้อใดเหมาะที่สุด",opts:["ฟอกต่อแล้วนัดช่างสัปดาห์หน้า","หยุดใช้น้ำจาก RO ตรวจ membrane และส่งตรวจ chemical contaminants","เพิ่ม carbon อีกหนึ่งถัง","เพิ่มความถี่ disinfection"],ans:1,why:"rejection ลดลงมากแปลว่า RO ไม่กันสารละลาย ต้องหยุดใช้และแก้ RO carbon ไม่ช่วยสารอนินทรีย์"}]},
+  diExhaust:{name:"DI exhaustion", p:{feedCl:1.5,ebct:10,spent:20,rej:96,di:true,diSpent:100,days:7},
+    rows:[["เหตุ","resin ของ DI หมด ไม่มี resistivity monitor ที่มี alarm"],["ผล","resistivity ต่ำกว่า 1 MΩ cm DI ปล่อยไอออนที่จับไว้กลับออกมา (dumping) ทำให้ fluoride และสารอื่นเข้มข้นกว่าน้ำเข้า"],["ประวัติ","มีรายงานผู้ป่วยเสียชีวิตจาก fluoride intoxication จาก DI exhausted"]],
+    take:["DI ต้องมี resistivity monitor ต่อเนื่องพร้อม alarm","Resistivity < 1 MΩ cm ห้ามใช้น้ำ หยุดฟอก","ต้องมี ultrafilter หลัง DI เพราะ resin เป็นแหล่ง bacteria"],
+    quiz:[{q:"Resistivity หลัง DI ลดเหลือ 0.4 MΩ cm ระหว่าง shift ข้อใดเหมาะที่สุด",opts:["ฟอกต่อจนจบ shift แล้วค่อยเปลี่ยน DI","หยุดใช้น้ำจาก DI ทันที หยุดฟอก และเปลี่ยน resin","ลด Qd เพื่อลดปริมาณน้ำที่ใช้","เพิ่ม carbon"],ans:1,why:"resistivity ต่ำกว่า 1 MΩ cm DI อาจปล่อยไอออนเช่น fluoride ออกมาในความเข้มข้นสูง ต้องหยุดใช้ทันที"}]},
+  biofilm:{name:"Biofilm และ endotoxin", p:{feedCl:1.5,ebct:10,spent:20,rej:98,di:true,diSpent:30,days:35},
+    rows:[["เหตุ","ไม่ได้ disinfect loop 5 สัปดาห์ มี dead leg ใน piping"],["Monitor","bacteria และ endotoxin เกิน action level"],["ผู้ป่วยหลายราย","ไข้ หนาวสั่นภายใน 30–60 นาทีแรกของการฟอก (pyrogenic reaction) ไข้หายหลังหยุดฟอก"]],
+    take:["Pyrogenic reaction: ไข้หนาวสั่นช่วงต้นของการฟอกหลายราย blood culture มักไม่ขึ้น","Endotoxin fragment ผ่าน high-flux membrane ได้ (backfiltration)","ทำ blood culture แยก bacteremia ทุกราย (ถ้ามี CVC หรืออาการหนักให้ empirical antibiotic ไปก่อนจนกว่าผล culture กลับ), culture น้ำและ dialysate, disinfect loop, เอา dead leg ออก"],
+    quiz:[{q:"ผู้ป่วย 4 รายใน shift เดียวมีไข้ 38.8°C หนาวสั่นใน 45 นาทีแรก ไม่มีแหล่งติดเชื้ออื่น ข้อใดเหมาะที่สุดเป็นอันดับแรก",opts:["ให้ vancomycin ทุกรายแล้วฟอกต่อ","หยุดฟอก ทำ blood culture และส่ง culture กับ endotoxin ของน้ำและ dialysate","เปลี่ยน dialyzer เป็น low-flux","ให้ paracetamol แล้วฟอกต่อ"],ans:1,why:"ไข้หลายรายพร้อมกันช่วงต้นการฟอกชี้ pyrogenic reaction จากน้ำ ต้องหยุด แยก bacteremia และตรวจระบบน้ำ"}]}
+};
+var ORDER=["normal","chloramine","roFail","diExhaust","biofilm"];
+
+var box=document.getElementById("ctls"), C={};
+function sl(k,o){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); box.appendChild(C[k].el); return C[k]; }
+sl("feedCl",{label:"Chlorine ในน้ำประปา",min:0.2,max:4,step:0.1,value:1.5,unit:"mg/L",fmt:function(v){return v.toFixed(1);}});
+sl("ebct",{label:"Carbon EBCT รวม",min:3,max:15,step:1,value:10,unit:"min"});
+sl("spent",{label:"Carbon ใช้ไปแล้ว",min:0,max:100,step:2,value:20,unit:"%"});
+sl("rej",{label:"RO rejection",min:60,max:99,step:1,value:98,unit:"%"});
+sl("diSpent",{label:"DI resin ใช้ไปแล้ว",min:0,max:100,step:2,value:30,unit:"%"}).el.classList.add("secondary");
+sl("days",{label:"วันจาก disinfection",min:1,max:60,step:1,value:7,unit:"วัน"});
+
+var c=Circuit.preset.water(document.getElementById("plant"),{di:true}), st={di:true};
+
+function model(p){
+  var k=0.55*(1-p.spent/100*0.97);
+  var cl=p.feedCl*Math.exp(-k*p.ebct);
+  var feedCond=420, prod=feedCond*(1-p.rej/100);
+  var res=p.di ? (p.diSpent>=96 ? 0.4 : Math.max(1.2, 18*(1-p.diSpent/100)*Math.exp(-prod/60))) : null;
+  var cfu=Math.round(2*Math.exp(p.days/7.5)), eu=+(cfu/900).toFixed(3);
+  return {cl:cl, cond:prod, rej:p.rej, res:res, cfu:cfu, eu:eu};
+}
+function params(){ return {feedCl:C.feedCl.get(),ebct:C.ebct.get(),spent:C.spent.get(),rej:C.rej.get(),diSpent:C.diSpent.get(),days:C.days.get(),di:st.di}; }
+function update(){
+  var p=params(), m=model(p);
+  c.set("CL",{value:+m.cl.toFixed(2)}); c.set("COND",{value:Math.round(m.cond)}); c.set("MIC",{value:m.cfu});
+  c.show("DI",p.di); c.show("RES",p.di);
+  if(p.di) c.set("RES",{value:+m.res.toFixed(1)});
+  c.set("CW",{exhaust:p.spent/100, alarm:m.cl>0.1}); c.set("CP",{exhaust:Math.max(0,(p.spent-50)/100)});
+  c.set("RO",{alarm:m.rej<90}); if(p.di) c.set("DI",{exhaust:p.diSpent/100, alarm:m.res<1});
+  c.set("ST",{alarm:m.cfu>50}); c.set("loop",{fluid:m.cfu>50?"cloudy":"water"}); c.set("w6",{fluid:m.cfu>50?"cloudy":"water"});
+  var bad=[];
+  if(m.cl>0.1) bad.push(["Total chlorine > 0.1 mg/L","Hemolysis, methemoglobinemia, anemia ดื้อ ESA หยุดฟอกจนแก้ carbon ได้"]);
+  if(p.di && m.res<1) bad.push(["Resistivity < 1 MΩ cm","DI dumping ไอออน เช่น fluoride (arrhythmia, sudden death) หยุดใช้น้ำ"]);
+  if(m.rej<90) bad.push(["RO rejection < 90%","Aluminum, fluoride, nitrate, copper ผ่านได้ ตรวจ chemical contaminant"]);
+  if(m.cfu>100||m.eu>0.25) bad.push(["Bacteria or endotoxin above maximum","Pyrogenic reaction ไข้หนาวสั่นช่วงต้นการฟอก disinfect ทันที"]);
+  else if(m.cfu>50||m.eu>0.125) bad.push(["Bacteria or endotoxin above action level","ยังไม่เกินค่าสูงสุด แต่ต้อง disinfect และหาสาเหตุ"]);
+  c.alarm(bad.length?bad[0][0]:null);
+  Sim.ro("roCl",Sim.fmt(m.cl,2),m.cl>0.1?"flag":"ok");
+  Sim.ro("roRej",Sim.fmt(m.rej,0),m.rej<90?"flag":"ok");
+  Sim.ro("roRes",p.di?Sim.fmt(m.res,1):"ไม่มี DI",p.di?(m.res<1?"flag":"ok"):false);
+  Sim.ro("roCfu",Sim.fmt(m.cfu,0),m.cfu>50?"flag":"ok");
+  Sim.ro("roEu",Sim.fmt(m.eu,3),m.eu>0.125?"flag":"ok");
+  var stop=(m.cl>0.1)||(p.di&&m.res<1)||m.rej<80||m.cfu>100||m.eu>0.25;
+  Sim.ro("roAct",stop?"หยุด":(bad.length?"แก้ไข":"ใช้ได้"),stop?"flag":(bad.length?"flag":"ok"));
+  var pt=document.getElementById("pt"); pt.innerHTML=""; pt.className="pt"+(bad.length?" bad":"");
+  if(!bad.length){ pt.appendChild(Sim.h("b",{text:"ผู้ป่วย: ไม่คาดว่าจะมีผลจากน้ำ"})); pt.appendChild(document.createTextNode("ทุกค่าอยู่ในมาตรฐาน ISO 23500")); }
+  bad.forEach(function(x){ pt.appendChild(Sim.h("b",{text:x[0]})); pt.appendChild(Sim.h("div",{text:x[1],style:"margin-bottom:6px"})); });
+  var tb=document.getElementById("std"); tb.innerHTML="";
+  tb.appendChild(Sim.h("tr",{},["Parameter","ค่าจริง","มาตรฐาน"].map(function(h){ return Sim.h("th",{text:h}); })));
+  [["Total chlorine",Sim.fmt(m.cl,2)+" mg/L","≤ 0.1 mg/L",m.cl>0.1],["RO product conductivity",Math.round(m.cond)+" µS/cm","rejection ≥ 90–95%",m.rej<90],["Bacteria (water)",m.cfu+" CFU/mL","≤ 100 (action 50)",m.cfu>50],["Endotoxin (water)",Sim.fmt(m.eu,3)+" EU/mL","≤ 0.25 (action 0.125)",m.eu>0.125],["Carbon EBCT",p.ebct+" min","≥ 10 min รวม",p.ebct<10]].forEach(function(r){
+    tb.appendChild(Sim.h("tr",{class:r[3]?"bad":""},[Sim.h("td",{text:r[0]}),Sim.h("td",{class:"v",text:r[1]}),Sim.h("td",{text:r[2]})]));
+  });
+}
+Sim.mount({code:"HD-07", title:"Water Treatment Plant", lead:"ปรับคุณภาพน้ำเข้า, carbon, RO, DI และรอบ disinfection แล้วดู monitor และผลต่อผู้ป่วย",
+  scenarios:S, order:ORDER, captureMs:2500,
+  onChange:function(k,s){ var p=s.p; ["feedCl","ebct","spent","rej","diSpent","days"].forEach(function(x){ C[x].set(p[x]); }); st.di=p.di; update(); },
+  refs:["ISO 23500-3:2019 Preparation and quality management of fluids for haemodialysis and related therapies. Part 3: Water for haemodialysis and related therapies. Geneva: ISO 2019",
+        "ISO 23500-5:2019 Part 5: Quality of dialysis fluid for haemodialysis and related therapies. Geneva: ISO 2019",
+        "Coulliette AD, Arduino MJ. Hemodialysis and water quality. Semin Dial 2013, 26(4): 427-438",
+        "Ward DM. Chloramine removal from water used in hemodialysis. Adv Ren Replace Ther 1996, 3(4): 337-347",
+        "Arnow PM, Bland LA, Garcia-Houchins S, Fridkin S, Fellner SK. An outbreak of fatal fluoride intoxication in a long-term hemodialysis unit. Ann Intern Med 1994, 121(5): 339-344"],
+  note:"ค่าใน monitor มาจาก model อย่างง่ายเพื่อการสอน (carbon แบบ exponential ตาม EBCT, bacteria เพิ่มตามวันหลัง disinfection) เกณฑ์ตาม ISO 23500"
+});
+})();
+</script>
+</body>
+</html>

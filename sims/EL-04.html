@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[EL-04] Hypernatremia and Polyuria</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(120px,160px) 1fr 100px}
+.sel{display:grid;grid-template-columns:minmax(120px,160px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.readout{grid-template-columns:repeat(3,1fr)}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,1fr)}}
+table.lab{width:100%;border-collapse:collapse;font-size:13px;margin-top:12px}
+table.lab th,table.lab td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right}
+table.lab th{font-weight:500;color:var(--muted);font-size:12px}
+table.lab td{font-family:var(--mono)}
+table.lab td:first-child,table.lab th:first-child{text-align:left;font-family:inherit;color:var(--muted)}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+body.present .bench{grid-template-columns:1.3fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:16px 20px}
+body.present .ctls{gap:2px}
+body.present .ro{padding:8px 12px}
+body.present table.lab td,body.present table.lab th{padding:4px 8px}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+body.present #cell svg{max-height:170px;width:auto!important;margin:0 auto}
+body.present #cell .nc-bar{display:none}
+body.present table.lab{display:none}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Water deprivation test แล้วให้ desmopressin</h2>
+      <div id="chart"></div>
+      <div id="live"></div>
+      <div id="cell" style="margin-top:10px"></div>
+      <table class="lab" id="lab" aria-label="Copeptin and urine values"></table>
+      <p class="hint no-present">งดน้ำจน Na > 145, Posm > 295–300, น้ำหนักลด 3–5% หรือ Uosm คงที่ แล้วให้ desmopressin วัด Uosm ซ้ำ 1–2 ชม. เส้นตั้งคือเวลาที่ให้ desmopressin ค่า copeptin ใช้เกณฑ์ baseline > 21.4 pmol/L (NDI), hypertonic saline stimulated ≤ 4.9 (CDI) และ arginine stimulated ≤ 3.8 pmol/L (CDI)</p>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วยและการทดสอบ</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roU1"><b>-</b><span>Uosm หลังงดน้ำ</span></div>
+        <div class="ro" id="roU2"><b>-</b><span>Uosm หลัง DDAVP</span></div>
+        <div class="ro" id="roInc"><b>-</b><span>เพิ่มขึ้นหลัง DDAVP</span></div>
+        <div class="ro" id="roNa"><b>-</b><span>Na สูงสุด</span></div>
+        <div class="ro" id="roWt"><b>-</b><span>น้ำหนักลด (%)</span></div>
+        <div class="ro" id="roDx"><b>-</b><span>แปลผล</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/live.js"></script>
+<script src="../core/nephron.js"></script>
+<script>
+(function(){
+"use strict";
+/* adh: endogenous ADH capacity 0..1, ren: renal response 0..1, wash: medullary washout (max Uosm), cop: baseline, stimulated (pmol/L), sol: solute mOsm/day */
+var D={
+  normal:{name:"ปกติ",adh:1,ren:1,wash:1100,cop:[6,12],sol:800,na:140,dx:"ปกติ"},
+  poly:{name:"Primary polydipsia",adh:1,ren:1,wash:720,cop:[2,8],sol:800,na:139,dx:"Primary polydipsia"},
+  ccdi:{name:"Complete central DI",adh:0.03,ren:1,wash:1000,cop:[1.5,1.8],sol:800,na:143,dx:"Complete central DI"},
+  pcdi:{name:"Partial central DI",adh:0.35,ren:1,wash:900,cop:[2.5,3.5],sol:800,na:142,dx:"Partial central DI"},
+  cndi:{name:"Complete nephrogenic DI",adh:1,ren:0.03,wash:900,cop:[45,60],sol:800,na:144,dx:"Complete nephrogenic DI"},
+  pndi:{name:"Partial nephrogenic DI (lithium)",adh:1,ren:0.35,wash:850,cop:[30,45],sol:800,na:143,dx:"Partial nephrogenic DI"},
+  osm:{name:"Osmotic diuresis",adh:1,ren:1,wash:550,cop:[15,25],sol:2400,na:146,dx:"Solute diuresis"},
+  adip:{name:"Adipsic DI",adh:0.05,ren:1,wash:1000,cop:[1.2,1.5],sol:800,na:156,dx:"Adipsic central DI"}
+};
+function P(o){ var d={k:"ccdi",w:60,dep:8,ddavp:"yes",sol:0}; for(var k in o) d[k]=o[k]; return d; }
+var TK={
+  normal:["Uosm หลังงดน้ำ > 800 และเพิ่มหลัง desmopressin < 10% = ปกติ","การงดน้ำต้องหยุดเมื่อ Na > 145 หรือน้ำหนักลด 3–5%","Polyuria = urine > 3 L/วัน หรือ > 50 ml/kg/วัน"],
+  poly:["Primary polydipsia: Uosm ขึ้นได้ไม่สุดเพราะ medullary washout แต่ไม่ตอบสนองต่อ desmopressin","Copeptin หลัง hypertonic saline > 4.9 pmol/L ช่วยแยกจาก partial CDI ได้แม่นกว่าการงดน้ำ","ระวังให้ desmopressin ใน polydipsia จะเกิด hyponatremia รุนแรง"],
+  ccdi:["Complete CDI: Uosm ต่ำแม้งดน้ำ เพิ่มมากกว่า 50% หลัง desmopressin","Na ขึ้นเร็วระหว่างงดน้ำ ต้องเฝ้าใกล้ชิด","รักษาด้วย desmopressin และอนุญาตให้ดื่มตามกระหาย"],
+  pcdi:["Partial CDI: Uosm ขึ้นได้บ้างและเพิ่มอีก 10–50% หลัง desmopressin","แยกจาก polydipsia ด้วยการงดน้ำทำได้ยาก copeptin ช่วยมาก","หา cause: tumor, infiltrative, post-surgery/trauma"],
+  cndi:["NDI: Uosm ต่ำ ไม่ตอบสนองต่อ desmopressin และ copeptin baseline สูง (> 21.4 pmol/L)","Congenital: AVPR2 (X-linked) หรือ AQP2 acquired: lithium, hyperCa, hypoK","รักษา: low solute diet, thiazide ± amiloride (lithium) ± NSAID"],
+  pndi:["Lithium ลด AQP2 ทำให้ NDI แบบค่อยเป็นค่อยไป","Amiloride ลดการเข้าเซลล์ของ lithium ที่ principal cell","ติดตาม Ca และ eGFR (lithium nephropathy)"],
+  osm:["Osmotic diuresis: Uosm ราว 300–500 แต่ osmolar excretion > 1,000 mOsm/วัน","สาเหตุ: glucose, urea (high-protein feeding, post-obstruction), mannitol","ไม่ต้องทำ water deprivation คำนวณ total osmolar excretion ก่อน"],
+  adip:["Adipsic DI: ไม่มี ADH และไม่มีกระหาย Na สูงเรื้อรัง","พบหลังผ่าตัด ACom aneurysm หรือ craniopharyngioma","รักษา: desmopressin ขนาดคงที่ + กำหนดน้ำดื่มตามน้ำหนักทุกวัน"]
+};
+var S={}, ORDER=["normal","poly","ccdi","pcdi","cndi","pndi","osm","adip"];
+ORDER.forEach(function(k){ var d=D[k]; S[k]={name:d.name,p:P({k:k,dep:k==="adip"?2:k==="osm"?4:8}),rows:[["Baseline","Na "+d.na+", copeptin "+d.cop[0]+" pmol/L"],["กลไก",k==="poly"?"ADH ปกติแต่ medulla ถูก washout":k==="osm"?"solute สูงพาน้ำออก":(d.adh<0.5?"ADH ไม่พอ":"ADH ปกติ")+(d.ren<0.5?" ไตไม่ตอบสนอง":"")],["ผลที่คาด",d.dx]],take:TK[k]}; });
+
+var box=document.getElementById("ctls"), C={}, SEL={};
+var ks=Sim.h("select",{id:"sk"},ORDER.map(function(k){ return Sim.h("option",{value:k,text:D[k].name}); })); ks.addEventListener("change",update);
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"sk",text:"ภาวะ"}),ks]));
+function sl(k,o,cls){ o.id="s"+k; o.onInput=function(){ update.drag=true; update(); }; C[k]=Sim.slider(o); if(cls) C[k].el.classList.add(cls); box.appendChild(C[k].el); }
+sl("dep",{label:"งดน้ำ",min:1,max:12,step:1,value:8,unit:"ชม."});
+sl("w",{label:"น้ำหนัก",min:30,max:100,step:1,value:60,unit:"kg"});
+sl("sol",{label:"Solute เพิ่ม",min:0,max:2000,step:100,value:0,unit:"mOsm/วัน"},"secondary");
+var dd=Sim.h("select",{id:"sdd"},[["yes","ให้ desmopressin หลังงดน้ำ"],["no","ไม่ให้"]].map(function(o){ return Sim.h("option",{value:o[0],text:o[1]}); })); dd.addEventListener("change",update);
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"sdd",text:"Desmopressin"}),dd]));
+
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?190:270,aria:"Urine osmolality and serum sodium during water deprivation",
+  x:{min:0,max:10,step:1,label:"Hours"},y:{min:0,max:1200,step:200,label:"Urine osm (mOsm/kg)"},y2:{min:135,max:165,step:5,label:"Serum Na"},
+  series:[{id:"u",name:"Urine osm",color:A.accent,data:[],width:2.8,points:true},{id:"na",name:"Serum Na",color:A.red,data:[],width:2,axis:"y2"},{id:"v",name:"Urine flow (ml/h)",color:A.muted,data:[],width:1.2,dash:[3,3],hidden:false}],legend:true});
+
+function sim(p){
+  var d=D[p.k], tbw=0.6*p.w, tbw0=tbw, na=d.na, sol=(d.sol+p.sol)/24, U=[], NA=[], V=[], stop=p.dep, uEnd=0, naMax=na, wl=0, tStop=p.dep;
+  for(var h=0;h<=p.dep;h++){
+    var posm=2*na+10, drive=Math.max(0,Math.min(1,(posm-280)/15));           /* ADH release vs Posm */
+    var eff=Math.min(1,drive*d.adh+0.08)*d.ren;
+    var uosm=Math.min(d.wash,60+(d.wash-60)*eff);
+    if(p.k==="osm") uosm=Math.max(uosm,320);
+    var v=sol/uosm;
+    U.push([h,uosm]); NA.push([h,na]); V.push([h,v*1000]);
+    uEnd=uosm; naMax=Math.max(naMax,na);
+    wl=(tbw0-tbw)/p.w*100;
+    if(h>0&&(na>=147||wl>=5)&&h<p.dep){ tStop=h; break; }
+    var vNaFree=v*(1-Math.min(1,uosm*0.35/na))+0.04;                      /* electrolyte-free water loss + insensible */
+    var newT=tbw-vNaFree; na=na*tbw/newT; tbw=newT;
+  }
+  var u2=null;
+  if(p.ddavp==="yes"){ u2=Math.min(d.wash*(d.adh<0.5?0.65:1),60+(d.wash-60)*Math.min(1,d.ren*1.0)); if(p.k==="osm") u2=Math.max(u2,uEnd*1.05);
+    if(p.k==="normal"||p.k==="poly") u2=uEnd*1.04; U.push([tStop+1,(uEnd+u2)/2]); U.push([tStop+2,u2]); }
+  return {U:U,NA:NA,V:V,u1:uEnd,u2:u2,naMax:naMax,wl:wl,tStop:tStop,d:d};
+}
+function interp(u1,u2){
+  var inc=u2?(u2-u1)/u1*100:null;
+  if(u1>=800&&(inc===null||inc<10)) return "ปกติ";
+  if(u1<300&&inc!==null&&inc>=50) return "Complete CDI";
+  if(u1<300&&inc!==null&&inc<50) return "Complete NDI";
+  if(inc!==null&&inc>=10&&u1<800) return "Partial CDI";
+  if(u1>=300&&u1<800&&inc!==null&&inc<10) return u1>=500?"Primary polydipsia":"Partial NDI";
+  return "ไม่สรุป";
+}
+var live=Live.player(chart,{mount:"live"}), LAST=null, cell=Nephron.cell("cell","CCD",{level:"basic",levelButtons:false}), ckey="";
+function cellAt(t){
+  var R=LAST.R, k=LAST.k, after=R.u2&&t>R.tStop+0.01, uo=Math.round(Live.valueAt(R.U,t)/50)*50, key=[k,after,uo].join();
+  if(key===ckey) return; ckey=key;
+  var fl=Math.max(0.05,Math.min(2,uo/550)), o={focus:["AQP2","V2R"],flows:{AQP2:fl},badges:{lumen:"Urine "+uo+" mOsm"}};
+  var dd=after?"After desmopressin: ":"";
+  if(k==="cndi"){ o.blocked=["V2R"]; o.caption=dd+"Collecting duct cannot respond: V2R or AQP2 defective. ADH is high but urine stays dilute."; }
+  else if(k==="pndi"){ o.focus=["AQP2","V2R","ENaC"]; o.caption=dd+"Lithium enters through ENaC and suppresses AQP2: only a weak response to ADH."; }
+  else if(k==="ccdi"||k==="adip"||k==="pcdi"){ if(after){ o.gain=["V2R"]; o.caption="Desmopressin switches V2R on: AQP2 inserted, urine osmolality rises."; } else o.caption=(k==="pcdi"?"Little ADH from the pituitary: few AQP2, urine only partly concentrated.":"No ADH from the pituitary: V2R idle, AQP2 stays inside the cell, urine dilute."); }
+  else if(k==="osm"){ o.caption=dd+"AQP2 works, but a high solute load holds water in the tubule: solute (osmotic) diuresis."; }
+  else if(k==="poly"){ o.caption=dd+"ADH and AQP2 work, but the washed-out medulla limits how concentrated urine can get."; }
+  else o.caption=dd+(uo>=800?"Water deprivation raises ADH: AQP2 inserted, urine fully concentrated.":"Rising plasma osmolality releases ADH: AQP2 moves into the membrane.");
+  cell.update("CCD",o);
+}
+function events(p,R){
+  var d=R.d, E=[], va=Live.valueAt;
+  E.push({t:0,kind:"phys",text:"เริ่มงดน้ำ Na "+d.na+" Uosm "+Math.round(R.U[0][1])+" urine "+Math.round(R.V[0][1])+" ml/h"+(p.k==="poly"?" (ดื่มน้ำมากเรื้อรัง medulla ถูก washout)":p.k==="osm"?" (solute "+(d.sol+p.sol)+" mOsm/วัน พาน้ำออก)":"")});
+  var NAc=R.NA, Uc=R.U.filter(function(x){ return x[0]<=R.tStop; });
+  if(R.V.length>1) E.push({t:1,kind:"phys",text:"Posm เริ่มสูง: "+(d.adh<0.5?"pituitary หลั่ง ADH ได้น้อย":"ADH หลั่งเพิ่ม")+(d.ren<0.5?" แต่ collecting duct ไม่ตอบสนอง":"")+" Uosm "+Math.round(R.U[1][1])});
+  var c3=Live.cross(Uc,300,1); if(c3!==null) E.push({t:c3,kind:"phys",text:"Uosm เกิน 300 (เริ่ม concentrate)"});
+  var c8=Live.cross(Uc,800,1); if(c8!==null) E.push({t:c8,kind:"ok",text:"Uosm เกิน 800: ระบบ ADH และไตทำงานได้เต็มที่"});
+  var n5=Live.cross(NAc,145,1); if(n5!==null) E.push({t:n5,kind:"warn",text:"Na เกิน 145 จากการเสีย electrolyte-free water"});
+  if(R.tStop<p.dep) E.push({t:R.tStop,kind:"warn",text:"หยุดงดน้ำที่ ชม. "+R.tStop+" เพราะ "+(R.naMax>=147?"Na ถึง "+R.naMax.toFixed(1):"น้ำหนักลด "+R.wl.toFixed(1)+"%")});
+  else E.push({t:R.tStop,kind:"phys",text:"ครบ "+R.tStop+" ชม. Uosm คงที่ที่ "+Math.round(R.u1)});
+  if(R.u2){ E.push({t:R.tStop+0.02,kind:"rx",text:"ให้ desmopressin: ทดสอบว่าไตตอบสนองต่อ ADH หรือไม่"});
+    var inc=(R.u2-R.u1)/R.u1*100;
+    E.push({t:R.tStop+2,kind:inc>=50?"warn":inc>=10?"warn":"ok",text:"Uosm หลัง desmopressin "+Math.round(R.u2)+" ("+(inc>=0?"+":"")+Math.round(inc)+"%) "+(inc>=50?"ตอบสนองมาก: ขาด ADH":inc>=10?"ตอบสนองบางส่วน":"ไม่ตอบสนองเพิ่ม: "+(R.u1>=800?"ADH ปกติอยู่แล้ว":"ADH มีอยู่แล้วหรือไตดื้อ"))}); }
+  return E.sort(function(a,b){ return a.t-b.t; });
+}
+function onFrame(t,done){
+  cellAt(t);
+  var R=LAST.R, va=Live.valueAt;
+  var nm=0; R.NA.forEach(function(x){ if(x[0]<=t) nm=Math.max(nm,x[1]); });
+  Sim.ro("roNa",nm.toFixed(1),nm>=147?"flag":"ok");
+  var wl=R.wl*Math.min(1,t/Math.max(R.tStop,0.01)); Sim.ro("roWt",wl.toFixed(1),wl>=5?"flag":false);
+  if(t>=R.tStop-1e-6) Sim.ro("roU1",Math.round(R.u1),R.u1<300?"flag":R.u1>=800?"ok":false); else Sim.ro("roU1","…");
+  if(done){ Sim.ro("roU2",R.u2?Math.round(R.u2):"-"); Sim.ro("roInc",LAST.inc===null?"-":(LAST.inc>=0?"+":"")+Math.round(LAST.inc)+"%",LAST.inc!==null&&LAST.inc>=50?"flag":false); Sim.ro("roDx",LAST.dx,LAST.dx==="ปกติ"?"ok":"flag"); }
+  else { Sim.ro("roU2","…"); Sim.ro("roInc","…"); Sim.ro("roDx","…"); }
+  var act=document.getElementById("act");
+  if(done){ act.innerHTML=LAST.act; act.className=LAST.actCls; }
+  else { act.innerHTML="<b>กำลังทดสอบ</b> ชม. "+t.toFixed(1)+" Uosm "+Math.round(va(R.U,t))+(t<=R.tStop?" Na "+va(R.NA,t).toFixed(1):" (หลัง desmopressin)"); act.className="act"; }
+}
+function update(){
+  var p={k:ks.value,dep:C.dep.get(),w:C.w.get(),sol:C.sol.get(),ddavp:dd.value}, R=sim(p), d=R.d;
+  chart.update({x:{min:0,max:Math.max(4,R.tStop+3),step:1,label:"Hours"},vlines:p.ddavp==="yes"?[{x:R.tStop,label:"Desmopressin"}]:[],hlines:[{y:800,label:"800",color:A.teal,dash:[4,4]},{y:300,label:"300",color:A.red,dash:[2,3]}],
+    y2:{min:Math.min(135,Math.floor(d.na/5)*5),max:Math.max(160,Math.ceil(R.naMax/5)*5+5),step:5,label:"Serum Na"}});
+  chart.setSeries("u",R.U); chart.setSeries("na",R.NA); chart.setSeries("v",R.V.map(function(x){ return [x[0],Math.min(1200,x[1])]; }));
+  var inc=R.u2?(R.u2-R.u1)/R.u1*100:null, dx=p.k==="osm"?"Solute diuresis":p.k==="adip"?"Adipsic DI":interp(R.u1,R.u2);
+  Sim.ro("roU1",Math.round(R.u1),R.u1<300?"flag":R.u1>=800?"ok":false);
+  Sim.ro("roU2",R.u2?Math.round(R.u2):"-");
+  Sim.ro("roInc",inc===null?"-":(inc>=0?"+":"")+Math.round(inc)+"%",inc!==null&&inc>=50?"flag":false);
+  Sim.ro("roNa",R.naMax.toFixed(1),R.naMax>=147?"flag":"ok");
+  Sim.ro("roWt",R.wl.toFixed(1),R.wl>=5?"flag":false);
+  Sim.ro("roDx",dx,dx==="ปกติ"?"ok":"flag");
+  var oe=(d.sol+p.sol);
+  var tb=document.getElementById("lab"); tb.innerHTML="";
+  tb.appendChild(Sim.h("tr",{},["","ค่า","เกณฑ์"].map(function(t){ return Sim.h("th",{text:t}); })));
+  [["Copeptin baseline (pmol/L)",d.cop[0],"> 21.4 = NDI"],["Copeptin stimulated (pmol/L)",d.cop[1],"saline ≤ 4.9 หรือ arginine ≤ 3.8 = CDI"],["Osmolar excretion (mOsm/วัน)",oe,"> 1,000 = solute diuresis"],["งดน้ำหยุดที่ (ชม.)",R.tStop,"Na ≥ 147 หรือ น้ำหนักลด 5%"]].forEach(function(r){ var tr=Sim.h("tr",{},[Sim.h("td",{text:r[0]}),Sim.h("td",{text:String(r[1])}),Sim.h("td",{text:r[2]})]); tb.appendChild(tr); });
+  var act=document.getElementById("act"), m, bad=true;
+  if(p.k==="adip") m="<b>Adipsic DI</b> ไม่ควรทำ water deprivation แก้ free water deficit ช้าๆ แล้วให้ desmopressin ขนาดคงที่ + น้ำดื่มตามตารางและน้ำหนักทุกวัน";
+  else if(dx==="Solute diuresis") m="<b>Osmotic diuresis</b> หา solute: glucose, urea (feeding, post-obstruction, recovering AKI), mannitol ทดแทนน้ำและแก้สาเหตุ";
+  else if(/CDI/.test(dx)) m="<b>"+dx+"</b> เริ่ม desmopressin (oral/nasal) ขนาดต่ำ ให้ดื่มตามกระหาย ตรวจ Na หลังเริ่มยา MRI pituitary";
+  else if(/NDI/.test(dx)) m="<b>"+dx+"</b> ลด solute (Na, protein) thiazide ± amiloride ถ้าเกิดจาก lithium แก้ hyperCa/hypoK";
+  else if(dx==="Primary polydipsia") m="<b>Primary polydipsia</b> ห้ามให้ desmopressin ค่อยๆ ลดน้ำดื่ม ทบทวนยาทางจิตเวช ยืนยันด้วย copeptin หลัง hypertonic saline";
+  else { bad=false; m="<b>ไม่มี DI</b> ทบทวนว่าเป็น polyuria จริง (24-h urine > 3 L) และ osmolar excretion"; }
+  ckey=""; LAST={R:R,k:p.k,inc:inc,dx:dx,act:"<b>Next step:</b> "+m,actCls:"act"+(bad?" bad":"")};
+  live.load({tMax:R.u2?R.tStop+2:R.tStop,unit:"ชม.",ms:7000,events:events(p,R),onFrame:onFrame,baseVlines:p.ddavp==="yes"?[{x:R.tStop,label:"Desmopressin"}]:[],cursorLabel:function(t){ return "Uosm "+Math.round(Live.valueAt(R.U,t)); },debounce:!!update.drag});
+  update.drag=false;
+}
+Sim.mount({code:"EL-04", title:"Hypernatremia and Polyuria", lead:"เลือกภาวะ งดน้ำแล้วให้ desmopressin ดู urine osmolality, Na และ copeptin เพื่อแยก central DI, nephrogenic DI, primary polydipsia และ solute diuresis",
+  scenarios:S, order:ORDER, captureMs:1400,
+  onChange:function(k,s){ var p=s.p; ks.value=p.k; dd.value=p.ddavp; C.dep.set(p.dep); C.w.set(p.w); C.sol.set(p.sol); update(); },
+  refs:["Fenske W, Refardt J, Chifu I, et al. A copeptin-based approach in the diagnosis of diabetes insipidus. N Engl J Med 2018, 379(5): 428-439",
+        "Winzeler B, Cesana-Nigro N, Refardt J, et al. Arginine-stimulated copeptin measurements in the differential diagnosis of diabetes insipidus: a prospective diagnostic study. Lancet 2019, 394(10198): 587-595",
+        "Refardt J, Atila C, Chifu I, et al. Arginine or hypertonic saline-stimulated copeptin to diagnose AVP deficiency. N Engl J Med 2023, 389(20): 1877-1887",
+        "Christ-Crain M, Bichet DG, Fenske WK, et al. Diabetes insipidus. Nat Rev Dis Primers 2019, 5(1): 54",
+        "Adrogué HJ, Madias NE. Hypernatremia. N Engl J Med 2000, 342(20): 1493-1499"],
+  note:"Model เพื่อการสอน: ADH หลั่งตาม Posm (เริ่มราว 280) คูณ capacity ของ pituitary และ renal response ได้ Uosm สูงสุดเท่ากับ medullary concentration ของแต่ละภาวะ (CDI เรื้อรังมี washout จึงตอบสนองต่อ desmopressin ได้ราว 65% ของสูงสุด) urine flow = solute excretion / Uosm Na คิดจาก electrolyte-free water loss ค่า copeptin เป็นค่าตัวอย่างประกอบการสอน"
+});
+})();
+</script>
+</body>
+</html>

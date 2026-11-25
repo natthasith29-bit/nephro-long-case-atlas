@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[PD-07] Ultrafiltration Failure Work-up</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(120px,160px) 1fr 100px}
+.readout{grid-template-columns:repeat(3,1fr)}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,1fr)}}
+ol.wk{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:6px;counter-reset:s}
+ol.wk li{counter-increment:s;display:grid;grid-template-columns:26px 1fr auto;gap:10px;align-items:start;padding:9px 12px;border:1px solid var(--line);border-radius:12px;font-size:13.5px}
+ol.wk li::before{content:counter(s);font:500 12px/22px var(--mono);text-align:center;width:22px;height:22px;border-radius:50%;background:var(--canvas);color:var(--muted)}
+ol.wk li b{font-weight:600}
+ol.wk li .st{font:500 12px var(--mono);white-space:nowrap}
+ol.wk li.hit{border-color:var(--red);background:#FFF6F6}
+ol.wk li.hit::before{background:var(--red);color:#fff}
+ol.wk li.hit .st{color:var(--red)}
+ol.wk li.ok .st{color:var(--teal)}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+body.present .bench{grid-template-columns:1.3fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .tools{display:none}
+body.present .card{padding:16px 20px}
+body.present .ctls{gap:2px}
+body.present .ro{padding:8px 12px}
+body.present ol.wk{gap:3px;margin-top:8px}
+body.present ol.wk li{padding:3px 10px;font-size:12px}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Membrane ตามระยะเวลาที่ทำ PD</h2>
+      <div id="chart"></div>
+      <div class="tools">
+        <button class="tog" type="button" id="tAdh" aria-pressed="false">กิน Na และน้ำมาก</button>
+        <button class="tog" type="button" id="tRKF" aria-pressed="false">RKF เพิ่งหมด</button>
+        <button class="tog" type="button" id="tCath" aria-pressed="false">Catheter drain ไม่หมด</button>
+        <button class="tog" type="button" id="tLeak" aria-pressed="false">Leak</button>
+        <button class="tog" type="button" id="tGDP" aria-pressed="false">Low-GDP + icodextrin</button>
+      </div>
+      <ol class="wk" id="wk" aria-label="UF failure work-up"></ol>
+      <p class="hint no-present">กราฟ: D/P Cr (ซ้าย) และ net UF ของ 4.25% 4 ชม. (ขวา) แต่ละปี เส้นตั้งคือปีปัจจุบัน ลำดับ work-up เริ่มจากสาเหตุนอก membrane ก่อนเสมอ</p>
+    </div>
+    <div class="card">
+      <h2>ประวัติผู้ป่วย</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roCr"><b>-</b><span>D/P Cr 4 ชม.</span></div>
+        <div class="ro" id="roUF"><b>-</b><span>Net UF 4.25% ที่วัดได้ (ml)</span></div>
+        <div class="ro" id="roDip"><b>-</b><span>Na dip 60 นาที</span></div>
+        <div class="ro" id="roFW"><b>-</b><span>Free water 60 นาที (ml)</span></div>
+        <div class="ro" id="roType"><b>-</b><span>สรุป</span></div>
+        <div class="ro" id="roEPS"><b>-</b><span>EPS risk</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/calc.js"></script>
+<script src="../core/pd.js"></script>
+<script>
+(function(){
+"use strict";
+function P(o){ var d={yr:1,a0:1.0,glu:90,peri:0,L:0.3,adh:false,rkf:false,cath:false,leak:false,gdp:false}; for(var k in o) d[k]=o[k]; return d; }
+var S = {
+  diet:{name:"Membrane ปกติ แต่กิน Na มาก", p:P({adh:true}),
+    rows:[["ประวัติ","PD ปีแรก บวมและ BP สูงขึ้น ใช้ 4.25% บ่อย"],["Work-up","PET: transport, UF และ Na dip ปกติ ซักประวัติพบกินเค็มและดื่มน้ำมาก"],["ข้อสรุป","ไม่ใช่ UF failure ปัญหาคือ intake"]],
+    take:["UF failure ต้องพิสูจน์ด้วย 4.25% PET ก่อน ไม่ใช่ดูจากอาการบวม","สาเหตุบวมที่พบบ่อยกว่าคือ Na/น้ำ intake, adherence และการสูญเสีย RKF","การเพิ่ม hypertonic glucose โดยไม่แก้ intake ทำให้ membrane เสียเร็วขึ้น"]},
+  type1:{name:"Type I fast transport", p:P({yr:5,a0:1.6,glu:170,peri:1,L:0.5}),
+    rows:[["ประวัติ","PD 5 ปี ใช้ glucose สูง peritonitis 1 ครั้ง"],["PET","D/P Cr ≥ 0.82 net UF < 400 ml free water ยังพอมี (Na dip อาจต่ำเพราะ Na diffusion เร็ว)"],["ข้อสรุป","UF failure จาก fast solute transfer (glucose gradient หายเร็ว)"]],
+    take:["Fast transport เป็นสาเหตุ UF failure ที่พบบ่อยที่สุด","แก้ด้วย dwell สั้น (APD) และ icodextrin long dwell","ลด glucose exposure เพื่อชะลอการเปลี่ยนแปลงต่อ"]},
+  type2:{name:"Type II osmotic conductance ต่ำ", p:P({yr:8,a0:1.1,glu:150,peri:3}),
+    rows:[["ประวัติ","PD 8 ปี peritonitis 3 ครั้ง glucose exposure สูง"],["PET","net UF < 400 ml free water และ Na dip แทบไม่มี D/P Cr สูงร่วมด้วย"],["ข้อสรุป","intrinsic membrane injury (fibrosis/aquaporin) EPS risk สูง"]],
+    take:["Free water ต่ำ (Na dip น้อย) = osmotic conductance to glucose ลดลง แม้ transport จะเร็วร่วมด้วย","เป็นสัญญาณของ fibrosis มักพบใน long vintage หลัง peritonitis หลายครั้ง","ควรวางแผนเปลี่ยนเป็น HD และเฝ้าระวัง EPS แม้หลังหยุด PD"]},
+  type3:{name:"Type III absorption สูง", p:P({yr:3,L:2.2}),
+    rows:[["ประวัติ","PD 3 ปี UF ลดลงเรื่อยๆ"],["PET","D/P Cr และ Na dip ปกติ แต่ net UF < 400 ml"],["ข้อสรุป","fluid absorption สูง (lymphatic) หลังตัด mechanical cause ออก"]],
+    take:["Transport และ Na dip ปกติแต่ UF ต่ำ ให้ตัด leak และ catheter problem ก่อน","Lymphatic absorption สูงเพิ่มขึ้นตาม IPP ลด fill volume ช่วยได้","Icodextrin ช่วยได้บางส่วน"]},
+  cath:{name:"Catheter drain ไม่หมด", p:P({yr:2,cath:true}),
+    rows:[["ประวัติ","drain ช้า drain volume น้อยกว่าปกติ ท้องผูก"],["PET","UF ที่วัดได้ต่ำเพราะน้ำค้างในท้อง ไม่ใช่ membrane"],["ข้อสรุป","mechanical outflow problem ต้องดู film และแก้ catheter"]],
+    take:["UF ที่วัดได้ = drain − fill ถ้า drain ไม่หมด UF จะต่ำเทียม","ดู plain film หา catheter migration แก้ท้องผูก ตรวจ fibrin","อย่าแปลผล PET จนกว่า drain ได้ครบ"]},
+  protect:{name:"8 ปีแต่ปกป้อง membrane", p:P({yr:8,a0:1.1,glu:70,peri:0,gdp:true}),
+    rows:[["ประวัติ","PD 8 ปี ใช้ icodextrin long dwell low-GDP fluid คุม Na และน้ำดี ไม่เคย peritonitis"],["PET","transport และ Na dip ยังใกล้เคียงปกติ"],["ข้อสรุป","glucose exposure และ peritonitis เป็นตัวเร่งหลักของ membrane injury"]],
+    take:["ลด glucose exposure ด้วย icodextrin, คุม intake และรักษา RKF","ป้องกัน peritonitis คือป้องกัน membrane","Low-GDP fluid ช่วย RKF แต่ยังไม่มีหลักฐานว่าลด mortality"]}
+};
+var ORDER=["diet","type1","type2","type3","cath","protect"];
+
+var box=document.getElementById("ctls"), C={};
+function sl(k,o,cls){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); if(cls) C[k].el.classList.add(cls); box.appendChild(C[k].el); return C[k]; }
+sl("yr",{label:"ทำ PD มาแล้ว",min:0,max:10,step:1,value:1,unit:"ปี"});
+sl("a0",{label:"Transport ตอนเริ่ม",min:0.6,max:1.6,step:0.05,value:1,fmt:function(v){ return "×"+v.toFixed(2); }});
+sl("glu",{label:"Glucose exposure",min:40,max:200,step:10,value:90,unit:"g/วัน"});
+sl("peri",{label:"Peritonitis",min:0,max:5,step:1,value:0,unit:"ครั้ง"});
+sl("L",{label:"Lymphatic flow",min:0.1,max:3,step:0.1,value:0.3,unit:"ml/min"});
+var T={}; ["adh","rkf","cath","leak","gdp"].forEach(function(k,i){ var id=["tAdh","tRKF","tCath","tLeak","tGDP"][i]; T[k]=document.getElementById(id); T[k].addEventListener("click",function(){ T[k].setAttribute("aria-pressed",T[k].getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); });
+function on(k){ return T[k].getAttribute("aria-pressed")==="true"; }
+
+/* membrane trajectory: glucose exposure และ peritonitis เร่ง vascular proliferation (area เพิ่ม) และ fibrosis (aqp, lps ลด) */
+function membrane(p,y){
+  var g=Math.max(0,(p.glu-60)/60)*(p.gdp?0.6:1), per=Math.min(p.peri,y*1.0+0.5);
+  var area=p.a0*(1+0.035*y*(0.5+g)+0.06*per);
+  var fib=Math.max(0,y-3)*0.045*(0.4+g)+0.05*per*Math.max(0,y-2)/Math.max(1,y);
+  return {area:area, aqp:Math.max(0.05,1-fib*1.6), lps:Math.max(0.35,1-fib)};
+}
+function pet(p,y){ var m=membrane(p,y); var R=PD.dwell({fluid:"g425",dwellMin:240,area:m.area,aqp:m.aqp,lps:m.lps,L:p.L}); return {m:m,R:R,a:R.at(240),a60:R.at(60)}; }
+
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?165:230,aria:"D over P creatinine and ultrafiltration by year on PD",
+  x:{min:0,max:10,step:1,label:"Years on PD"},y:{min:0.4,max:1,step:0.1,label:"D/P Cr"},y2:{min:-200,max:1200,step:200,label:"UF ml"},
+  series:[{id:"cr",name:"D/P Cr",color:A.accent,data:[],width:2.4,points:true},{id:"uf",name:"UF 4.25%",color:A.ink,data:[],width:2,axis:"y2",points:true},{id:"dip",name:"Na dip x 100",color:A.accent2,data:[],width:1.4,axis:"y2",dash:[4,3]}],legend:true});
+
+function params(){ var o={}; for(var k in C) o[k]=C[k].get(); ["adh","rkf","cath","leak","gdp"].forEach(function(k){ o[k]=on(k); }); return o; }
+function update(){
+  var p=params(), cr=[], uf=[], dip=[];
+  for(var y=0;y<=10;y++){ var r=pet(p,y); cr.push([y,r.a.dpCr]); uf.push([y,r.a.uf]); dip.push([y,r.a60.naDip*100]); }
+  chart.setSeries("cr",cr); chart.setSeries("uf",uf); chart.setSeries("dip",dip);
+  chart.update({vlines:[{x:p.yr,label:"Year "+p.yr}],hlines:[{y:400,axis:"y2",color:A.red,dash:[4,4],label:"400 ml"},{y:0.82,color:A.muted,dash:[2,3]}]});
+  var cur=pet(p,p.yr), a=cur.a, d=cur.a60.naDip, fw=cur.a60.fw60;
+  var artefact=(p.cath?500:0)+(p.leak?300:0), measured=a.uf-artefact;
+  var membraneLow=a.uf<400, uff=measured<400;
+  var pr=Calc.pet({dpCr4:+a.dpCr.toFixed(2),na0:Math.round(cur.R.na0),na60:Math.round(cur.R.na[60]),uf:Math.round(a.uf)});
+  var concl;
+  if(!uff) concl=(p.adh||p.rkf)?"Non-membrane":"ปกติ";
+  else if(artefact&&!membraneLow) concl="Mechanical";
+  else concl=fw<75?"Type II":a.dpCr>=0.82?"Type I":"Type III";
+  var eps=(p.yr>=8&&(fw<75||p.peri>=2))||(p.yr>=5&&fw<75)?"High":(p.yr>=5||fw<75)?"Rising":"Low";
+  Sim.ro("roCr",a.dpCr.toFixed(2),a.dpCr>=0.82?"flag":false);
+  Sim.ro("roUF",Math.round(measured),uff?"flag":"ok");
+  Sim.ro("roDip",d.toFixed(1),d<5?"flag":"ok");
+  Sim.ro("roFW",Math.round(fw),fw<75?"flag":false);
+  Sim.ro("roType",concl,concl==="ปกติ"?"ok":"flag");
+  Sim.ro("roEPS",eps,eps==="High"?"flag":eps==="Low"?"ok":false);
+  /* work-up list */
+  var steps=[
+    {t:"<b>Adherence, Na และน้ำ intake</b> ซักประวัติ อาหาร น้ำหนัก",hit:p.adh,s:p.adh?"พบ":"ไม่พบ"},
+    {t:"<b>Residual kidney function</b> 24-h urine เทียบครั้งก่อน",hit:p.rkf,s:p.rkf?"RKF ลด":"คงเดิม"},
+    {t:"<b>Mechanical</b> drain volume, inflow/outflow, film, leak",hit:!!artefact,s:artefact?(p.cath&&p.leak?"catheter + leak":p.cath?"drain ไม่หมด":"leak"):"ปกติ"},
+    {t:"<b>4.25% PET</b> net UF 4 ชม.",hit:uff,s:Math.round(measured)+" ml"},
+    {t:"<b>D/P Cr</b> fast transport?",hit:uff&&a.dpCr>=0.82,s:a.dpCr.toFixed(2)},
+    {t:"<b>Free water 60 นาที</b> osmotic conductance",hit:uff&&fw<75,s:Math.round(fw)+" ml"},
+    {t:"<b>Na dip 60 นาที</b> (แปลร่วมกับ D/P Cr)",hit:uff&&d<5&&a.dpCr<0.82,s:d.toFixed(1)+" mmol/L"}
+  ];
+  var ol=document.getElementById("wk"); ol.innerHTML="";
+  steps.forEach(function(x){ var li=Sim.h("li",{class:x.hit?"hit":"ok"}); li.innerHTML="<span>"+x.t+"</span><span class='st'>"+x.s+"</span>"; ol.appendChild(li); });
+  var act=document.getElementById("act"), m, bad=true;
+  if(artefact&&!membraneLow) m="<b>แก้ปัญหา mechanical ก่อน</b> plain film ดูตำแหน่ง catheter แก้ท้องผูก heparin ถ้ามี fibrin CT peritoneography ถ้าสงสัย leak แล้วทำ PET ซ้ำ";
+  else if(!uff){ bad=p.adh||p.rkf; m=p.adh?"<b>Membrane ปกติ</b> ลด Na (< 2 g/วัน) และน้ำ ใช้ loop diuretic ถ้ายังมีปัสสาวะ ไม่ควรเพิ่ม 4.25%":p.rkf?"<b>RKF ลดลง</b> ปรับ prescription ให้ UF เพิ่ม (icodextrin, APD) และใช้ diuretic ถ้ายังมีปัสสาวะ":"<b>ไม่มี UF failure</b> ติดตาม PET เมื่อ UF หรืออาการเปลี่ยน"; }
+  else if(fw>=75&&a.dpCr>=0.82) m="<b>Type I</b> APD dwell สั้น icodextrin long dwell ลด glucose exposure ทำ PET ซ้ำ 6–12 เดือน";
+  else if(fw<75) m="<b>Type II</b> osmotic conductance ต่ำ"+(a.dpCr>=0.82?" ร่วมกับ fast transport":"")+" วางแผนเปลี่ยนเป็น HD"+(eps==="High"?" EPS risk สูง เฝ้าระวังอาการลำไส้อุดตัน น้ำหนักลด ascites แม้หลังหยุด PD":"");
+  else m="<b>Type III</b> หลังตัด leak และ catheter problem แล้ว ลด fill volume ลด IPP ใช้ icodextrin";
+  act.innerHTML="<b>Next step:</b> "+m; act.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"PD-07", title:"Ultrafiltration Failure Work-up", lead:"ตั้งระยะเวลาที่ทำ PD, glucose exposure และ peritonitis ดู membrane เปลี่ยนไปทุกปี แล้วไล่ work-up จากสาเหตุนอก membrane ไปจนแยก UF failure type I, II และ III",
+  scenarios:S, order:ORDER, captureMs:2000,
+  onChange:function(k,s){ var p=s.p; ["yr","a0","glu","peri","L"].forEach(function(x){ C[x].set(p[x]); }); ["adh","rkf","cath","leak","gdp"].forEach(function(x){ T[x].setAttribute("aria-pressed",p[x]?"true":"false"); }); update(); },
+  refs:["Morelle J, Stachowska-Pietka J, Öberg C, et al. ISPD recommendations for the evaluation of peritoneal membrane dysfunction in adults: classification, measurement, interpretation and rationale for intervention. Perit Dial Int 2021, 41(4): 352-372",
+        "Davies SJ. Longitudinal relationship between solute transport and ultrafiltration capacity in peritoneal dialysis patients. Kidney Int 2004, 66(6): 2437-2445",
+        "Morelle J, Sow A, Hautem N, et al. Interstitial fibrosis restricts osmotic water transport in encapsulating peritoneal sclerosis. J Am Soc Nephrol 2015, 26(10): 2521-2533",
+        "Brown EA, Bargman J, van Biesen W, et al. Length of time on peritoneal dialysis and encapsulating peritoneal sclerosis: position paper for ISPD 2017 update. Perit Dial Int 2017, 37(4): 362-374",
+        "Johnson DW, Brown FG, Clarke M, et al (balANZ). Effects of biocompatible versus standard fluid on peritoneal dialysis outcomes. J Am Soc Nephrol 2012, 23(6): 1097-1107"],
+  note:"Model เพื่อการสอน: แต่ละปีคำนวณ 4.25% PET ด้วย core/pd.js โดย effective surface area เพิ่มตาม glucose exposure และ peritonitis ส่วน aquaporin และ osmotic conductance ลดตาม fibrosis ที่เริ่มหลังปีที่ 3 catheter drain ไม่หมดหัก UF 500 ml และ leak หัก 300 ml free water < 75 ml ใช้เป็นเกณฑ์ osmotic conductance ต่ำ EPS risk เป็นระดับเชิงคุณภาพตาม vintage, free water และ peritonitis"
+});
+})();
+</script>
+</body>
+</html>

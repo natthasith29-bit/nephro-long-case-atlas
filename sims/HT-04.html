@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[HT-04] Renin x Aldosterone Matrix</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.35fr 1fr}}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:12px}
+.sub{font-size:12.5px;color:var(--muted);margin:14px 0 4px}
+.split{display:grid;grid-template-columns:1.1fr 1fr;gap:14px;align-items:start}
+@media (max-width:700px){.split{grid-template-columns:1fr}}
+.pick{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:14px}
+.pick select{flex:1;min-width:220px}
+.clue{margin-top:12px;font-size:13.5px;color:var(--muted)}
+.clue b{color:var(--ink);font-weight:600}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:14px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .ro{padding:6px 12px}
+body.present .ro b{font-size:19px}
+body.present .tog{padding:3px 8px;font-size:11.5px}
+body.present .tools{margin-top:4px;gap:5px}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+body.present .sub{margin:6px 0 2px}
+body.present .clue{margin-top:6px;font-size:12px}
+body.present #cell .nc-bar{display:none}
+body.present #cell svg{max-height:300px}
+body.present #vis{max-height:440px;width:auto;display:block;margin:0 auto}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Renin x aldosterone</h2>
+      <div class="svgwrap" style="max-width:520px;margin:0 auto"><svg id="vis" viewBox="0 0 420 400" role="img" aria-label="Plasma renin activity versus aldosterone matrix with ARR line"></svg></div>
+      <p class="hint no-present">แกนเป็น log scale จุดทึบคือค่าที่วัดได้ วงกลมกลวงคือค่าจริงก่อนยารบกวน เส้นทแยงคือ ARR 20 (aldosterone ng/dL ต่อ PRA ng/mL/h) กรอบมุมซ้ายบนคือเกณฑ์ screen PA (PRA &lt; 1 และ aldosterone &gt; 10) </p>
+      <details class="more"><summary>กลไกของโรคบนเซลล์ท่อไต</summary><div class="more-body"><div id="cell"></div></div></details>
+    </div>
+    <div class="card">
+      <h2>ภาวะและสิ่งรบกวนผล</h2>
+      <div class="pick"><label for="cond">ภาวะ</label><select id="cond"></select></div>
+      <div class="sub">ยาและภาวะที่รบกวน ARR (กดเปิด/ปิด)</div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roPRA"><b>-</b><span>PRA (ng/mL/h)</span></div>
+        <div class="ro" id="roPAC"><b>-</b><span>Aldosterone (ng/dL)</span></div>
+        <div class="ro" id="roARR"><b>-</b><span>ARR</span></div>
+        <div class="ro" id="roK"><b>-</b><span>K (mmol/L)</span></div>
+        <div class="ro" id="roHCO"><b>-</b><span>HCO3 (mmol/L)</span></div>
+        <div class="ro" id="roBP"><b>-</b><span>BP</span></div>
+      </div>
+      <div class="clue" id="clue"></div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/nephron.js"></script>
+<script>
+(function(){
+"use strict";
+function SV(t,a,p){ var b={}; for(var k in a) if(a[k]!==null&&a[k]!==undefined) b[k]=a[k]; return Sim.svg(t,b,p); }
+/* condition library: pra ng/mL/h, pac ng/dL */
+var D={
+  normal:{name:"ปกติ",pra:1.6,pac:12,k:4.2,hco3:25,bp:"Normal",seg:"CCD",gain:[],block:[],cap:"Normal principal cell: aldosterone binds MR and opens ENaC, lumen-negative voltage drives K secretion.",
+    clue:"ไม่มี",next:"ARR ปกติ ไม่ต้องตรวจเพิ่ม"},
+  ehLow:{name:"Essential HT, low renin",pra:0.7,pac:9,k:4.1,hco3:25,bp:"HT",seg:"CCD",gain:[],block:[],cap:"Low-renin essential hypertension: renin low but aldosterone is not autonomous.",
+    clue:"อายุมาก, กินเค็ม, ARR ก้ำกึ่ง",next:"ARR ไม่ถึงเกณฑ์ ถ้ายังสงสัย (HT ดื้อยา, K ต่ำ, adrenal nodule) ตรวจซ้ำหลังแก้ K และเลี่ยงยารบกวน"},
+  apa:{name:"PA: aldosterone-producing adenoma",pra:0.2,pac:34,k:3.0,hco3:30,bp:"HT",seg:"CCD",gain:["MR","ENaC"],block:[],cap:"Autonomous aldosterone keeps MR and ENaC active, Na retained, K and H secreted, renin suppressed.",
+    clue:"K ต่ำ, metabolic alkalosis, adrenal nodule, อายุน้อย",next:"Confirm ด้วย saline infusion หรือ captopril challenge (ข้ามได้ถ้า renin ถูกกดชัด aldosterone > 20 และ K ต่ำ) → CT adrenal → adrenal vein sampling ถ้าผ่าตัดได้ → laparoscopic adrenalectomy ถ้า unilateral"},
+  bah:{name:"PA: bilateral adrenal hyperplasia",pra:0.4,pac:18,k:3.7,hco3:28,bp:"HT",seg:"CCD",gain:["MR","ENaC"],block:[],cap:"Bilateral hyperplasia: milder autonomous aldosterone excess, often normokalemic.",
+    clue:"K ปกติหรือต่ำเล็กน้อย, HT ดื้อยา",next:"Confirm แล้ว AVS แยกจาก unilateral ถ้า bilateral ให้ MRA (spironolactone หรือ eplerenone) ปรับยาจน renin ไม่ถูกกด"},
+  gra:{name:"Familial HT type I (GRA)",pra:0.2,pac:22,k:3.9,hco3:27,bp:"HT",seg:"CCD",gain:["MR","ENaC"],block:[],cap:"CYP11B1/CYP11B2 chimera: ACTH drives aldosterone synthase, so aldosterone follows the cortisol rhythm.",
+    clue:"HT ตั้งแต่เด็ก, ญาติมี hemorrhagic stroke อายุน้อย, K มักปกติ",next:"ตรวจยีน chimeric CYP11B1/CYP11B2 รักษาด้วย glucocorticoid ขนาดต่ำกด ACTH หรือ MRA คัดกรองญาติ"},
+  rvh:{name:"Renovascular HT",pra:8,pac:30,k:3.4,hco3:28,bp:"HT",seg:"CCD",gain:["MR"],block:[],cap:"Ischemic kidney releases renin, Ang II drives aldosterone: secondary hyperaldosteronism.",
+    clue:"bruit, Cr ขึ้นหลัง ACEi, flash pulmonary edema, ไตสองข้างไม่เท่ากัน",next:"Duplex หรือ CTA/MRA ของ renal artery ดู HT-05 เรื่อง viability ก่อน revascularize"},
+  renin:{name:"Renin-secreting tumor",pra:25,pac:45,k:2.9,hco3:31,bp:"HT",seg:"CCD",gain:["MR"],block:[],cap:"Juxtaglomerular cell tumor secretes renin, very high Ang II and aldosterone.",
+    clue:"HT รุนแรงในคนอายุน้อย, K ต่ำมาก, renal artery ปกติ",next:"CT หรือ MRI ไต หา cortical mass ผ่าตัด partial nephrectomy ระหว่างรอใช้ ACEi หรือ ARB"},
+  diur:{name:"Diuretic (thiazide/loop)",pra:5,pac:24,k:3.3,hco3:29,bp:"Normal",seg:"DCT",gain:[],block:["NCC"],cap:"Thiazide blocks NCC, volume contraction raises renin and aldosterone, more Na reaches the CCD.",
+    clue:"มีประวัติใช้ยาขับปัสสาวะหรือยาลดน้ำหนัก",next:"ตรวจ urine diuretic screen ถ้าสงสัยแอบใช้ หยุดยาแล้วตรวจซ้ำ"},
+  liddle:{name:"Liddle syndrome",pra:0.1,pac:2,k:2.9,hco3:31,bp:"HT",seg:"CCD",gain:["ENaC"],block:[],cap:"Gain-of-function ENaC (SCNN1B/G): Na reabsorption without aldosterone, K wasting, renin and aldosterone suppressed.",
+    clue:"HT ตั้งแต่อายุน้อย, autosomal dominant, K ต่ำ, spironolactone ไม่ได้ผล",next:"ตรวจยีน SCNN1B/SCNN1G รักษาด้วย amiloride หรือ triamterene ร่วมกับจำกัดเกลือ"},
+  ame:{name:"AME: liquorice, posaconazole",pra:0.1,pac:2,k:2.8,hco3:30,bp:"HT",seg:"CCD",gain:["MR","ENaC"],block:["HSD2"],cap:"11β-HSD2 blocked: cortisol occupies MR and opens ENaC, mimicking aldosterone excess.",
+    clue:"กินชะเอม (liquorice), posaconazole หรือ itraconazole, urinary cortisol/cortisone สูง",next:"หยุดชะเอมหรือเปลี่ยนยา azole MRA ได้ผลเพราะอาการผ่าน MR ถ้าเป็นแต่กำเนิดตรวจยีน HSD11B2"},
+  cah:{name:"CAH: 11β-hydroxylase deficiency",pra:0.1,pac:1.5,k:3.0,hco3:29,bp:"HT",seg:"CCD",gain:["MR","ENaC"],block:[],cap:"Deoxycorticosterone accumulates and activates MR, renin and aldosterone suppressed.",
+    clue:"virilization (11β) หรือ hypogonadism (17α), DOC และ 11-deoxycortisol สูง",next:"ตรวจ DOC, 11-deoxycortisol, androgen รักษาด้วย glucocorticoid replacement ± MRA"},
+  cush:{name:"Cushing (ectopic ACTH)",pra:0.2,pac:3,k:2.6,hco3:32,bp:"HT",seg:"CCD",gain:["MR","ENaC"],block:[],cap:"Cortisol excess overwhelms 11β-HSD2 and activates MR.",
+    clue:"cushingoid หรือผอมลงเร็ว, hyperglycemia, K ต่ำมาก",next:"ตรวจ late-night salivary cortisol หรือ 1 mg overnight dexamethasone, ACTH หาตำแหน่งต้นเหตุ"},
+  gordon:{name:"Gordon syndrome (PHA2)",pra:0.2,pac:8,k:6.0,hco3:19,bp:"HT",seg:"DCT",gain:["NCC","WNK"],block:[],cap:"WNK4/KLHL3/CUL3 defect activates NCC: salt retention, less distal Na delivery, less K secretion.",
+    clue:"HT + hyperkalemia + metabolic acidosis, GFR ปกติ",next:"ตรวจยีน WNK1/WNK4/KLHL3/CUL3 thiazide ขนาดต่ำได้ผลดีมาก"},
+  gitel:{name:"Gitelman / Bartter",pra:6,pac:30,k:2.8,hco3:31,bp:"Low",seg:"DCT",gain:[],block:["NCC"],cap:"NCC loss: salt wasting, high renin and aldosterone, K wasting with normal or low BP.",
+    clue:"BP ปกติหรือต่ำ, Mg ต่ำ, urine Ca ต่ำ (Gitelman)",next:"BP ไม่สูงจึงไม่ใช่ secondary HT ดู EL-07 รักษาด้วย K, Mg และ amiloride หรือ spironolactone"},
+  type4:{name:"Hyporeninemic hypoaldosteronism",pra:0.3,pac:3,k:5.7,hco3:19,bp:"HT",seg:"CCD",gain:[],block:["MR"],cap:"Low renin and low aldosterone (diabetic CKD, NSAID, CNI): less ENaC activity, K and H retained.",
+    clue:"DKD, CKD G3, NSAID หรือ CNI, K สูง acidosis",next:"เป็น type 4 RTA ไม่ใช่ mineralocorticoid excess จำกัด K, loop หรือ thiazide, K binder พิจารณา fludrocortisone ถ้าไม่มี HT หรือบวม"},
+  addison:{name:"Primary adrenal insufficiency",pra:15,pac:2,k:5.8,hco3:20,bp:"Low",seg:"CCD",gain:[],block:["MR"],cap:"Adrenal failure: no aldosterone despite very high renin, Na wasting and K retention.",
+    clue:"BP ต่ำ, Na ต่ำ, K สูง, ผิวคล้ำ",next:"ตรวจ cortisol และ ACTH, ให้ hydrocortisone ทันทีถ้า crisis ตามด้วย fludrocortisone"}
+};
+var ORDER_D=["normal","ehLow","apa","bah","gra","rvh","renin","diur","liddle","ame","cah","cush","gordon","gitel","type4","addison"];
+var IF={acei:{name:"ACEi/ARB"},diu:{name:"Diuretic"},mra:{name:"MRA"},bb:{name:"β-blocker"},ccb:{name:"DHP CCB"},nsaid:{name:"NSAID"},lowk:{name:"K ต่ำยังไม่แก้"}};
+function P(c,i){ return {c:c,i:i||[]}; }
+var S={
+  apa:{name:"Aldosterone-producing adenoma", p:P("apa"),
+    rows:[["Lab","PRA 0.2, aldosterone 34, K 3.0, HCO3 30"],["Matrix","มุมซ้ายบน ARR 170"],["Next","confirm, CT, AVS, ผ่าตัด"]],
+    take:["PA คือ aldosterone สูงขณะที่ renin ถูกกด เป็นสาเหตุ endocrine ของ HT ที่พบบ่อยที่สุด","Screen ด้วย aldosterone + renin + ARR ในผู้ป่วย HT ทุกราย โดยเฉพาะ HT ดื้อยา K ต่ำ adrenal nodule หรือ OSA","K ปกติไม่ได้ตัด PA ส่วนใหญ่ของผู้ป่วยมี K ปกติ"]},
+  aceiPA:{name:"PA ขณะใช้ ACEi", p:P("bah",["acei"]),
+    rows:[["ยา","ACEi ทำให้ renin สูงขึ้นและ aldosterone ลด"],["ผล","ARR ต่ำลง (false negative ได้)"],["อ่านผล","ถ้า renin ยังถูกกดทั้งที่ใช้ ACEi ยิ่งสนับสนุน PA"]],
+    take:["ไม่ต้องหยุดยาส่วนใหญ่ก่อน screen PA ตรวจได้เลยแล้วแปลผลตามยา","ACEi, ARB, diuretic และ DHP CCB ทำให้ ARR ต่ำผิด ส่วน β-blocker และ NSAID ทำให้ ARR สูงผิด","Renin ที่ยังถูกกดระหว่างใช้ยาที่เพิ่ม renin เป็นข้อมูลที่หนักแน่น"]},
+  lowk:{name:"K ต่ำกด aldosterone", p:P("apa",["lowk"]),
+    rows:[["ภาวะ","K 2.8 ยังไม่ได้แก้"],["ผล","hypokalemia กดการหลั่ง aldosterone ARR ต่ำลง"],["แก้","ให้ K จนปกติแล้วตรวจซ้ำ"]],
+    take:["แก้ K ให้ปกติก่อนตรวจ aldosterone เพราะ K ต่ำลดการหลั่ง aldosterone","K ต่ำที่ไม่มีสาเหตุร่วมกับ HT คือข้อบ่งชี้แรงในการ screen PA","เจาะเลือดตอนเช้าหลังลุกเดินอย่างน้อย 2 ชม. นั่งพัก 5–15 นาที"]},
+  liddle:{name:"Liddle syndrome", p:P("liddle"),
+    rows:[["Lab","renin และ aldosterone ต่ำทั้งคู่ K ต่ำ"],["Matrix","มุมซ้ายล่าง"],["กลไก","ENaC gain-of-function ไม่ต้องพึ่ง aldosterone"]],
+    take:["Low renin + low aldosterone + HT + K ต่ำ = mineralocorticoid-like state ที่ไม่ใช่ aldosterone","Liddle ตอบสนองต่อ amiloride หรือ triamterene แต่ไม่ตอบสนองต่อ spironolactone","AME และ liquorice ให้ภาพเดียวกันแต่ตอบสนองต่อ MRA"]},
+  ame:{name:"Liquorice หรือ posaconazole", p:P("ame"),
+    rows:[["ประวัติ","กินชะเอมหรือได้ posaconazole"],["กลไก","ยับยั้ง 11β-HSD2 cortisol จับ MR"],["Lab","renin aldosterone ต่ำ K ต่ำ"]],
+    take:["11β-HSD2 แปลง cortisol เป็น cortisone ปกป้อง MR ใน principal cell","Liquorice, posaconazole และ itraconazole ยับยั้งเอนไซม์นี้ทำให้เกิด acquired AME","รักษาด้วยหยุดสาเหตุ และ MRA ได้ผลเพราะอาการเกิดผ่าน MR"]},
+  gra:{name:"GRA", p:P("gra"),
+    rows:[["ประวัติ","HT ตั้งแต่วัยรุ่น ญาติเป็น stroke อายุน้อย"],["Lab","PA pattern K มักปกติ"],["กลไก","aldosterone synthase อยู่ใต้ ACTH"]],
+    take:["FH-I (GRA) ให้ภาพเหมือน PA แต่ตอบสนองต่อ glucocorticoid","สงสัยใน PA อายุน้อยกว่า 20 ปีหรือมีญาติเป็น PA หรือ stroke อายุน้อย","ตรวจยีน chimeric CYP11B1/CYP11B2 และคัดกรองหลอดเลือดสมองโป่งพอง"]},
+  rvh:{name:"Renovascular", p:P("rvh"),
+    rows:[["Lab","renin และ aldosterone สูงทั้งคู่"],["Matrix","มุมขวาบน ARR ต่ำ"],["กลไก","secondary hyperaldosteronism"]],
+    take:["Renin สูง + aldosterone สูง = secondary hyperaldosteronism (renovascular, renin tumor, diuretic, Bartter/Gitelman)","แยกกลุ่มนี้ด้วย BP: HT ชี้ renovascular หรือ renin tumor ส่วน BP ปกติหรือต่ำชี้ diuretic หรือ tubulopathy","ARR ต่ำแม้ aldosterone สูง เพราะ renin สูงตาม"]},
+  gordon:{name:"Gordon syndrome", p:P("gordon"),
+    rows:[["Lab","HT, K สูง, metabolic acidosis, renin ต่ำ"],["กลไก","NCC ทำงานเกินจาก WNK pathway"],["รักษา","thiazide ขนาดต่ำ"]],
+    take:["HT + hyperkalemia + acidosis ใน GFR ปกติ ให้นึกถึง Gordon syndrome (PHA2)","NCC ดูด Na มากที่ DCT ทำให้ Na ถึง CCD น้อย K หลั่งไม่ได้","Tacrolimus ก่อภาพคล้ายกันผ่าน NCC จึงตอบสนองต่อ thiazide เช่นกัน"]}
+};
+var ORDER=["apa","aceiPA","lowk","liddle","ame","gra","rvh","gordon"];
+var sel=document.getElementById("cond");
+ORDER_D.forEach(function(k){ var o=document.createElement("option"); o.value=k; o.textContent=D[k].name; sel.appendChild(o); });
+sel.addEventListener("change",update);
+var T={}, tb=document.getElementById("tools");
+Object.keys(IF).forEach(function(k){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:IF[k].name}); b.addEventListener("click",function(){ b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); tb.appendChild(b); T[k]=b; });
+function on(k){ return T[k].getAttribute("aria-pressed")==="true"; }
+var cell=Nephron.cell(document.getElementById("cell"),"CCD",{level:"basic",levelButtons:false});
+/* measured values after interference */
+function measure(d,i){
+  var pra=d.pra, pac=d.pac, k=d.k, notes=[];
+  var supp=d.pra<0.5&&d.pac>15; /* autonomous: renin rises less */
+  if(i.acei){ pra*=supp?1.6:2.5; pac*=supp?0.92:0.75; notes.push("ACEi/ARB: renin ↑ aldosterone ↓ (ARR ต่ำผิด)"); }
+  if(i.diu){ pra*=supp?1.5:2.2; pac*=1.15; k-=0.4; notes.push("Diuretic: renin ↑ (ARR ต่ำผิด) K ↓"); }
+  if(i.mra){ pra*=supp?1.4:3; pac*=1.2; k+=0.4; notes.push("MRA: renin ↑ ถ้า renin ยังถูกกดแปลผลได้"); }
+  if(i.bb){ pra*=0.4; pac*=0.85; notes.push("β-blocker: renin ↓ (ARR สูงผิด)"); }
+  if(i.ccb){ pra*=1.3; pac*=0.9; notes.push("DHP CCB: renin ↑ เล็กน้อย"); }
+  if(i.nsaid){ pra*=0.6; notes.push("NSAID: renin ↓ (ARR สูงผิด)"); }
+  if(i.lowk){ pac*=0.6; k=Math.min(k,2.8); notes.push("K ต่ำ: aldosterone ↓ (ARR ต่ำผิด)"); }
+  return {pra:Math.max(0.05,Math.min(50,pra)),pac:Math.max(1,Math.min(100,pac)),k:k,notes:notes};
+}
+/* matrix drawing */
+var svg=document.getElementById("vis"), X0=64,X1=404,Y0=24,Y1=344;
+function lx(v){ return X0+(Math.log10(v)-Math.log10(0.05))/(Math.log10(50)-Math.log10(0.05))*(X1-X0); }
+function ly(v){ return Y1-(Math.log10(v)-0)/(2)*(Y1-Y0); }
+function tx(x,y,s,o){ o=o||{}; return SV("text",{x:x,y:y,"text-anchor":o.a||"middle","font-family":o.mono?"Geist Mono, monospace":"IBM Plex Sans Thai, sans-serif","font-size":o.fs||12,"font-weight":o.fw||400,fill:o.fill||"#0B0B1F",text:s,transform:o.rot?"rotate(-90 "+x+" "+y+")":null},svg); }
+function drawMatrix(d,m){
+  svg.innerHTML="";
+  var INK="#0B0B1F",MUT="#5E6075",LINE="#E6E7F0",RED="#B4232A",ACC="#5B4BFF",TEAL="#1F7A72";
+  /* quadrant tints */
+  SV("rect",{x:X0,y:Y0,width:lx(1)-X0,height:ly(10)-Y0,fill:"rgba(180,35,42,0.07)"},svg);
+  SV("rect",{x:lx(1),y:Y0,width:X1-lx(1),height:ly(10)-Y0,fill:"rgba(91,75,255,0.06)"},svg);
+  SV("rect",{x:X0,y:ly(10),width:lx(1)-X0,height:Y1-ly(10),fill:"rgba(168,132,44,0.08)"},svg);
+  SV("rect",{x:lx(1),y:ly(10),width:X1-lx(1),height:Y1-ly(10),fill:"rgba(31,122,114,0.06)"},svg);
+  [0.1,1,10].forEach(function(v){ SV("line",{x1:lx(v),x2:lx(v),y1:Y0,y2:Y1,stroke:v===1?"#9A9CB2":LINE,"stroke-width":v===1?1.4:1,"stroke-dasharray":v===1?"4 3":null},svg); tx(lx(v),Y1+16,String(v),{fs:11,mono:true,fill:MUT}); });
+  [1,10,100].forEach(function(v){ SV("line",{x1:X0,x2:X1,y1:ly(v),y2:ly(v),stroke:v===10?"#9A9CB2":LINE,"stroke-width":v===10?1.4:1,"stroke-dasharray":v===10?"4 3":null},svg); tx(X0-6,ly(v)+4,String(v),{fs:11,mono:true,fill:MUT,a:"end"}); });
+  tx(X0-6,ly(3)+4,"3",{fs:10,mono:true,fill:"#B5B7C8",a:"end"}); tx(X0-6,ly(30)+4,"30",{fs:10,mono:true,fill:"#B5B7C8",a:"end"});
+  /* ARR 20 line: pac = 20 pra */
+  var p1=0.05,p2=3; SV("line",{x1:lx(p1),y1:ly(20*p1),x2:lx(p2),y2:ly(20*p2),stroke:RED,"stroke-width":1.3,"stroke-dasharray":"6 4"},svg);
+  tx(lx(0.6)+6,ly(12)-2,"ARR 20",{fs:11,fill:RED,a:"start",fw:600});
+  SV("rect",{x:X0+1,y:Y0+1,width:lx(1)-X0-2,height:ly(10)-Y0-2,fill:"none",stroke:RED,"stroke-width":1.4,rx:6},svg);
+  tx(X0+8,Y0+16,"Primary aldosteronism",{fs:11.5,fw:600,fill:RED,a:"start"});
+  tx(X1-8,Y0+16,"Secondary hyperaldo",{fs:11.5,fw:600,fill:ACC,a:"end"});
+  tx(X0+8,Y1-10,"Non-aldo MC excess",{fs:11.5,fw:600,fill:"#A8842C",a:"start"});
+  tx(X1-8,Y1-10,"Hypoaldosteronism",{fs:11.5,fw:600,fill:TEAL,a:"end"});
+  tx((X0+X1)/2,Y1+34,"Plasma renin activity (ng/mL/h, log)",{fs:12,fill:MUT});
+  tx(16,(Y0+Y1)/2,"Aldosterone (ng/dL, log)",{fs:12,fill:MUT,rot:true});
+  /* reference cloud of other conditions */
+  ORDER_D.forEach(function(k){ var q=D[k]; if(q===d) return; SV("circle",{cx:lx(q.pra),cy:ly(q.pac),r:3.2,fill:"#C9CBDA"},svg); });
+  /* true vs measured */
+  var tx0=lx(d.pra), ty0=ly(d.pac), tx1=lx(m.pra), ty1=ly(m.pac), moved=Math.hypot(tx1-tx0,ty1-ty0)>4;
+  if(moved){ SV("circle",{cx:tx0,cy:ty0,r:7,fill:"#fff",stroke:INK,"stroke-width":1.6,"stroke-dasharray":"2 2"},svg);
+    SV("line",{x1:tx0,y1:ty0,x2:tx1,y2:ty1,stroke:INK,"stroke-width":1.4},svg); tx(tx0,ty0-12,"True",{fs:10.5,fill:MUT}); }
+  var pos=m.pra<1&&m.pac>10&&m.pac/m.pra>20;
+  SV("circle",{cx:tx1,cy:ty1,r:9,fill:pos?RED:INK,stroke:"#fff","stroke-width":2.5},svg);
+  var lbl="ARR "+(m.pac/m.pra).toFixed(0), lx1=tx1+14>X1-70?tx1-14:tx1+14;
+  tx(lx1,ty1+4,lbl,{fs:12,fw:600,mono:true,a:tx1+14>X1-70?"end":"start",fill:pos?RED:INK});
+}
+function opts(){ var i={}; Object.keys(IF).forEach(function(k){ i[k]=on(k); }); return {c:sel.value,i:i}; }
+function update(){
+  var o=opts(), d=D[o.c], m=measure(d,o.i), arr=m.pac/m.pra, arrT=d.pac/d.pra;
+  drawMatrix(d,m);
+  cell.update(d.seg,{gain:d.gain,blocked:d.block,caption:d.cap,level:"basic",levelButtons:false});
+  var pos=m.pra<1&&m.pac>10&&arr>20, truePos=d.pra<1&&d.pac>10&&arrT>20;
+  Sim.ro("roPRA",m.pra<0.2?m.pra.toFixed(2):m.pra.toFixed(1),m.pra<1?"flag":m.pra>3?"flag":null);
+  Sim.ro("roPAC",m.pac.toFixed(0),m.pac>10?"flag":m.pac<4?"flag":null);
+  Sim.ro("roARR",arr.toFixed(0),pos?"flag":"ok");
+  Sim.ro("roK",m.k.toFixed(1),m.k<3.5||m.k>5.2?"flag":"ok");
+  Sim.ro("roHCO",d.hco3.toFixed(0),d.hco3>28||d.hco3<22?"flag":"ok");
+  Sim.ro("roBP",d.bp,d.bp==="HT"?"flag":d.bp==="Low"?"flag":"ok");
+  document.getElementById("clue").innerHTML="<b>Clue:</b> "+d.clue+(m.notes.length?"<br><b>ผลของสิ่งรบกวน:</b> "+m.notes.join(", "):"");
+  var a=document.getElementById("act"), msg, bad=true;
+  if(truePos&&!pos) msg="<b>False negative</b> ค่าจริงเข้าเกณฑ์ PA (ARR "+arrT.toFixed(0)+") แต่ยาหรือ K ต่ำทำให้ ARR เหลือ "+arr.toFixed(0)+" แก้ K, ถ้าทำได้หยุด diuretic หรือ MRA 4 สัปดาห์ แล้วตรวจซ้ำ ถ้า renin ยังถูกกดขณะใช้ ACEi ให้ถือว่าน่าสงสัยมาก";
+  else if(!truePos&&pos) msg="<b>False positive</b> ARR สูงจาก renin ที่ถูกยากด (β-blocker หรือ NSAID) โดย aldosterone ไม่ได้ autonomous เปลี่ยนเป็นยาที่ไม่รบกวน (verapamil SR, hydralazine, doxazosin) แล้วตรวจซ้ำ";
+  else msg="<b>"+d.name+"</b> "+d.next;
+  if(o.c==="normal"||o.c==="ehLow") bad=false;
+  a.innerHTML="<b>Next step:</b> "+msg; a.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"HT-04", title:"Renin x Aldosterone Matrix", lead:"เลือกภาวะแล้วดูตำแหน่งบนแกน renin x aldosterone พร้อมกลไกบนเซลล์ไต จากนั้นเปิดยาที่ผู้ป่วยกินอยู่หรือ K ต่ำ เพื่อดูว่า ARR เลื่อนไปทางไหนและเกิด false negative หรือ false positive อย่างไร",
+  scenarios:S, order:ORDER, captureMs:900,
+  onChange:function(k,s){ sel.value=s.p.c; Object.keys(T).forEach(function(x){ T[x].setAttribute("aria-pressed",s.p.i.indexOf(x)>=0?"true":"false"); }); update(); },
+  refs:["Adler GK, Stowasser M, Correa RR, et al. Primary aldosteronism: an Endocrine Society clinical practice guideline. J Clin Endocrinol Metab 2025, 110(9): 2453-2495",
+        "Funder JW, Carey RM, Mantero F, et al. The management of primary aldosteronism: case detection, diagnosis, and treatment. J Clin Endocrinol Metab 2016, 101(5): 1889-1916",
+        "Jones DW, Ferdinand KC, Taler SJ, et al. 2025 AHA/ACC and multisociety guideline for the prevention, detection, evaluation and management of high blood pressure in adults. Hypertension 2025, 82(10): e212-e316",
+        "Raina R, Krishnappa V, Das A, et al. Overview of monogenic or Mendelian forms of hypertension. Front Pediatr 2019, 7: 263",
+        "Funder JW. Apparent mineralocorticoid excess. J Steroid Biochem Mol Biol 2017, 165(Pt A): 151-153",
+        "Thompson GR, Chang D, Wittenberg RT, et al. In vivo 11β-hydroxysteroid dehydrogenase inhibition in posaconazole-induced hypertension and hypokalemia. Antimicrob Agents Chemother 2017, 61(8): e00760-17",
+        "Mulatero P, Rabbia F, Milan A, et al. Drug effects on aldosterone/plasma renin activity ratio in primary aldosteronism. Hypertension 2002, 40(6): 897-902"],
+  note:"Model เพื่อการสอน: ค่า PRA และ aldosterone ของแต่ละภาวะเป็นค่าตัวอย่างทั่วไป เกณฑ์ screen PA ใช้ PRA < 1 ng/mL/h, aldosterone > 10 ng/dL และ ARR > 20 (ng/dL ต่อ ng/mL/h) ถ้าใช้ direct renin concentration เกณฑ์ต่างกันตาม assay ผลของยาเป็นตัวคูณโดยประมาณ (ACEi/ARB renin x2.5 aldosterone x0.75, diuretic renin x2.2, MRA renin x3, β-blocker renin x0.4, DHP CCB renin x1.3, NSAID renin x0.6, K ต่ำ aldosterone x0.6) ใน PA ที่ renin ถูกกดชัด renin ขึ้นน้อยกว่า"
+});
+})();
+</script>
+</body>
+</html>

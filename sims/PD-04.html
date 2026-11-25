@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[PD-04] PD Prescription: CAPD vs APD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(120px,160px) 1fr 100px}
+.sel{display:grid;grid-template-columns:minmax(120px,160px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.grp{font:500 11.5px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin:10px 0 0}
+.readout{grid-template-columns:repeat(3,1fr)}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,1fr)}}
+table.ex{width:100%;border-collapse:collapse;font-size:13px;margin-top:12px}
+table.ex th,table.ex td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right}
+table.ex th{font-weight:500;color:var(--muted);font-size:12px}
+table.ex td{font-family:var(--mono);font-variant-numeric:tabular-nums}
+table.ex td:first-child,table.ex th:first-child,table.ex td:nth-child(2),table.ex th:nth-child(2){text-align:left}
+table.ex td:first-child,table.ex td:nth-child(2){font-family:inherit}
+table.ex tr.tot td{font-weight:600;border-top:1.5px solid var(--line-strong)}
+.exwrap{overflow-x:auto}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.hide{display:none!important}
+body.present .bench{grid-template-columns:1.35fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present #steps,body.present .grp{display:none}
+body.present .card{padding:16px 20px}
+body.present .ctls{gap:4px 18px;grid-template-columns:1fr 1fr}
+body.present .ctl{grid-template-columns:96px 1fr 62px;gap:6px;font-size:12.5px}
+body.present .ctl output{font-size:12.5px}
+body.present .sel{grid-template-columns:96px minmax(0,1fr);gap:6px;font-size:12.5px}
+body.present select{font-size:12px;padding:3px 6px}
+body.present .ro{padding:8px 12px}
+body.present table.ex td,body.present table.ex th{padding:4px 8px}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>ปริมาตรน้ำยาในท้องตลอด 24 ชั่วโมง</h2>
+      <div id="chart"></div>
+      <div class="exwrap"><table class="ex" id="ex" aria-label="Exchange by exchange results"></table></div>
+      <p class="hint no-present">แต่ละฟันเลื่อยคือ 1 exchange ความชันขาขึ้นคือ UF ถ้าเส้นลดลงระหว่าง dwell แปลว่าน้ำถูกดูดกลับ urea cleared = D/P urea × drain volume รวมทั้งวันแล้วคูณ 7 หาร V ได้ weekly Kt/V</p>
+      <div id="steps" class="no-present"></div>
+    </div>
+    <div class="card">
+      <h2>Prescription</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roKtV"><b>-</b><span>Weekly Kt/V รวม</span></div>
+        <div class="ro" id="roCCr"><b>-</b><span>Weekly CCr (L/1.73 m²)</span></div>
+        <div class="ro" id="roUF"><b>-</b><span>UF + urine (ml/วัน)</span></div>
+        <div class="ro" id="roNa"><b>-</b><span>Na removal (mmol/วัน)</span></div>
+        <div class="ro" id="roGlu"><b>-</b><span>Glucose ดูดซึม (g/วัน)</span></div>
+        <div class="ro" id="roVol"><b>-</b><span>น้ำยาที่ใช้ (L/วัน)</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/calc.js"></script>
+<script src="../core/pd.js"></script>
+<script>
+(function(){
+"use strict";
+function P(o){ var d={mode:"CAPD",n:4,fill:2000,dayFl:"g15",nightFl:"g25",night:600,cyc:5,cycH:9,cycFl:"g15",day:"wet",dayFl2:"ico",dayFill:2000,area:1.1,w:60,kru:3,urine:1.0,ht:165}; for(var k in o) d[k]=o[k]; return d; }
+var S = {
+  capd:{name:"CAPD 4 x 2 L", p:P({}),
+    rows:[["Prescription","CAPD 4 exchange ต่อวัน 1.5% กลางวัน 3 ครั้ง 2.5% ค้างคืน"],["ผู้ป่วย","60 kg fast-average Kru 3 ml/min ปัสสาวะ 1 L/วัน"],["ผล","weekly Kt/V รวมเกิน 1.7 ได้ง่ายเพราะมี residual kidney function ช่วย"]],
+    take:["Weekly Kt/V = (urea clearance ทางท้อง + ทางไต) x 7 / V เป้าต่ำสุด 1.7","RKF มีค่ามากใน PD ทั้งด้าน clearance, น้ำ และ Na","Kt/V เป็นเกณฑ์ขั้นต่ำ ต้องดูอาการ, volume, โภชนาการร่วมด้วย"]},
+  big:{name:"ตัวใหญ่ anuric", p:P({w:80,kru:0,urine:0,ht:178}),
+    rows:[["ผู้ป่วย","80 kg ไม่มีปัสสาวะแล้ว V ราว 46 L"],["Prescription","CAPD 4 x 2 L เหมือนเดิม"],["ผล","Kt/V ต่ำกว่า 1.7 และ UF รวมน้อย"]],
+    take:["เมื่อ RKF หมด clearance มาจากท้องอย่างเดียว คนตัวใหญ่ต้องเพิ่ม dose","เพิ่ม fill volume ได้ผลดีกว่าเพิ่มจำนวน exchange ที่ dwell สั้นลง","Icodextrin ค้างคืนช่วยทั้ง UF และ clearance ใน long dwell"]},
+  apdIco:{name:"APD fast + icodextrin", p:P({mode:"APD",area:1.9,kru:1,urine:0.5,cyc:5,cycH:9,day:"wet",dayFl2:"ico"}),
+    rows:[["ผู้ป่วย","fast transporter Kru 1 ml/min"],["Prescription","APD 5 cycles ใน 9 ชม. 1.5% ค้างกลางวันด้วย icodextrin"],["ผล","cycle สั้นได้ UF และ icodextrin ให้ UF ต่อในช่วงกลางวัน"]],
+    take:["Fast transporter เหมาะกับ APD dwell สั้น","Day dwell ยาวต้องใช้ icodextrin ไม่เช่นนั้นจะดูดน้ำกลับ","APD ให้ urea clearance ใกล้เคียง CAPD แต่ creatinine clearance และ Na removal มักต่ำกว่า"]},
+  apdGlu:{name:"APD fast + glucose กลางวัน", p:P({mode:"APD",area:1.9,kru:1,urine:0.5,cyc:5,cycH:9,day:"wet",dayFl2:"g25"}),
+    rows:[["Prescription","เหมือนเดิมแต่ค้างกลางวันด้วย 2.5%"],["ผล","day dwell 15 ชม. ดูดน้ำกลับหลายร้อย ml UF รวมทั้งวันติดลบ"],["แนวทาง","เปลี่ยนเป็น icodextrin หรือเพิ่ม mid-day exchange"]],
+    take:["UF ที่ได้จาก cycler กลางคืนถูกหักล้างด้วย long day dwell","ดู UF แยกทีละ exchange ไม่ใช่ดูแค่ยอดรวม","Mid-day exchange ช่วยทั้ง UF และ clearance"]},
+  apdSlow:{name:"APD ใน slow transporter", p:P({mode:"APD",area:0.55,w:70,kru:0,urine:0,cyc:7,cycH:9,day:"dry",ht:170}),
+    rows:[["ผู้ป่วย","slow transporter anuric 70 kg"],["Prescription","APD 7 cycles ใน 9 ชม. dry day"],["ผล","dwell สั้นมาก creatinine และ urea ยังซึมออกมาไม่ทัน Kt/V และ CCr ต่ำมาก"]],
+    take:["Slow transporter ต้องการ dwell ยาว (CAPD หรือ APD ที่มี day dwell)","Dry day เสีย clearance ไปครึ่งวัน","เพิ่ม cycle ใน slow transporter เพิ่มน้ำยาแต่แทบไม่เพิ่ม clearance"]},
+  apdSlowFix:{name:"Slow: 4 cycles + day dwells", p:P({mode:"APD",area:0.55,w:70,kru:0,urine:0,cyc:4,cycH:10,fill:2500,day:"wet+mid",dayFl2:"g25",dayFill:2500,ht:170}),
+    rows:[["Prescription","APD 4 cycles ใน 10 ชม. fill 2.5 L ค้างกลางวัน 2 ครั้ง"],["ผล","dwell ยาวขึ้นทุก exchange Kt/V ใกล้ 1.7"],["หลักคิด","ปรับ prescription ตาม transport type ไม่ใช่เพิ่มปริมาณน้ำยาอย่างเดียว"]],
+    take:["Slow transporter: fill มาก dwell ยาว ใช้ทั้งวัน","ถ้ายังไม่พอ ควรพิจารณา HD โดยเฉพาะคนตัวใหญ่ที่ anuric","ประเมิน PET ซ้ำเมื่อ clearance หรือ UF เปลี่ยน"]}
+};
+var ORDER=["capd","big","apdIco","apdGlu","apdSlow","apdSlowFix"];
+
+var box=document.getElementById("ctls"), C={}, SEL={};
+var FOPT=["g15","g25","g425","ico"].map(function(k){ return [k,PD.FLUIDS[k].name]; });
+function sel(k,label,opts,cls){ var s=Sim.h("select",{id:"s"+k},opts.map(function(o){ return Sim.h("option",{value:o[0],text:o[1]}); })); s.addEventListener("change",update); var w=Sim.h("div",{class:"sel"+(cls?" "+cls:"")},[Sim.h("label",{"for":"s"+k,text:label}),s]); box.appendChild(w); SEL[k]={el:w,s:s}; return s; }
+function sl(k,o,cls){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); if(cls) C[k].el.classList.add(cls); box.appendChild(C[k].el); return C[k]; }
+function grp(t,cls){ var e=Sim.h("p",{class:"grp"+(cls?" "+cls:""),text:t}); box.appendChild(e); return e; }
+sel("mode","Modality",[["CAPD","CAPD"],["APD","APD (cycler)"]]);
+sl("fill",{label:"Fill volume",min:1500,max:3000,step:100,value:2000,unit:"ml"});
+var gC=grp("CAPD","m-capd");
+sl("n",{label:"Exchanges ต่อวัน",min:3,max:5,step:1,value:4},"m-capd");
+sel("dayFl","น้ำยากลางวัน",FOPT,"m-capd");
+sel("nightFl","น้ำยาค้างคืน",FOPT,"m-capd");
+sl("night",{label:"Night dwell",min:360,max:720,step:30,value:600,fmt:function(v){ return (v/60).toFixed(1)+" ชม."; }},"m-capd");
+var gA=grp("APD","m-apd");
+sl("cyc",{label:"Cycles",min:3,max:8,step:1,value:5},"m-apd");
+sl("cycH",{label:"เวลาบน cycler",min:7,max:11,step:0.5,value:9,unit:"ชม."},"m-apd");
+sel("cycFl","น้ำยา cycler",FOPT,"m-apd");
+sel("day","กลางวัน",[["dry","Dry day"],["wet","Wet day (last fill)"],["wet+mid","Wet day + mid-day exchange"]],"m-apd");
+sel("dayFl2","น้ำยากลางวัน",FOPT,"m-apd");
+grp("ผู้ป่วย");
+sl("area",{label:"Surface area",min:0.4,max:2.4,step:0.05,value:1.1,fmt:function(v){ return "×"+v.toFixed(2); }});
+sl("w",{label:"น้ำหนัก",min:40,max:100,step:1,value:60,unit:"kg"});
+sl("kru",{label:"Kru (renal urea)",min:0,max:8,step:0.5,value:3,unit:"ml/min"});
+sl("urine",{label:"ปัสสาวะ",min:0,max:2.5,step:0.1,value:1,unit:"L/วัน"},"secondary");
+sl("ht",{label:"ส่วนสูง",min:145,max:190,step:1,value:165,unit:"cm"},"secondary");
+
+var A=Plot.colors, FCOL={g15:"#19C8E6",g25:"#5B4BFF",g425:"#0B0B1F",ico:"#1F7A72"};
+var startClock=7;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?230:250,aria:"Intraperitoneal volume over 24 hours",
+  x:{min:0,max:24,step:3,label:"Clock time",fmt:function(h){ var c=(Math.round(h)+startClock)%24; return (c<10?"0":"")+c+":00"; }},
+  y:{min:0,max:3.5,step:0.5,label:"IP volume (L)"},
+  series:[{id:"v",name:"IP volume",color:A.accent,data:[],width:2,fill:Plot.alpha?Plot.alpha("#5B4BFF",0.12):true}]});
+
+function params(){ var o={}; for(var k in C) o[k]=C[k].get(); for(var j in SEL) o[j]=SEL[j].s.value; return o; }
+function update(){
+  var p=params(), apd=p.mode==="APD";
+  document.querySelectorAll(".m-capd").forEach(function(e){ e.classList.toggle("hide",apd); });
+  document.querySelectorAll(".m-apd").forEach(function(e){ e.classList.toggle("hide",!apd); });
+  SEL.dayFl2.el.classList.toggle("hide",!apd||p.day==="dry");
+  startClock=apd?21:7;
+  var sched=apd?PD.apd({cycles:p.cyc,cyclerMin:p.cycH*60,fillMl:p.fill,cyclerFluid:p.cycFl,day:p.day,dayFluid:p.dayFl2,midFluid:p.dayFl2,dayFillMl:p.fill})
+               :PD.capd({n:p.n,fillMl:p.fill,dayFluid:p.dayFl,nightFluid:p.nightFl,nightMin:p.night});
+  var R=PD.regimen(sched,{area:p.area});
+  var V=0.58*p.w, bsa=0.007184*Math.pow(p.w,0.425)*Math.pow(p.ht,0.725);
+  var renalUreaL=p.kru*1.44, upU=p.urine>0?renalUreaL/p.urine:0;
+  var kt=Calc.pdKtV({dpUrea:+R.dpUrea.toFixed(3),drainL:+R.drainL.toFixed(2),upUrea:+upU.toFixed(2),urineL:p.urine,v:+V.toFixed(1)});
+  var cc=Calc.pdCCr({dpCr:+R.dpCr.toFixed(3),drainL:+R.drainL.toFixed(2),ucr:+(upU*1.8).toFixed(2),pcr:1,uurea:+upU.toFixed(2),bun:1,urineL:p.urine,bsa:+bsa.toFixed(2)});
+  /* chart */
+  chart.setSeries("v",R.series.map(function(d){ return [d[0],d[1]/1000]; }));
+  var marks=[], cyc=R.ex.filter(function(e){ return /^Cycle/.test(e.label); });
+  R.ex.forEach(function(e){ if(/^Cycle/.test(e.label)) return; marks.push({x:(e.start+e.dwellMin)/60,y:(e.fillMl+250+e.uf)/1000,label:(e.uf>=0?"+":"")+Math.round(e.uf),color:e.uf<0?A.red:A.ink}); });
+  if(cyc.length){ var cu=cyc.reduce(function(s,e){ return s+e.uf; },0), last=cyc[cyc.length-1]; marks.push({x:(last.start+last.dwellMin)/60,y:3.2,label:"cycles "+(cu>=0?"+":"")+Math.round(cu),color:A.ink}); }
+  chart.update({marks:marks});
+  /* table */
+  var tb=document.getElementById("ex"); tb.innerHTML="";
+  tb.appendChild(Sim.h("tr",{},["Exchange","น้ำยา","Dwell (ชม.)","UF (ml)","D/P urea","Urea cleared (L)"].map(function(t){ return Sim.h("th",{text:t}); })));
+  var list=R.ex;
+  if(cyc.length>2){ var c0=cyc[0]; list=[{label:cyc.length+" cycles",fluid:c0.fluid,dwellMin:c0.dwellMin,uf:cyc.reduce(function(s,e){return s+e.uf;},0),dpUrea:c0.dpUrea,ureaL:cyc.reduce(function(s,e){return s+e.ureaL;},0),each:true}].concat(R.ex.filter(function(e){ return !/^Cycle/.test(e.label); })); }
+  list.forEach(function(e){
+    var tr=Sim.h("tr",{},[Sim.h("td",{text:e.label}),Sim.h("td",{text:PD.FLUIDS[e.fluid].short}),Sim.h("td",{text:(e.dwellMin/60).toFixed(1)+(e.each?" ต่อ cycle":"")}),Sim.h("td",{text:Math.round(e.uf)}),Sim.h("td",{text:e.dpUrea.toFixed(2)}),Sim.h("td",{text:e.ureaL.toFixed(2)})]);
+    if(e.uf<0) tr.children[3].className="flag-txt";
+    tb.appendChild(tr);
+  });
+  tb.appendChild(Sim.h("tr",{class:"tot"},[Sim.h("td",{text:"รวม"}),Sim.h("td",{text:""}),Sim.h("td",{text:""}),Sim.h("td",{text:Math.round(R.ufMl)}),Sim.h("td",{text:R.dpUrea.toFixed(2)}),Sim.h("td",{text:R.ureaL.toFixed(2)})]));
+  /* readout */
+  var fluidOut=R.ufMl+p.urine*1000;
+  Sim.ro("roKtV",kt.value.toFixed(2),kt.value<1.7?"flag":"ok");
+  Sim.ro("roCCr",Math.round(cc.value),cc.value<50?"flag":"ok");
+  Sim.ro("roUF",Math.round(fluidOut),fluidOut<750?"flag":"ok");
+  Sim.ro("roNa",Math.round(R.naMmol),R.naMmol<60?"flag":false);
+  Sim.ro("roGlu",Math.round(R.gluG),R.gluG>150?"flag":false);
+  Sim.ro("roVol",R.fillL.toFixed(1));
+  Calc.renderSteps("steps",kt,{title:"Weekly Kt/V (V = 0.58 x น้ำหนัก = "+V.toFixed(1)+" L)"});
+  /* next step */
+  var act=document.getElementById("act"), m="", bad=false, dayEx=R.ex.filter(function(e){ return !/^Cycle/.test(e.label)&&e.uf<0; });
+  if(kt.value<1.7){
+    bad=true;
+    if(apd&&p.day==="dry") m="<b>Kt/V ต่ำและเป็น dry day</b> เพิ่ม day dwell (wet day) ก่อนเพิ่มจำนวน cycle";
+    else if(p.area<0.8&&apd) m="<b>Slow transporter บน APD</b> ลดจำนวน cycle ให้ dwell ยาวขึ้น เพิ่ม fill volume และใช้ทั้ง last fill กับ mid-day exchange หรือเปลี่ยนเป็น CAPD";
+    else if(p.fill<2500) m="<b>Kt/V ต่ำกว่า 1.7</b> เพิ่ม fill volume (เช่น 2.5 L ถ้าทนได้) หรือเพิ่ม exchange ถ้ายังไม่พอและ anuric ให้พิจารณา HD";
+    else m="<b>Kt/V ยังต่ำแม้ fill มาก</b> เพิ่ม exchange หรือ mid-day exchange ถ้ายังไม่พอให้พิจารณา HD หรือ PD ร่วมกับ HD";
+  } else if(dayEx.length){
+    bad=true; m="<b>"+dayEx.map(function(e){ return e.label; }).join(", ")+" ดูดน้ำกลับ</b> ใช้ icodextrin สำหรับ long dwell หรือย่น dwell"; }
+  else if(fluidOut<750){ bad=true; m="<b>น้ำออกรวมน้อย</b> ทบทวน Na และน้ำดื่ม เพิ่ม UF ด้วย icodextrin ใน long dwell ก่อนเพิ่ม glucose"; }
+  else if(R.gluG>150){ m="<b>Glucose exposure สูง</b> ราว "+Math.round(R.gluG*3.4)+" kcal/วัน ใช้ icodextrin และ 1.5% ให้มากที่สุดที่ยังคุมน้ำได้"; }
+  else m="<b>ผ่านเกณฑ์ขั้นต่ำ</b> ปรับต่อตามอาการ volume และโภชนาการ (goal-directed) ติดตาม RKF ทุก 3–6 เดือนเพราะจะต้องเพิ่ม dose เมื่อ RKF ลด";
+  act.innerHTML="<b>Next step:</b> "+m; act.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"PD-04", title:"PD Prescription: CAPD vs APD", lead:"สร้าง prescription แบบ CAPD หรือ APD ตาม transport type น้ำหนัก และ RKF แล้วดู UF ทีละ exchange, weekly Kt/V, CCr, Na removal และ glucose ที่ได้รับ",
+  scenarios:S, order:ORDER, captureMs:2200,
+  onChange:function(k,s){ var p=s.p; SEL.mode.s.value=p.mode; SEL.dayFl.s.value=p.dayFl; SEL.nightFl.s.value=p.nightFl; SEL.cycFl.s.value=p.cycFl; SEL.day.s.value=p.day; SEL.dayFl2.s.value=p.dayFl2;
+    ["n","fill","night","cyc","cycH","area","w","kru","urine","ht"].forEach(function(x){ C[x].set(p[x]); }); update(); },
+  refs:["Brown EA, Blake PG, Boudville N, et al. International Society for Peritoneal Dialysis practice recommendations: prescribing high-quality goal-directed peritoneal dialysis. Perit Dial Int 2020, 40(3): 244-253",
+        "Paniagua R, Amato D, Vonesh E, et al (ADEMEX). Effects of increased peritoneal clearances on mortality rates in peritoneal dialysis: a prospective randomized controlled trial. J Am Soc Nephrol 2002, 13(5): 1307-1320",
+        "Lo WK, Ho YW, Li CS, et al. Effect of Kt/V on survival and clinical outcome in CAPD patients in a randomized prospective study. Kidney Int 2003, 64(2): 649-656",
+        "Bargman JM, Thorpe KE, Churchill DN (CANUSA reanalysis). Relative contribution of residual renal function and peritoneal clearance to adequacy of dialysis. J Am Soc Nephrol 2001, 12(10): 2158-2162"],
+  note:"Model เพื่อการสอน (core/pd.js v1.1 PD.regimen) จำลองทุก exchange แยกกัน APD เสียเวลา fill และ drain ราว 20 นาทีต่อ cycle V = 0.58 x น้ำหนัก renal CrCl สมมติเป็น 1.8 เท่าของ Kru เพื่อคำนวณ CCr ค่าจริงต้องใช้ 24-h dialysate และปัสสาวะ"
+});
+})();
+</script>
+</body>
+</html>

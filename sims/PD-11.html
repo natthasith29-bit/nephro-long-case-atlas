@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[PD-11] PD Solutions and Metabolic Effects</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.sel{display:grid;grid-template-columns:minmax(120px,160px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.ctl{grid-template-columns:minmax(120px,160px) 1fr 100px}
+#bars{max-height:300px}
+.readout{grid-template-columns:repeat(3,1fr)}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,1fr)}}
+ul.fx{margin:12px 0 0;padding:0;list-style:none;display:grid;gap:6px}
+ul.fx li{padding:8px 12px;border:1px solid var(--line);border-radius:12px;font-size:13.5px}
+ul.fx li b{font-weight:600}
+ul.fx li.w{border-color:var(--red);background:#FFF6F6}
+ul.fx li.g{border-color:var(--teal);background:#EEF8F6}
+body.present .bench{grid-template-columns:1.25fr 1fr}
+body.present #bars{max-height:250px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:16px 20px}
+body.present .ctls{gap:2px}
+body.present .ro{padding:8px 12px}
+body.present ul.fx li{padding:5px 10px;font-size:12.5px}
+body.present ul.fx li:nth-child(n+4){display:none}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>UF และสิ่งที่ร่างกายได้รับต่อ exchange</h2>
+      <div class="svgwrap"><svg id="bars" viewBox="0 0 640 300" role="img" aria-label="Ultrafiltration and absorbed load per exchange"></svg></div>
+      <ul class="fx" id="fx"></ul>
+      <p class="hint no-present">แท่งบนคือ net UF ต่อ exchange แท่งล่างคือ glucose (ม่วง) หรือ amino acid (เขียว) ที่ดูดซึม CAPD 3 exchange กลางวัน (ราว 4.7 ชม.) และ 1 exchange ค้างคืน 10 ชม.</p>
+    </div>
+    <div class="card">
+      <h2>เลือกน้ำยาแต่ละ exchange</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roUF"><b>-</b><span>Net UF (ml/วัน)</span></div>
+        <div class="ro" id="roGlu"><b>-</b><span>Glucose (g/วัน)</span></div>
+        <div class="ro" id="roKcal"><b>-</b><span>kcal จาก PD (% ความต้องการ)</span></div>
+        <div class="ro" id="roNa"><b>-</b><span>Na removal (mmol/วัน)</span></div>
+        <div class="ro" id="roAA"><b>-</b><span>Amino acid (g/วัน)</span></div>
+        <div class="ro" id="roK"><b>-</b><span>K ในน้ำยา</span></div>
+      </div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/pd.js"></script>
+<script>
+(function(){
+"use strict";
+function P(o){ var d={e1:"g15",e2:"g15",e3:"g15",e4:"g25",buf:"lac",dm:"no",area:1.1,w:60}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  std:{name:"มาตรฐาน glucose ล้วน", p:P({}),
+    rows:[["Prescription","1.5% 3 ครั้ง + 2.5% ค้างคืน lactate-buffered"],["ผล","glucose ดูดซึมราว 85 g/วัน (ราว 300 kcal)"],["ผลข้างเคียง","น้ำหนักขึ้น triglyceride สูง insulin resistance"]],
+    take:["Glucose ที่ดูดซึมจาก PD เป็น 10–20% ของพลังงานที่ต้องการ","GDP และ glucose ทำร้าย membrane ระยะยาว","น้ำยามาตรฐานไม่มี K จึงพบ hypokalemia ได้บ่อย"]},
+  hyper:{name:"ใช้ 4.25% บ่อย", p:P({e2:"g25",e3:"g425",e4:"g425"}),
+    rows:[["Prescription","มี 4.25% สองครั้งต่อวันเพราะน้ำเกิน"],["ผล","UF มากขึ้นแต่ glucose ดูดซึมราว 150 g/วัน"],["แนวทาง","คุม Na และน้ำ ใช้ icodextrin แทนใน long dwell"]],
+    take:["Hypertonic glucose เพิ่ม UF แต่เพิ่ม metabolic burden และเร่ง membrane injury","แก้ต้นเหตุของน้ำเกินก่อน (intake, RKF, membrane)","4.25% ใช้เป็นครั้งคราว ไม่ใช่ประจำ"]},
+  dm:{name:"DM: glucose-sparing", p:P({e1:"aa",e4:"ico",dm:"yes",buf:"bic"}),
+    rows:[["Prescription","amino acid 1 ครั้ง, 1.5% 2 ครั้ง, icodextrin ค้างคืน"],["ผล","glucose ลดลงกว่าครึ่ง UF ใกล้เดิมหรือดีขึ้น"],["ข้อควรระวัง","icodextrin ทำให้ glucose meter ชนิด GDH-PQQ อ่านสูงลวง"]],
+    take:["Glucose-sparing (icodextrin + amino acid) ลด HbA1c และ triglyceride ใน DM","ต้องใช้ glucose meter ที่ไม่ทำปฏิกิริยากับ maltose","Amino acid ใช้ไม่เกินวันละ 1 bag เพราะเพิ่ม urea และ acidosis"]},
+  ico:{name:"Icodextrin long dwell", p:P({e4:"ico"}),
+    rows:[["Prescription","1.5% กลางวัน icodextrin ค้างคืน"],["ผล","UF ค้างคืนดีขึ้นมาก glucose ลดลง"],["ผลข้างเคียง","skin rash, amylase ต่ำลวง, maltose สะสม"]],
+    take:["Icodextrin เหมาะกับ long dwell วันละ 1 ครั้ง","ไม่มีผลต่อ glucose แต่ maltose รบกวน meter บางชนิด","ช่วยเพิ่ม UF โดยเฉพาะ fast transporter"]},
+  bic:{name:"Bicarbonate/low-GDP", p:P({buf:"bic"}),
+    rows:[["Prescription","เหมือนมาตรฐานแต่เป็น neutral-pH low-GDP bicarbonate"],["ผล","glucose เท่าเดิม GDP ต่ำ inflow pain น้อยลง"],["หลักฐาน","ช่วยรักษา RKF และ urine volume แต่ไม่ลด mortality หรือ peritonitis ชัดเจน"]],
+    take:["Low-GDP fluid ช่วย RKF ได้ แต่ไม่ได้ลด glucose load","Bicarbonate เหมาะกับผู้ที่มี inflow pain และผู้ป่วยตับวายหรือ lactate สูง","ผลต่อ survival ยังไม่ชัด"]},
+  aa2:{name:"Amino acid มากเกิน", p:P({e1:"aa",e2:"aa",dm:"yes"}),
+    rows:[["Prescription","amino acid 2 ครั้งต่อวันเพื่อหวังเพิ่มโปรตีน"],["ผล","ได้ amino acid ราว 35 g/วัน BUN เพิ่ม HCO3 ลด"],["แนวทาง","ใช้ 1 bag ต่อวัน ร่วมกับพลังงานที่พอ"]],
+    take:["Amino acid ช่วยทดแทน protein loss ทางน้ำยาเมื่อพลังงานพอ","เกิน 1 bag ต่อวันเพิ่ม uremia และ metabolic acidosis","ถ้าพลังงานไม่พอ amino acid จะถูกเผาเป็นพลังงาน"]}
+};
+var ORDER=["std","hyper","dm","ico","bic","aa2"];
+var FO=["g15","g25","g425","ico","aa"].map(function(k){ return [k,PD.FLUIDS[k].name]; });
+var box=document.getElementById("ctls"), SEL={}, C={};
+function sel(k,label,opts){ var s=Sim.h("select",{id:"s"+k},opts.map(function(o){ return Sim.h("option",{value:o[0],text:o[1]}); })); s.addEventListener("change",update); box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"s"+k,text:label}),s])); SEL[k]=s; }
+sel("e1","Exchange 1 (เช้า)",FO); sel("e2","Exchange 2",FO); sel("e3","Exchange 3",FO); sel("e4","ค้างคืน",FO);
+sel("buf","Buffer",[["lac","Lactate, standard GDP"],["bic","Bicarbonate, low-GDP"]]);
+sel("dm","เบาหวาน",[["no","ไม่มี"],["yes","มี"]]);
+C.area=Sim.slider({id:"sarea",label:"Surface area",min:0.5,max:2.2,step:0.05,value:1.1,fmt:function(v){ return "×"+v.toFixed(2); },onInput:update}); box.appendChild(C.area.el);
+C.w=Sim.slider({id:"sw",label:"น้ำหนัก",min:40,max:100,step:1,value:60,unit:"kg",onInput:update}); box.appendChild(C.w.el); C.w.el.classList.add("secondary");
+
+var svg=document.getElementById("bars"), F="IBM Plex Sans Thai, sans-serif", M="Geist Mono, monospace";
+var COL={g15:"#19C8E6",g25:"#5B4BFF",g425:"#0B0B1F",ico:"#1F7A72",aa:"#1F7A72"};
+function el(t,a){ return Sim.svg(t,a,svg); }
+function params(){ var o={}; for(var k in SEL) o[k]=SEL[k].value; o.area=C.area.get(); o.w=C.w.get(); return o; }
+function update(){
+  var p=params(), fl=[p.e1,p.e2,p.e3,p.e4];
+  var sched=PD.capd({n:4,fillMl:2000,dayFluid:"g15",nightFluid:"g25",nightMin:600}).map(function(e,i){ e.fluid=fl[i]; return e; });
+  var R=PD.regimen(sched,{area:p.area});
+  var aa=fl.reduce(function(s,f,i){ return s+(f==="aa"?22*Math.min(0.85,0.5+R.ex[i].dwellMin/900):0); },0);
+  var nAA=fl.filter(function(f){ return f==="aa"; }).length, nIco=fl.filter(function(f){ return f==="ico"; }).length, n425=fl.filter(function(f){ return f==="g425"; }).length;
+  /* bars */
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  var base=150, scU=0.12, scG=1.6;
+  el("line",{x1:40,y1:base,x2:620,y2:base,stroke:"#D3D5E2"});
+  el("text",{x:44,y:22,"font-size":12,fill:"#5E6075","font-family":F,text:"Net UF (ml)"});
+  el("text",{x:44,y:292,"font-size":12,fill:"#5E6075","font-family":F,text:"Absorbed (g)"});
+  R.ex.forEach(function(e,i){
+    var x=90+i*135, f=fl[i], u=e.uf, g=f==="aa"?22*Math.min(0.85,0.5+e.dwellMin/900):e.gluG;
+    var hU=Math.min(125,Math.abs(u)*scU);
+    el("rect",{x:x,y:u>=0?base-hU:base,width:70,height:Math.max(1,hU),rx:6,fill:u>=0?COL[f]:"#B4232A",opacity:f==="g425"?0.85:1});
+    el("text",{x:x+35,y:u>=0?base-hU-6:base+hU+14,"text-anchor":"middle","font-size":13,"font-weight":600,fill:u>=0?"#0B0B1F":"#B4232A","font-family":M,text:(u>=0?"+":"")+Math.round(u)});
+    var hG=Math.min(110,g*scG);
+    if(hG>0) el("rect",{x:x+18,y:base+4,width:34,height:hG,rx:5,fill:f==="aa"?"#1F7A72":"#5B4BFF",opacity:0.35});
+    el("text",{x:x+35,y:base+hG+18,"text-anchor":"middle","font-size":12,fill:"#5E6075","font-family":M,text:g>0.5?Math.round(g)+" g":"0"});
+    el("text",{x:x+35,y:42,"text-anchor":"middle","font-size":12,fill:"#5E6075","font-family":F,text:(i<3?"Day "+(i+1):"Night")+" "+PD.FLUIDS[f].short});
+  });
+  var kcal=R.gluG*3.4+aa*4, need=p.w*30;
+  Sim.ro("roUF",Math.round(R.ufMl),R.ufMl<300?"flag":"ok");
+  Sim.ro("roGlu",Math.round(R.gluG),R.gluG>120?"flag":R.gluG<60?"ok":false);
+  Sim.ro("roKcal",Math.round(kcal)+" ("+Math.round(kcal/need*100)+"%)",p.dm==="yes"&&R.gluG>100?"flag":false);
+  Sim.ro("roNa",Math.round(R.naMmol));
+  Sim.ro("roAA",aa?Math.round(aa):"0",nAA>1?"flag":false);
+  Sim.ro("roK","0 mmol/L");
+  var L=[];
+  if(p.dm==="yes"&&R.gluG>100) L.push(["w","<b>DM + glucose "+Math.round(R.gluG)+" g/วัน</b> ใช้ icodextrin ค้างคืนและ amino acid 1 exchange ลด HbA1c และ triglyceride"]);
+  if(n425>=2) L.push(["w","<b>4.25% หลายครั้งต่อวัน</b> ทบทวน Na/น้ำ intake RKF และทำ PET แทนการเพิ่ม glucose"]);
+  if(nIco>1) L.push(["w","<b>Icodextrin มากกว่า 1 ครั้งต่อวัน</b> maltose สะสม ใช้ได้วันละ 1 exchange"]);
+  if(nIco) L.push(["","<b>Icodextrin</b> ระวัง glucose meter ชนิด GDH-PQQ อ่านสูงลวง (เสี่ยงให้ insulin เกิน) amylase ต่ำลวง และ skin rash"]);
+  if(nAA>1) L.push(["w","<b>Amino acid > 1 bag</b> BUN เพิ่มและ metabolic acidosis ลดเหลือ 1 bag ต่อวัน"]);
+  else if(nAA===1) L.push(["g","<b>Amino acid 1 bag</b> ทดแทน protein loss ราว 5–15 g/วันทางน้ำยา ได้ผลดีเมื่อพลังงานพอ"]);
+  L.push(["","<b>Hypokalemia</b> น้ำยาไม่มี K ผู้ป่วย PD จำนวนมากต้องกิน K เสริมหรือเพิ่ม K ในอาหาร"]);
+  L.push([p.buf==="bic"?"g":"",p.buf==="bic"?"<b>Bicarbonate low-GDP</b> ลด inflow pain ช่วยคง RKF และ urine volume ใช้ในตับวายหรือ lactate สูง":"<b>Lactate standard</b> GDP สูง pH ต่ำ อาจมี inflow pain ใช้ไม่ได้ดีในผู้ป่วยตับวาย"]);
+  var ul=document.getElementById("fx"); ul.innerHTML="";
+  L.forEach(function(x){ var li=Sim.h("li",{class:x[0]}); li.innerHTML=x[1]; ul.appendChild(li); });
+}
+Sim.mount({code:"PD-11", title:"PD Solutions and Metabolic Effects", lead:"เลือกน้ำยาทีละ exchange (glucose, icodextrin, amino acid) และ buffer แล้วดู UF, glucose และพลังงานที่ได้รับ ผลต่อเบาหวาน K และข้อควรระวังของแต่ละชนิด",
+  scenarios:S, order:ORDER, captureMs:1400,
+  onChange:function(k,s){ var p=s.p; ["e1","e2","e3","e4","buf","dm"].forEach(function(x){ SEL[x].value=p[x]; }); C.area.set(p.area); C.w.set(p.w); update(); },
+  refs:["Li PK, Culleton BF, Ariza A, et al (IMPENDIA/EDEN). Randomized, controlled trial of glucose-sparing peritoneal dialysis in diabetic patients. J Am Soc Nephrol 2013, 24(11): 1889-1900",
+        "Johnson DW, Brown FG, Clarke M, et al (balANZ). Effects of biocompatible versus standard fluid on peritoneal dialysis outcomes. J Am Soc Nephrol 2012, 23(6): 1097-1107",
+        "Goossen K, Becker M, Marshall MR, et al. Icodextrin versus glucose solutions for the once-daily long dwell in peritoneal dialysis: an enriched systematic review and meta-analysis of randomized controlled trials. Am J Kidney Dis 2020, 75(6): 830-846",
+        "Htay H, Johnson DW, Wiggins KJ, et al. Biocompatible dialysis fluids for peritoneal dialysis. Cochrane Database Syst Rev 2018, 10: CD007554"],
+  note:"Model เพื่อการสอน (core/pd.js) amino acid 1.1% 2 L มี amino acid ราว 22 g ดูดซึมราว 50–85% ตาม dwell kcal คิด glucose 3.4 และ amino acid 4 kcal/g ความต้องการพลังงาน 30 kcal/kg/วัน"
+});
+})();
+</script>
+</body>
+</html>

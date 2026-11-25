@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[CKD-07] Metabolic Acidosis in CKD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(100px,130px) 1fr 122px}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:10px}
+body.present .bench{grid-template-columns:1.25fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:14px 18px}
+body.present .ctls{gap:1px}
+body.present .ctl{font-size:13px}
+body.present .tools{margin-top:6px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .ro{padding:6px 10px}
+body.present .ro b{font-size:18px}
+body.present .readout{margin-top:8px}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+body.present .take li{font-size:14px}
+body.present .svgwrap svg{max-height:235px;width:auto;margin:0 auto}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>สมดุลกรด: ที่กินเข้า, ที่ไตขับได้, ที่ค้าง</h2>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 640 270" role="img" aria-label="Acid balance and ammoniagenesis per nephron"></svg></div>
+      <div id="chart"></div>
+      <p class="hint no-present">ภาพบน: จำนวน nephron ที่เหลือตาม eGFR สีเข้มขึ้นเมื่อแต่ละ nephron ต้องสร้าง NH3 มากขึ้นเพื่อชดเชย กราฟล่าง: HCO3 ที่ควรเป็นตาม eGFR เมื่อใช้อาหารและการรักษาเดียวกัน (เส้นม่วง) เทียบอาหารเดิมโดยไม่มี alkali (เส้นประ)</p>
+    </div>
+    <div class="card">
+      <h2>ไต อาหาร และ alkali</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roH"><b>-</b><span>Serum HCO3 (mmol/L)</span></div>
+        <div class="ro" id="roN"><b>-</b><span>NEAP (mEq/วัน)</span></div>
+        <div class="ro" id="roX"><b>-</b><span>NAE สูงสุดที่ไตทำได้</span></div>
+        <div class="ro" id="roA"><b>-</b><span>NH3 ต่อ nephron (x ปกติ)</span></div>
+        <div class="ro" id="roB"><b>-</b><span>กรดค้าง → bone/muscle</span></div>
+        <div class="ro" id="roS"><b>-</b><span>NaHCO3 650 mg (เม็ด/วัน)</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script>
+(function(){
+"use strict";
+function P(o){ var d={gfr:45,prot:1.0,w:70,k:60,bic:0,t4:false}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  g3:{name:"G3b อาหารปกติ", p:P({gfr:45}),
+    rows:[["ผู้ป่วย","eGFR 45 โปรตีน 1.0 g/kg K intake 60 mEq/วัน"],["ไต","NH3 ต่อ nephron เพิ่มราว 2 เท่าเพื่อรักษาสมดุล"],["HCO3","ยังปกติ แต่การชดเชยนี้มีราคา"]],
+    take:["HCO3 ปกติใน CKD G3 ไม่ได้แปลว่าไม่มีภาระกรด nephron ที่เหลือทำงานหนักขึ้น","Ammoniagenesis ต่อ nephron ที่สูงกระตุ้น complement และ tubulointerstitial injury","Net endogenous acid production ขึ้นกับโปรตีนสัตว์ต่อผักผลไม้"]},
+  meat:{name:"G4 โปรตีนสัตว์สูง", p:P({gfr:22,prot:1.4,k:45}),
+    rows:[["ผู้ป่วย","eGFR 22 กินเนื้อสัตว์มาก ผักผลไม้น้อย"],["Lab","HCO3 ราว 18 mmol/L AG ปกติหรือสูงเล็กน้อย"],["ผล","กรดค้างถูก buffer ด้วยกระดูกและกล้ามเนื้อ"]],
+    take:["Acidosis ใน CKD ระยะต้นเป็น hyperchloremic ระยะท้าย anion gap สูงขึ้นจาก sulfate, phosphate, urate","กรดที่ค้างทำให้กระดูกสลาย กล้ามเนื้อสลาย (ubiquitin-proteasome) และ insulin resistance","HCO3 < 18 ควรได้การรักษาด้วย alkali"]},
+  fv:{name:"G4 + ผักผลไม้", p:P({gfr:22,prot:0.8,k:100}),
+    rows:[["การรักษา","ลดโปรตีนสัตว์ เพิ่มผักผลไม้ (base-producing)"],["ผล","NEAP ลดมาก HCO3 กลับเกือบปกติ"],["ระวัง","K intake เพิ่ม ต้องติดตาม K"]],
+    take:["ผักผลไม้ให้ base ลด NEAP ได้เทียบเท่า NaHCO3 และลด BP กับน้ำหนัก","เหมาะกับ CKD G3–G4 ที่ K ไม่สูง ติดตาม K หลังปรับอาหาร","อาหาร plant-based ไม่ได้เพิ่ม hyperK เท่าที่กลัวในผู้ป่วยส่วนใหญ่ เพราะ alkali และ fiber ช่วยขับ K"]},
+  bic:{name:"G4 + NaHCO3", p:P({gfr:22,prot:1.4,k:45,bic:50}),
+    rows:[["การรักษา","NaHCO3 50 mEq/วัน (ราว 6–7 เม็ด 650 mg)"],["ผล","HCO3 ขึ้นเป็นราว 23"],["ราคา","Na ราว 1.2 g/วัน ระวังบวมและ BP"]],
+    take:["NaHCO3 ราว 0.5–1 mEq/kg/วัน ปรับให้ HCO3 อยู่ในช่วงปกติ ไม่เกิน ULN","Na load จาก NaHCO3 เพิ่ม BP และบวมน้อยกว่า NaCl ในปริมาณเท่ากัน แต่ยังต้องระวังใน HF","การแก้ acidosis ช่วยมวลกล้ามเนื้อและกระดูก ผลชะลอ eGFR ยังไม่สม่ำเสมอ"]},
+  g5:{name:"G5 ไม่ dialysis", p:P({gfr:8,prot:1.1,k:55}),
+    rows:[["ผู้ป่วย","eGFR 8 HCO3 ราว 17 AG สูง"],["กลไก","nephron เหลือน้อย NH4 excretion ทั้งหมดต่ำแม้ต่อ nephron จะสูงสุดแล้ว"],["ทำ","alkali + low protein และเตรียม KRT"]],
+    take:["เมื่อ GFR ต่ำมาก NH4 รวมลดลงจนสมดุลกรดเป็นบวกทุกวัน","Acidosis ที่ดื้อต่อ alkali เป็นอาการหนึ่งที่ช่วยตัดสินเริ่ม dialysis","Dialysate bicarbonate แก้ acidosis ระหว่างฟอก"]},
+  t4:{name:"Type 4 RTA ใน DKD", p:P({gfr:40,prot:1.0,k:60,t4:true}),
+    rows:[["ผู้ป่วย","DKD eGFR 40 K 5.8 HCO3 ราว 20"],["กลไก","hyporeninemic hypoaldosteronism + hyperK กด ammoniagenesis ใน PT"],["clue","acidosis และ hyperK รุนแรงเกินกว่าระดับ GFR"]],
+    take:["HyperK กด NH3 production ทำให้ acidosis แย่ลง แก้ K แล้ว HCO3 ดีขึ้น","Type 4 RTA: urine pH < 5.5 ได้ แต่ urine NH4 ต่ำ (UAG บวก)","Loop/thiazide หรือ K binder ช่วยทั้ง K และ HCO3 fludrocortisone ใช้เมื่อไม่มีน้ำเกินหรือ HT"]}
+};
+var ORDER=["g3","meat","fv","bic","g5","t4"];
+var box=document.getElementById("ctls"), C={}, T4=false;
+function sl(k,o){ o.id="s"+k; o.onInput=function(){ update(); }; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("gfr",{label:"eGFR",min:5,max:100,step:1,value:45,unit:"mL/min"});
+sl("prot",{label:"Protein",min:0.4,max:1.8,step:0.05,value:1.0,unit:"g/kg/วัน",fmt:function(v){ return v.toFixed(2); }});
+sl("w",{label:"น้ำหนัก",min:40,max:110,step:1,value:70,unit:"kg"});
+sl("k",{label:"K intake",min:25,max:130,step:5,value:60,unit:"mEq/วัน"});
+sl("bic",{label:"NaHCO3",min:0,max:100,step:5,value:0,unit:"mEq/วัน"});
+var tb=document.getElementById("tools"), bT=Sim.toggle("Hyperkalemia / type 4 RTA",function(on){ T4=on; update(); },false); tb.appendChild(bT);
+function v(k){ return C[k].get(); }
+function calc(g,prot,w,k,bic,t4){
+  var neap=54.5*prot*w/k-10.2, ne=neap-bic, nae=(20+2.2*g)*(t4?0.45:1);
+  var r=Math.max(0,ne)/nae, h=ne>=0?26-10*(1-Math.exp(-0.5*Math.pow(r,2.5))):Math.min(34,26+(-ne)/(g*0.25+5));
+  var ret=Math.max(0,ne-nae*0.9);
+  var nh4=Math.min(Math.max(0,ne),nae)*0.65, per=(nh4/Math.max(0.05,g/100))/(0.65*44);
+  return {neap:neap,ne:ne,nae:nae,r:r,h:h,ret:ret,per:Math.max(0.3,per)};
+}
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?215:230,aria:"Serum bicarbonate across eGFR",
+  x:{min:5,max:100,step:10,label:"eGFR (mL/min/1.73 m²)"},y:{min:12,max:30,step:4,label:"HCO3 (mmol/L)"},
+  series:[{id:"rx",name:"Current diet and alkali",color:A.accent,data:[],width:2.6},{id:"base",name:"Same diet, no alkali",color:A.muted,data:[],width:1.5,dash:[5,4]}],
+  bands:[{y0:22,y1:29,color:"rgba(31,122,114,0.07)",label:"Normal"}],hlines:[{y:18,label:"18",color:A.red,dash:[4,3]}],legend:true});
+var svg=document.getElementById("vis");
+function T(x,y,s,o){ o=o||{}; var a={x:x,y:y,"font-size":o.fs||12,fill:o.c||"#0B0B1F","text-anchor":o.a||"start",text:s}; if(o.w) a["font-weight"]=o.w; if(o.mono) a["font-family"]="Geist Mono, monospace"; return Sim.svg("text",a,svg); }
+function draw(M,g){
+  svg.innerHTML="";
+  T(20,20,"Nephrons remaining",{fs:12.5,w:600});
+  var n=Math.max(1,Math.round(g/5)), heat=Sim.clamp((M.per-1)/3,0,1);
+  for(var i=0;i<20;i++){ var x=24+(i%10)*30, y=34+Math.floor(i/10)*46, on=i<n;
+    Sim.svg("path",{d:"M"+(x+10)+" "+(y+6)+" a8 8 0 1 0 0.1 0 M"+(x+10)+" "+(y+22)+" v10 q0 8 8 8",fill:"none",stroke:on?"rgb("+Math.round(91+120*heat)+","+Math.round(75-40*heat)+","+Math.round(255-200*heat)+")":"#E6E7F0","stroke-width":on?3.2:2},svg);
+    if(on&&heat>0.3) T(x+18,y+10,"NH3",{fs:8.5,c:"#B4232A",mono:true}); }
+  T(24,146,"NH3 per nephron x"+M.per.toFixed(1),{fs:11.5,c:M.per>2.5?"#B4232A":"#5E6075",mono:true});
+  if(M.per>2.5) T(24,162,"Complement C3 activation, interstitial injury",{fs:11,c:"#B4232A"});
+  // balance bars
+  var x0=360, sc=230/Math.max(120,M.neap,M.nae);
+  function bar(y,label,val,col,sub){ T(x0,y-6,label,{fs:12,w:600}); Sim.svg("rect",{x:x0,y:y,width:Math.max(2,val*sc),height:18,rx:5,fill:col},svg); T(x0+Math.max(2,val*sc)+6,y+14,Math.round(val)+" mEq/d",{fs:11.5,mono:true,c:"#0B0B1F"}); if(sub) T(x0,y+32,sub,{fs:10.5,c:"#5E6075"}); }
+  bar(36,"Diet acid load (NEAP)",Math.max(0,M.neap),"#B4232A","Animal protein minus fruit and vegetable base");
+  if(M.bic>0) bar(92,"Alkali given",M.bic,"#1F7A72","");
+  bar(M.bic>0?148:92,"Max kidney acid excretion",M.nae,"#5B4BFF","NH4+ plus titratable acid");
+  var yr=M.bic>0?204:148;
+  T(x0,yr-6,"Retained acid",{fs:12,w:600}); Sim.svg("rect",{x:x0,y:yr,width:Math.max(2,M.ret*sc),height:18,rx:5,fill:M.ret>0?"#A8842C":"#E6E7F0"},svg);
+  T(x0+Math.max(2,M.ret*sc)+6,yr+14,M.ret>0?Math.round(M.ret)+" mEq/d to bone, muscle":"none",{fs:11.5,mono:true,c:M.ret>0?"#A8842C":"#5E6075"});
+  T(20,250,"Serum HCO3 "+M.h.toFixed(1)+" mmol/L",{fs:15,w:600,c:M.h<18?"#B4232A":M.h<22?"#A8842C":"#1F7A72"});
+}
+function update(){
+  var g=v("gfr"), pr=v("prot"), w=v("w"), k=v("k"), bic=v("bic");
+  var M=calc(g,pr,w,k,bic,T4); M.bic=bic;
+  draw(M,g);
+  Sim.ro("roH",M.h.toFixed(1),M.h<18?"flag":M.h>29?"flag":M.h>=22?"ok":null);
+  Sim.ro("roN",Math.round(M.neap)); Sim.ro("roX",Math.round(M.nae),M.ne>M.nae?"flag":null);
+  Sim.ro("roA",M.per.toFixed(1)+"x",M.per>2.5?"flag":null);
+  Sim.ro("roB",M.ret>0?Math.round(M.ret)+" mEq/d":"0",M.ret>0?"flag":"ok");
+  Sim.ro("roS",bic?(bic/7.7).toFixed(1)+" (Na "+(bic*23/1000).toFixed(1)+" g)":"0",bic>60?"flag":null);
+  var rx=[],bs=[]; for(var gg=5;gg<=100;gg+=2.5){ rx.push([gg,calc(gg,pr,w,k,bic,T4).h]); bs.push([gg,calc(gg,pr,w,k,0,T4).h]); }
+  chart.update({vlines:[{x:g,label:"Now"}]}); chart.setSeries("rx",rx); chart.setSeries("base",bic>0?bs:[]);
+  var m,bad=true;
+  if(M.h>29) m="<b>HCO3 เกิน ULN</b> ลดขนาด NaHCO3 ไม่ควรให้ HCO3 สูงกว่าค่าปกติ (metabolic alkalosis เพิ่ม Ca-P precipitation และ HF)";
+  else if(M.h<18) m="<b>HCO3 "+M.h.toFixed(1)+" ต่ำกว่า 18</b> เริ่ม NaHCO3 ราว 0.5–1 mEq/kg/วัน ("+Math.round(0.6*w)+" mEq ≈ "+Math.round(0.6*w/7.7)+" เม็ด) ร่วมกับลดโปรตีนสัตว์และเพิ่มผักผลไม้ถ้า K ยอมให้"+(T4?" แก้ hyperK (diuretic, K binder) ซึ่งช่วย ammoniagenesis":"")+(g<10?" และใช้ acidosis ร่วมพิจารณาเวลาเริ่ม KRT":"");
+  else if(M.h<22) m="<b>HCO3 "+M.h.toFixed(1)+"</b> ปรับอาหารก่อน: ลดโปรตีนสัตว์ เพิ่มผักผลไม้ (ถ้า K ไม่สูง) ติดตาม HCO3 ทุก 3 เดือน พิจารณา alkali ถ้าลดลงถึง 18";
+  else if(M.per>2.5) { bad=false; m="<b>HCO3 ปกติ แต่ ammoniagenesis ต่อ nephron สูง</b> อาหาร base-producing ลดภาระนี้ได้ ติดตาม HCO3 ทุก 3–6 เดือน"; }
+  else { bad=false; m="<b>สมดุลกรดปกติ</b> ติดตาม HCO3 ตาม stage ไม่ต้องให้ alkali"; }
+  var a=document.getElementById("act"); a.innerHTML="<b>Next step:</b> "+m; a.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"CKD-07", title:"Metabolic Acidosis in CKD", lead:"ลด eGFR และปรับโปรตีน, ผักผลไม้, NaHCO3 ดูว่าภาระกรดจากอาหารเทียบกับความสามารถขับกรดของไตอย่างไร กรดที่ค้างไปไหน และ nephron ที่เหลือต้องทำงานหนักแค่ไหน",
+  scenarios:S, order:ORDER, captureMs:800,
+  onChange:function(kk,s){ var p=s.p; C.gfr.set(p.gfr); C.prot.set(p.prot); C.w.set(p.w); C.k.set(p.k); C.bic.set(p.bic); T4=p.t4; bT.setState(T4); update(); },
+  refs:["KDIGO 2024 Clinical Practice Guideline for the Evaluation and Management of CKD. Kidney Int 2024, 105(4S): S117-S314",
+        "Frassetto LA, Todd KM, Morris RC, Sebastian A. Estimation of net endogenous noncarbonic acid production in humans from diet potassium and protein contents. Am J Clin Nutr 1998, 68(3): 576-583",
+        "Nath KA, Hostetter MK, Hostetter TH. Pathophysiology of chronic tubulo-interstitial disease in rats: interactions of dietary acid load, ammonia, and complement component C3. J Clin Invest 1985, 76(2): 667-675",
+        "Goraya N, Simoni J, Jo CH, Wesson DE. A comparison of treating metabolic acidosis in CKD stage 4 hypertensive kidney disease with fruits and vegetables or sodium bicarbonate. Clin J Am Soc Nephrol 2013, 8(3): 371-381",
+        "de Brito-Ashurst I, Varagunam M, Raftery MJ, Yaqoob MM. Bicarbonate supplementation slows progression of CKD and improves nutritional status. J Am Soc Nephrol 2009, 20(9): 2075-2084",
+        "BiCARB study group. Clinical and cost-effectiveness of oral sodium bicarbonate therapy for older patients with CKD and low-grade acidosis. BMC Med 2020, 18(1): 91",
+        "Kraut JA, Madias NE. Metabolic acidosis of CKD: an update. Am J Kidney Dis 2016, 67(2): 307-317"],
+  note:"Model เพื่อการสอน: NEAP = 54.5 x protein (g/วัน) / K intake (mEq/วัน) − 10.2 (Frassetto) ลบด้วย alkali NAE สูงสุด = 20 + 2.2 x eGFR mEq/วัน (x 0.45 เมื่อ hyperK/type 4) HCO3 = 26 − 10 x (1 − e^(−0.5 r^2.5)) โดย r = NEAP สุทธิ / NAE สูงสุด NH3 ต่อ nephron เทียบ NH4 ที่ GFR 100 NaHCO3 650 mg = 7.7 mEq"
+});
+})();
+</script>
+</body>
+</html>

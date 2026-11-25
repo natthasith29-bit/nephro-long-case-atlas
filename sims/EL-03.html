@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[EL-03] Hyponatremia: Mechanism and Correction</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(120px,160px) 1fr 100px}
+.sel{display:grid;grid-template-columns:minmax(120px,160px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.grp{font:500 11.5px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin:10px 0 0}
+.readout{grid-template-columns:repeat(3,1fr)}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,1fr)}}
+table.lab{width:100%;border-collapse:collapse;font-size:13px;margin-top:12px}
+table.lab td{padding:6px 8px;border-bottom:1px solid var(--line)}
+table.lab td:first-child{color:var(--muted);width:44%}
+table.lab td:last-child{font-family:var(--mono)}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+body.present .bench{grid-template-columns:1.3fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present #steps,body.present .grp,body.present table.lab{display:none}
+body.present .card{padding:16px 20px}
+body.present .ctls{gap:4px 16px;grid-template-columns:1fr 1fr}
+body.present .ctl{grid-template-columns:86px 1fr 66px;gap:6px;font-size:12px}
+body.present .ctl output{font-size:12px}
+body.present .sel{grid-template-columns:86px minmax(0,1fr);gap:6px;font-size:12px}
+body.present select{font-size:11.5px;padding:3px 6px}
+body.present .ro{padding:8px 12px}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+body.present #cell svg{max-height:170px;width:auto!important;margin:0 auto}
+body.present #cell .nc-bar{display:none}
+body.present table.lab{display:none}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Na และปัสสาวะใน 48 ชั่วโมง</h2>
+      <div id="chart"></div>
+      <div id="live"></div>
+      <div id="cell" style="margin-top:10px"></div>
+      <table class="lab" id="lab" aria-label="Diagnostic laboratory values"></table>
+      <p class="hint no-present">แถบเขียวคือ 6 ชม. แรก (เป้าเพิ่ม 4–6 ถ้ามีอาการ) เส้นประแดงคือขีด +8 ใน 24 ชม. (และ 16 ใน 48 ชม.) สำหรับผู้ป่วยเสี่ยง ODS เส้นจางคือ urine flow (แกนขวา) model คิด Na balance รายชั่วโมงจากสารน้ำ น้ำดื่ม ปัสสาวะ และ insensible loss</p>
+      <div id="steps" class="no-present"></div>
+    </div>
+    <div class="card">
+      <h2>กลไกและการรักษา</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="ro6"><b>-</b><span>ΔNa 6 ชม.</span></div>
+        <div class="ro" id="ro24"><b>-</b><span>ΔNa 24 ชม.</span></div>
+        <div class="ro" id="ro48"><b>-</b><span>ΔNa 48 ชม.</span></div>
+        <div class="ro" id="roUF"><b>-</b><span>Urine สูงสุด (ml/h)</span></div>
+        <div class="ro" id="roUo"><b>-</b><span>Uosm ชม. แรก</span></div>
+        <div class="ro" id="roEF"><b>-</b><span>EFWC 24 ชม. (L)</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/calc.js"></script>
+<script src="../core/live.js"></script>
+<script src="../core/nephron.js"></script>
+<script>
+(function(){
+"use strict";
+/* mech: ADH behaviour and labs */
+var MECH={
+  siad:{name:"SIAD",lab:{Posm:"250 (hypotonic)",Uosm:"> 100, มักเกิน 300",UNa:"> 30",Volume:"Euvolemic","FE urate":"> 12% ก่อนและหลังแก้ Na",Other:"TSH และ cortisol ปกติ"}},
+  hypo:{name:"Hypovolemic (vomiting/diarrhea)",lab:{Posm:"hypotonic",Uosm:"> 300",UNa:"< 20–30",Volume:"Hypovolemic","FE urate":"< 12%",Other:"BUN/Cr สูง"}},
+  thz:{name:"Thiazide",lab:{Posm:"hypotonic",Uosm:"> 100",UNa:"แปรผัน (มักสูง)",Volume:"Euvolemic ถึง hypovolemic","FE urate":"แปรผัน",Other:"K และ Mg ต่ำ"}},
+  beer:{name:"Low solute (beer potomania/tea and toast)",lab:{Posm:"hypotonic",Uosm:"< 100",UNa:"< 20",Volume:"Euvolemic","FE urate":"-",Other:"solute intake ต่ำ, alcohol"}},
+  poly:{name:"Primary polydipsia",lab:{Posm:"hypotonic",Uosm:"< 100",UNa:"แปรผัน",Volume:"Euvolemic","FE urate":"-",Other:"ดื่มน้ำเกิน 10–15 L/วัน, psychiatric"}},
+  reset:{name:"Reset osmostat",lab:{Posm:"hypotonic",Uosm:"ปรับได้ (dilute เมื่อได้น้ำ)",UNa:"ตาม intake",Volume:"Euvolemic","FE urate":"ปกติ",Other:"Na คงที่ราว 125–130 water loading test ขับน้ำได้"}},
+  csw:{name:"Cerebral salt wasting",lab:{Posm:"hypotonic",Uosm:"> 300",UNa:"> 30 มาก",Volume:"Hypovolemic","FE urate":"> 12% และยังสูงหลังแก้ Na",Other:"SAH หรือ neurosurgery"}}
+};
+function P(o){ var d={mech:"siad",na:118,w:60,sex:"m",bolus:2,nss:0,ns6:6,restr:1.0,urea:0,tolv:0,ddavp:"no",d5w:0,solute:"no",stopThz:"yes"}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  siad:{name:"SIAD + อาการรุนแรง", p:P({}),
+    rows:[["ผู้ป่วย","SIAD จาก pneumonia Na 118 ชัก"],["รักษา","3% NaCl 150 ml 2 bolus แล้วจำกัดน้ำ 1 L/วัน"],["ผล","Na ขึ้นราว 3–4 ใน 6 ชม. แล้วขึ้นช้าๆ ไม่เกินขีด"]],
+    take:["อาการรุนแรง: 3% NaCl 150 ml ใน 20 นาที ซ้ำได้ 2–3 ครั้ง เป้าเพิ่ม 4–6 mmol/L","หลังจากนั้นรักษาตามสาเหตุและจำกัดการแก้ไม่เกิน 8–10 ใน 24 ชม.","SIAD ที่ Uosm สูงมาก จำกัดน้ำอย่างเดียวมักไม่พอ ใช้ urea หรือ vaptan"]},
+  hypo:{name:"Hypovolemic แล้ว overcorrect", p:P({mech:"hypo",na:116,bolus:0,nss:2.0,restr:2.0}),
+    rows:[["ผู้ป่วย","อาเจียนหลายวัน Na 116"],["รักษา","0.9% NaCl 2 L ใน 6 ชม."],["ผล","พอ volume กลับมา ADH หยุดหลั่ง ไตขับน้ำอิสระ (aquaresis) Na ขึ้นเกิน 8 ใน 24 ชม."]],
+    take:["Overcorrection มักเกิดเมื่อแก้สาเหตุที่กระตุ้น ADH (volume, thiazide, low solute, desmopressin หยุด)","เฝ้า urine output: > 100 ml/h ที่ dilute คือสัญญาณเตือน","Rescue: D5W 3 ml/kg/h ± desmopressin 2 µg IV เพื่อลด Na กลับ"]},
+  clamp:{name:"Hypovolemic + DDAVP clamp", p:P({mech:"hypo",na:116,bolus:0,nss:2.0,restr:2.0,ddavp:"yes"}),
+    rows:[["กลยุทธ์","desmopressin 1–2 µg ทุก 6–8 ชม. ร่วมกับ hypertonic saline หรือ NSS ที่คุมได้"],["ผล","ไตไม่ขับน้ำอิสระ Na ขึ้นตามที่ให้ Na เท่านั้น คาดเดาได้"],["ข้อควรระวัง","ต้องจำกัดน้ำเข้า ไม่เช่นนั้น Na ลดต่อ"]],
+    take:["DDAVP clamp ป้องกัน overcorrection ในผู้ป่วยเสี่ยง ODS","Na ขึ้นได้จาก Na ที่ให้ ไม่ใช่จาก aquaresis","ใช้ได้ทั้งแบบ proactive และ reactive"]},
+  beer:{name:"Beer potomania", p:P({mech:"beer",na:112,bolus:0,nss:1.0,restr:2.0,solute:"yes"}),
+    rows:[["ผู้ป่วย","ดื่มเบียร์มาก กินอาหารน้อย Na 112 Uosm 60"],["กลไก","solute น้อย ขับน้ำได้น้อยแม้ ADH ต่ำ"],["ผล","เมื่อได้ solute (อาหาร, saline) ไตขับน้ำมาก Na ขึ้นเร็วมาก เสี่ยง ODS สูง (alcohol, malnutrition, hypoK)"]],
+    take:["Low solute: น้ำที่ขับได้ ≈ solute ที่กิน / Uosm ต่ำสุด","ห้ามให้อาหารหรือ saline มากทันที ค่อยๆ เพิ่ม solute","ผู้ป่วยกลุ่มนี้เสี่ยง ODS สูงสุด เป้า 4–6 ไม่เกิน 8 ใน 24 ชม."]},
+  thz:{name:"Thiazide-induced", p:P({mech:"thz",na:121,bolus:0,nss:0,restr:1.2,stopThz:"yes"}),
+    rows:[["ผู้ป่วย","หญิงสูงอายุผอม เพิ่งเริ่ม HCTZ Na 121"],["รักษา","หยุด thiazide จำกัดน้ำ แก้ K"],["ผล","ฤทธิ์ยาหมดใน 1–2 วัน ไตกลับมาขับน้ำ Na ขึ้น ต้องติดตามไม่ให้เร็วเกิน"]],
+    take:["Thiazide ลดการขับน้ำอิสระที่ DCT และทำให้เสีย K","หยุดยาแล้ว Na ขึ้นเองได้ ติดตามทุก 4–6 ชม.","ห้ามให้ thiazide ซ้ำ ผู้ป่วยมักเป็นซ้ำ"]},
+  reset:{name:"Reset osmostat", p:P({mech:"reset",na:127,bolus:0,nss:0,restr:2.5}),
+    rows:[["ผู้ป่วย","Na คงที่ 127 มานาน ไม่มีอาการ"],["Work-up","water load 20 ml/kg ขับได้ > 80% ใน 4 ชม. Uosm ลดต่ำได้"],["รักษา","ไม่ต้องรักษา ไม่ต้องจำกัดน้ำ"]],
+    take:["Reset osmostat (SIAD type C): ADH ยังตอบสนองแต่ที่จุดตั้งต่ำลง","การจำกัดน้ำไม่ช่วยและไม่จำเป็น","พบใน pregnancy, malnutrition, TB, chronic illness"]},
+  csw:{name:"CSW vs SIAD", p:P({mech:"csw",na:124,bolus:0,nss:2.0,restr:2.5}),
+    rows:[["ผู้ป่วย","SAH วันที่ 5 Na 124 urine output มาก UNa 180"],["แยกโรค","CSW: hypovolemic และ FE urate ยังสูงหลังแก้ Na  SIAD: euvolemic FE urate กลับปกติ"],["รักษา","CSW ให้ NaCl ทดแทน (NSS หรือ 3%) ± fludrocortisone ห้ามจำกัดน้ำ"]],
+    take:["CSW และ SIAD มี UNa สูงเหมือนกัน ต่างกันที่ volume status","FE urate ที่ยังสูงหลังแก้ Na ชี้ CSW (renal salt wasting)","จำกัดน้ำใน CSW หรือ SAH ทำให้ vasospasm แย่ลง"]}
+};
+var ORDER=["siad","hypo","clamp","beer","thz","reset","csw"];
+
+var box=document.getElementById("ctls"), C={}, SEL={};
+function sel(k,label,opts){ var s=Sim.h("select",{id:"s"+k},opts.map(function(o){ return Sim.h("option",{value:o[0],text:o[1]}); })); s.addEventListener("change",update); var w=Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"s"+k,text:label}),s]); box.appendChild(w); SEL[k]={s:s,el:w}; }
+function sl(k,o,cls){ o.id="s"+k; o.onInput=function(){ update.drag=true; update(); }; C[k]=Sim.slider(o); if(cls) C[k].el.classList.add(cls); box.appendChild(C[k].el); }
+function grp(t){ box.appendChild(Sim.h("p",{class:"grp",text:t})); }
+sel("mech","กลไก",Object.keys(MECH).map(function(k){ return [k,MECH[k].name]; }));
+sl("na",{label:"Na เริ่มต้น",min:105,max:134,step:1,value:118,unit:"mmol/L"});
+sl("w",{label:"น้ำหนัก",min:35,max:100,step:1,value:60,unit:"kg"});
+sel("sex","TBW",[["m","ชาย 0.6"],["f","หญิง 0.5"],["e","สูงอายุ 0.45"]]);
+grp("การรักษา");
+sl("bolus",{label:"3% NaCl 150 ml",min:0,max:3,step:1,value:2,unit:"bolus"});
+sl("nss",{label:"0.9% NaCl",min:0,max:4,step:0.5,value:0,unit:"L / 6 ชม."});
+sl("restr",{label:"น้ำดื่ม",min:0.5,max:4,step:0.1,value:1.0,unit:"L/วัน"});
+sl("urea",{label:"Urea oral",min:0,max:60,step:15,value:0,unit:"g/วัน"},"secondary");
+sl("tolv",{label:"Tolvaptan",min:0,max:30,step:7.5,value:0,unit:"mg"},"secondary");
+sel("ddavp","Desmopressin clamp",[["no","ไม่ใช้"],["yes","1–2 µg ทุก 8 ชม."]]);
+sl("d5w",{label:"D5W rescue",min:0,max:300,step:25,value:0,unit:"ml/h"},"secondary");
+sel("solute","อาหาร/solute",[["no","คงเดิม"],["yes","เริ่มอาหารปกติ"]]);
+sel("stopThz","Thiazide",[["yes","หยุดยา"],["no","ยังได้ยา"]]);
+
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?200:280,aria:"Serum sodium and urine flow over 48 hours",
+  x:{min:0,max:48,step:6,label:"Hours"},y:{min:105,max:140,step:5,label:"Serum Na (mmol/L)"},y2:{min:0,max:600,step:100,label:"Urine flow (ml/h)"},
+  series:[{id:"uf",name:"Urine flow",color:A.muted,data:[],width:1.3,dash:[3,3],axis:"y2"},{id:"na",name:"Serum Na",color:A.accent,data:[],width:2.8}],legend:true});
+
+function params(){ var o={}; for(var k in C) o[k]=C[k].get(); for(var j in SEL) o[j]=SEL[j].s.value; return o; }
+function simulate(p){
+  var frac=p.sex==="m"?0.6:p.sex==="f"?0.5:0.45, tbw=frac*p.w, cont=p.na*tbw, out=[], uf=[], adhH=[], uoH=[], tolH=[], nssGiven=0, efw=0, uo1=null, peak=0;
+  var baseSol=p.mech==="beer"?(p.solute==="yes"?700:250):(p.solute==="yes"?800:650);
+  var solute=baseSol+p.urea*16.7;              /* mOsm/day */
+  for(var h=0;h<=48;h++){
+    var na=cont/tbw; out.push([h,na]);
+    if(h===48) break;
+    /* inputs this hour */
+    var vin=p.restr/24, nain=solute*(p.mech==="beer"&&p.solute!=="yes"?0.3:0.42)/24;  /* dietary Na+K */
+    if(h===0&&p.bolus){ vin+=0.15*p.bolus; nain+=513*0.15*p.bolus; }
+    if(h<6&&p.nss){ var v=p.nss/6; vin+=v; nain+=154*v; nssGiven+=v; }
+    if(p.d5w) vin+=p.d5w/1000;
+    var infNa=nain-solute*(p.mech==="beer"&&p.solute!=="yes"?0.3:0.42)/24, solH=(solute+infNa)/24;   /* infused NaCl excreted gradually */
+    /* ADH state → minimal / fixed Uosm */
+    var uosm, unak;
+    var adh;
+    switch(p.mech){
+      case "siad": adh=true; break;
+      case "hypo": adh=nssGiven<1.5; break;
+      case "csw": adh=nssGiven<2.5; break;
+      case "thz": adh=p.stopThz==="no"||h<12; break;
+      case "beer": adh=false; break;
+      case "poly": adh=false; break;
+      case "reset": adh=na>127; break;
+    }
+    var normal=!adh&&na>=133&&p.mech!=="poly";   /* osmoregulation กลับมาเมื่อ Na ใกล้ปกติ */
+    if(p.ddavp==="yes") adh=true;
+    var tol=p.tolv&&h<24&&p.ddavp!=="yes";
+    if(adh&&!tol){ uosm=p.mech==="siad"?600:p.mech==="thz"?450:500; unak=p.mech==="hypo"?60:p.mech==="csw"?240:uosm*0.5; }
+    else if(normal&&!tol){ uosm=350; unak=150; }
+    else { uosm=tol?(p.tolv>=15?150:220):(p.mech==="beer"?70:p.mech==="poly"?60:100); unak=uosm*0.4; }
+    if(p.mech==="csw"){ solH+=8; unak=Math.max(unak,200); }
+    var vu=solH/uosm;                          /* L/h */
+    if(p.mech==="thz"&&adh) unak=Math.max(unak,180);
+    var naOut=vu*unak;
+    if(h===0) uo1=uosm;
+    adhH.push(adh); uoH.push(uosm); tolH.push(!!tol);
+    peak=Math.max(peak,vu*1000);
+    if(h<24) efw+=vu*(1-unak/na);
+    uf.push([h,vu*1000]);
+    cont+=nain-naOut; tbw+=vin-vu-0.035;
+  }
+  return {na:out,uf:uf,peak:peak,uo1:uo1,efw:efw,tbw0:frac*p.w,adh:adhH,uo:uoH,tol:tolH};
+}
+var live=Live.player(chart,{mount:"live"});
+function events(p,R){
+  var n0=p.na, E=[], f=function(x){ return x.toFixed(1); }, tbw=R.tbw0;
+  E.push({t:0,kind:"phys",text:"เริ่ม Na "+n0+" mmol/L TBW "+tbw.toFixed(1)+" L ("+MECH[p.mech].name+") Uosm "+R.uo[0]+(R.adh[0]?" เพราะ ADH ทำงาน":" ไตขับน้ำอิสระได้")});
+  if(p.bolus) E.push({t:0.05,kind:"rx",text:"3% NaCl 150 ml x "+p.bolus+" bolus (Na 513 mmol/L) ดึงน้ำออกจากเซลล์ทันที"});
+  if(p.nss) E.push({t:0.1,kind:"rx",text:"เริ่ม 0.9% NaCl "+p.nss+" L ใน 6 ชม."});
+  if(p.ddavp==="yes") E.push({t:0.15,kind:"rx",text:"Desmopressin clamp: ล็อก Uosm สูง ไตขับน้ำอิสระไม่ได้ Na ขึ้นตาม Na ที่ให้เท่านั้น"});
+  if(p.tolv) E.push({t:0.2,kind:"rx",text:"Tolvaptan "+p.tolv+" mg บล็อก V2 receptor Uosm ลดเหลือ "+(p.tolv>=15?150:220)});
+  if(p.d5w) E.push({t:0.25,kind:"rx",text:"D5W "+p.d5w+" ml/h ให้น้ำอิสระลด Na"});
+  if(p.mech==="beer"&&p.solute==="yes") E.push({t:0.3,kind:"rx",text:"เริ่มอาหาร: solute เพิ่ม ไตขับน้ำได้มากขึ้นทันที (Uosm ต่ำคงที่)"});
+  if(p.urea) E.push({t:0.35,kind:"rx",text:"Urea "+p.urea+" g/วัน เพิ่ม solute ทำให้ขับน้ำได้มากขึ้นที่ Uosm เดิม"});
+  if(p.nss) E.push({t:6,kind:"rx",text:"NSS ครบ "+p.nss+" L"});
+  for(var h=1;h<R.adh.length;h++){
+    if(R.adh[h-1]&&!R.adh[h]) E.push({t:h,kind:"warn",text:(p.mech==="hypo"?"Volume กลับมา: baroreceptor หยุดกระตุ้น ADH":p.mech==="thz"?"Thiazide หมดฤทธิ์ DCT กลับมา dilute ได้":p.mech==="csw"?"Volume กลับมา ADH หยุดหลั่ง":"ADH หยุดหลั่ง")+" Uosm ลดจาก "+R.uo[h-1]+" เหลือ "+R.uo[h]+" เกิด aquaresis"});
+    if(!R.adh[h-1]&&R.adh[h]) E.push({t:h,kind:"phys",text:"ADH กลับมาทำงาน Uosm "+R.uo[h]});
+    if(R.uo[h]!==R.uo[h-1]&&R.adh[h]===R.adh[h-1]&&R.uo[h]===350) E.push({t:h,kind:"ok",text:"Na ถึง 133: osmoregulation กลับมาปกติ"});
+    if(R.tol[h-1]&&!R.tol[h]) E.push({t:h,kind:"phys",text:"Tolvaptan หมดฤทธิ์"});
+  }
+  var u100=Live.cross(R.uf,100,1); if(u100!==null&&p.ddavp!=="yes") E.push({t:u100,kind:"warn",text:"Urine flow เกิน 100 ml/h และ dilute: สัญญาณเตือน overcorrection"});
+  var c4=Live.cross(R.na,n0+4,1); if(c4!==null) E.push({t:c4,kind:"ok",text:"Na เพิ่มถึง +4 ("+f(n0+4)+") ถ้ามีอาการ ถือว่าถึงเป้าแรก"});
+  var c8=Live.cross(R.na,n0+8,1); if(c8!==null) E.push({t:c8,kind:c8<=24?"warn":"phys",text:c8<=24?"เกินขีด +8 ภายใน "+c8.toFixed(1)+" ชม. เสี่ยง ODS":"ถึง +8 ที่ "+c8.toFixed(1)+" ชม. (หลัง 24 ชม. ยังอยู่ในขีด)"});
+  var d24=R.na[24][1]-n0; E.push({t:24,kind:d24>8||d24<0?"warn":"ok",text:"ครบ 24 ชม.: ΔNa "+(d24>=0?"+":"")+f(d24)});
+  var d48=R.na[48][1]-n0; E.push({t:48,kind:d48>16?"warn":"ok",text:"ครบ 48 ชม.: ΔNa "+(d48>=0?"+":"")+f(d48)});
+  return E.sort(function(a,b){ return a.t-b.t; });
+}
+var LAST=null, cell=Nephron.cell("cell","CCD",{level:"basic",levelButtons:false}), ckey="";
+function cellAt(t){
+  var R=LAST.R, p=LAST.p, h=Math.min(R.adh.length-1,Math.floor(t)), adh=R.adh[h], tol=R.tol[h], uo=R.uo[h], key=[adh,tol,uo,p.ddavp].join();
+  if(key===ckey) return; ckey=key;
+  var o={level:"basic",focus:["AQP2","V2R"],flows:{AQP2:uo>=450?1.8:uo>=300?1:uo>=200?0.4:0.08},badges:{lumen:"Urine "+uo+" mOsm"}};
+  if(p.ddavp==="yes"){ o.gain=["V2R"]; o.caption="Desmopressin keeps V2R switched on: AQP2 stays in, no aquaresis. Na rises only from the Na given."; }
+  else if(tol){ o.blocked=["V2R"]; o.caption="Tolvaptan blocks V2R: AQP2 is pulled out, urine dilutes to "+uo+" and free water is excreted."; }
+  else if(adh){ o.caption="ADH on: AQP2 in the membrane, water is reabsorbed. Urine "+uo+" mOsm, so free water is retained and Na stays low."; }
+  else if(uo===350){ o.caption="Na near normal: osmoregulation is back and ADH tracks plasma osmolality again."; }
+  else { o.caption="ADH off: AQP2 removed, urine "+uo+" mOsm. Free water pours out (aquaresis) and Na rises fast."; }
+  cell.update("CCD",o);
+}
+function onFrame(t,done){
+  cellAt(t);
+  var R=LAST.R, n0=LAST.n0, d=function(h){ return R.na[h][1]-n0; };
+  [[6,"ro6",function(x){ return LAST.p.bolus&&x<4||x>6?"flag":"ok"; }],[24,"ro24",function(x){ return x>8||x<0?"flag":"ok"; }],[48,"ro48",function(x){ return x>16?"flag":"ok"; }]].forEach(function(r){
+    if(t>=r[0]-1e-6){ var x=d(r[0]); Sim.ro(r[1],(x>=0?"+":"")+x.toFixed(1),r[2](x)); } else Sim.ro(r[1],"…");
+  });
+  var pk=0; R.uf.forEach(function(u){ if(u[0]<=t) pk=Math.max(pk,u[1]); });
+  Sim.ro("roUF",Math.round(pk),pk>150?"flag":false);
+  if(t>=24) Sim.ro("roEF",R.efw.toFixed(2),R.efw>1?"flag":false); else Sim.ro("roEF","…");
+  var act=document.getElementById("act");
+  if(!done){ act.innerHTML="<b>กำลังจำลอง</b> ชั่วโมงที่ "+Math.floor(t)+" Na "+Live.valueAt(R.na,t).toFixed(1)+" urine "+Math.round(Live.valueAt(R.uf,Math.min(t,47)))+" ml/h"; act.className="act"; }
+  else { act.innerHTML=LAST.act; act.className=LAST.actCls; }
+}
+function update(){
+  var p=params(), R=simulate(p), n0=p.na;
+  SEL.stopThz.el.style.display=p.mech==="thz"?"":"none";
+  SEL.solute.el.style.opacity=p.mech==="beer"?1:0.5;
+  var at=function(h){ return R.na[h][1]-n0; };
+  var mx=Math.max(n0+18,Math.ceil(Math.max.apply(null,R.na.map(function(d){ return d[1]; }))/5)*5+5), mn=Math.min(n0-4,Math.floor(Math.min.apply(null,R.na.map(function(d){ return d[1]; }))/5)*5);
+  var band=[]; for(var h=0;h<=48;h++) band.push([h,n0+(h<=24?8*h/24:8+8*(h-24)/24)]);
+  chart.update({y:{min:mn,max:mx,step:5,label:"Serum Na (mmol/L)"},y2:{min:0,max:Math.max(300,Math.ceil(R.peak/100)*100+100),label:"Urine flow (ml/h)"},
+    hlines:[{y:n0+8,label:"+8 (24 h limit)",color:A.red,dash:[5,4]},{y:n0+4,label:"+4",color:A.teal,dash:[2,3]}],
+    xbands:[{x0:0,x1:6,label:"0–6 h",color:"rgba(31,122,114,0.06)"}]});
+  chart.setSeries("na",R.na); chart.setSeries("uf",R.uf);
+  var d6=at(6), d24=at(24), d48=at(48);
+  Sim.ro("ro6",(d6>=0?"+":"")+d6.toFixed(1),p.bolus&&d6<4?"flag":d6>6?"flag":"ok");
+  Sim.ro("ro24",(d24>=0?"+":"")+d24.toFixed(1),d24>8?"flag":d24<0?"flag":"ok");
+  Sim.ro("ro48",(d48>=0?"+":"")+d48.toFixed(1),d48>16?"flag":"ok");
+  Sim.ro("roUF",Math.round(R.peak),R.peak>150?"flag":false);
+  Sim.ro("roUo",R.uo1);
+  Sim.ro("roEF",R.efw.toFixed(2),R.efw>1?"flag":false);
+  var tb=document.getElementById("lab"); tb.innerHTML=""; var L=MECH[p.mech].lab;
+  Object.keys(L).forEach(function(k){ tb.appendChild(Sim.h("tr",{},[Sim.h("td",{text:k}),Sim.h("td",{text:L[k]})])); });
+  var am=Calc.adrogueMadias({na:n0,infNa:513,infK:0,tbw:+R.tbw0.toFixed(1)});
+  am.steps.push({t:"150 ml bolus",f:Calc.f(am.value,2)+" × 0.15 = "+Calc.f(am.value*0.15,2)+" mmol/L ต่อ bolus"});
+  Calc.renderSteps("steps",am,{title:"Adrogué–Madias สำหรับ 3% NaCl (TBW "+R.tbw0.toFixed(1)+" L)"});
+  var act=document.getElementById("act"), m, bad=false;
+  if(d24>8){ bad=true; m="<b>Overcorrection "+d24.toFixed(1)+" mmol/L ใน 24 ชม.</b> ให้ D5W 3 ml/kg/h ร่วมกับ desmopressin 2 µg IV ทุก 6–8 ชม. ลด Na กลับให้อยู่ในขีด ตรวจ Na ทุก 1–2 ชม.";}
+  else if(d24<0){ bad=true; m="<b>Na ยังลดลง</b> "+(p.mech==="siad"?"จำกัดน้ำไม่พอเพราะ Uosm สูง เพิ่ม urea 15–30 g/วัน หรือ tolvaptan":p.mech==="csw"?"CSW ต้องทดแทน NaCl มากขึ้น ห้ามจำกัดน้ำ":"ทบทวนสารน้ำ hypotonic และน้ำดื่ม"); }
+  else if(p.bolus&&d6<4){ bad=true; m="<b>ยังไม่ถึงเป้า 4–6 mmol/L</b> ถ้ายังมีอาการให้ 3% NaCl 150 ml ซ้ำ ตรวจ Na หลังแต่ละ bolus"; }
+  else if(p.mech==="reset") m="<b>Reset osmostat</b> ไม่ต้องจำกัดน้ำหรือรักษา Na ติดตามโรคต้นเหตุ";
+  else if(R.peak>150&&p.ddavp!=="yes") { m="<b>Urine flow สูงและ dilute</b> เสี่ยง overcorrection ตรวจ Na ทุก 2–4 ชม. เตรียม DDAVP clamp"; bad=true; }
+  else m="<b>อยู่ในขีดปลอดภัย</b> ตรวจ Na ทุก 4–6 ชม. รักษาตามสาเหตุ ("+MECH[p.mech].name+")";
+  ckey=""; LAST={p:p,R:R,n0:n0,act:"<b>Next step:</b> "+m,actCls:"act"+(bad?" bad":"")};
+  live.load({tMax:48,unit:"ชม.",events:events(p,R),onFrame:onFrame,cursorLabel:function(t){ return "Na "+Live.valueAt(R.na,t).toFixed(1); },debounce:!!update.drag});
+  update.drag=false;
+}
+Sim.mount({code:"EL-03", title:"Hyponatremia: Mechanism and Correction", lead:"เลือกกลไกของ hyponatremia และการรักษา ดู Na และ urine flow 48 ชั่วโมง ว่าแก้ได้ตามเป้า ขึ้นช้าเกิน หรือ overcorrect เมื่อ ADH หยุดทำงาน",
+  scenarios:S, order:ORDER, captureMs:1400,
+  onChange:function(k,s){ var p=s.p; ["mech","sex","ddavp","solute","stopThz"].forEach(function(x){ SEL[x].s.value=p[x]; }); ["na","w","bolus","nss","restr","urea","tolv","d5w"].forEach(function(x){ C[x].set(p[x]); }); update(); },
+  refs:["Spasovski G, Vanholder R, Allolio B, et al. Clinical practice guideline on diagnosis and treatment of hyponatraemia. Nephrol Dial Transplant 2014, 29 Suppl 2: i1-i39",
+        "Verbalis JG, Goldsmith SR, Greenberg A, et al. Diagnosis, evaluation, and treatment of hyponatremia: expert panel recommendations. Am J Med 2013, 126(10 Suppl 1): S1-S42",
+        "Sterns RH, Hix JK, Silver S. Treating profound hyponatremia: a strategy for controlled correction. Am J Kidney Dis 2010, 56(4): 774-779",
+        "Fenske W, Störk S, Koschker AC, et al. Value of fractional uric acid excretion in differential diagnosis of hyponatremic patients on diuretics. J Clin Endocrinol Metab 2008, 93(8): 2991-2997",
+        "Baek SH, Jo YH, Ahn S, et al (SALSA). Risk of overcorrection in rapid intermittent bolus vs slow continuous infusion therapies of hypertonic saline for patients with symptomatic hyponatremia. JAMA Intern Med 2021, 181(1): 81-92"],
+  note:"Model เพื่อการสอน: Na = (exchangeable Na+K)/TBW รายชั่วโมง urine flow = solute excretion / Uosm โดย Uosm ขึ้นกับสถานะ ADH ของแต่ละกลไก (hypovolemic: ADH หยุดหลัง NSS ราว 1.5 L, thiazide หมดฤทธิ์ราว 12 ชม., reset osmostat หยุดเมื่อ Na < 127, ADH กลับมาทำงานปกติเมื่อ Na ≥ 133) insensible loss 35 ml/h ตัวเลขเป็นการประมาณ ไม่ใช่การทำนายรายบุคคล"
+});
+})();
+</script>
+</body>
+</html>

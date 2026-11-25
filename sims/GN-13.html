@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[GN-13] Hereditary Glomerular Disease: Pedigree and Phenotype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.2fr 1fr}}
+.sel{display:grid;grid-template-columns:minmax(90px,120px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px;margin:6px 0}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+table.cmp{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:10px}
+table.cmp td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+table.cmp td:first-child{color:var(--muted);width:34%}
+.act{margin-top:10px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .act{display:none}
+body.present .card{padding:14px 18px}
+body.present #ped{max-height:250px;width:auto!important;margin:0 auto}
+body.present #loop{max-height:200px;width:auto!important;margin:0 auto}
+body.present table.cmp td{padding:3px 8px;font-size:12.5px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Pedigree และ EM</h2>
+      <div class="svgwrap"><svg id="ped" viewBox="0 0 640 300" role="img" aria-label="Three-generation pedigree"></svg></div>
+      <div class="svgwrap" style="margin-top:10px"><svg id="loop" aria-label="EM of glomerular basement membrane"></svg></div>
+      <p class="hint no-present">สี่เหลี่ยม = ชาย วงกลม = หญิง ทึบ = มีโรค ครึ่งทึบ = หญิง heterozygous ใน X-linked (อาการแปรผันตาม X-inactivation) จุดกลาง = carrier ของ autosomal recessive ลูกศร = proband ภาพล่างคือ EM ที่เข้ากับโรค</p>
+    </div>
+    <div class="card">
+      <h2>โรค ยีน และ phenotype</h2>
+      <div class="sel"><label for="sDz">โรค</label><select id="sDz">
+        <option value="xlas">X-linked Alport (COL4A5)</option><option value="aras">Autosomal recessive Alport (COL4A3/4 biallelic)</option>
+        <option value="adas">Autosomal dominant Alport / thin GBM (COL4A3/4 heterozygous)</option><option value="fabry">Fabry disease (GLA)</option>
+        <option value="nphs2">Genetic SRNS (NPHS2)</option><option value="umod">ADTKD-UMOD</option></select></div>
+      <div class="sel"><label for="sSex">Proband</label><select id="sSex"><option value="m">ชาย</option><option value="f">หญิง</option></select></div>
+      <table class="cmp" id="tab"></table>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/patho.js"></script>
+<script>
+(function(){
+"use strict";
+var D = {
+  xlas:{inh:"XL", gene:"COL4A5 (α5 chain of type IV collagen)", kid:"Hematuria ตั้งแต่เด็ก, proteinuria วัยรุ่น, ESKD ในชาย median ราว 25–30 ปี (ขึ้นกับ variant)", fem:"หญิง heterozygous: hematuria เกือบทุกคน ราว 15–30% ถึง ESKD เมื่อสูงอายุ", extra:"Sensorineural hearing loss, anterior lenticonus, dot-and-fleck retinopathy", em:"GBM หนาบางสลับ lamellation (basket-weave)", test:"Genetic testing (COL4A3/4/5 panel), IHC α5(IV) หายในชาย mosaic ในหญิง", tx:"RAASi ตั้งแต่ microalbuminuria (หรือก่อนในชายที่มี variant รุนแรง) + SGLT2i ตรวจการได้ยินและตา", kt:"ชาย XLAS ได้ไตใหม่เสี่ยง anti-GBM disease (ราว 3–5%) ชาย XLAS ไม่บริจาคไต ส่วนหญิง heterozygous COL4A5 เป็น donor of last resort เท่านั้น เมื่ออายุ > 45 ปี ไม่มี proteinuria ไม่มี hearing loss และ kidney function ปกติ หลัง counseling", loop:{alport:true, effacement:0.5}},
+  aras:{inh:"AR", gene:"COL4A3 หรือ COL4A4 สองอัลลีล", kid:"ชายและหญิงรุนแรงเท่ากัน ESKD วัยรุ่นถึงผู้ใหญ่ตอนต้น", fem:"รุนแรงเหมือนชาย", extra:"Hearing loss, ocular change เหมือน XLAS", em:"Basket-weave GBM", test:"Genetic testing พ่อแม่เป็น carrier (มักมี hematuria เล็กน้อย)", tx:"RAASi เร็ว + SGLT2i", kt:"เสี่ยง post-transplant anti-GBM (anti-α3) พ่อแม่ heterozygous (carrier) ประเมินเฉพาะราย บริจาคได้ถ้าไม่มี proteinuria, HT หรือ eGFR ลด", loop:{alport:true, effacement:0.5}},
+  adas:{inh:"AD", gene:"COL4A3 หรือ COL4A4 heterozygous", kid:"Microscopic hematuria ต่อเนื่อง ส่วนหนึ่งมี proteinuria และ FSGS ภายหลัง ESKD ช้า (ผู้ใหญ่ตอนปลาย)", fem:"เหมือนชาย", extra:"ไม่ค่อยมี hearing loss หรือ ocular change", em:"GBM บางสม่ำเสมอ (< 250 nm) อาจมี lamellation เป็นจุด", test:"Genetic testing แยกจาก benign familial hematuria ไม่ใช้คำว่า thin basement membrane nephropathy อย่างเดียว", tx:"ติดตาม BP และ albuminuria ทุกปี RAASi เมื่อมี albuminuria", kt:"ญาติที่มี variant เดียวกันเสี่ยง CKD ภายหลัง ไม่ควรบริจาคไต", loop:{thin:true, effacement:0.2}},
+  fabry:{inh:"XL", gene:"GLA (α-galactosidase A) → Gb3 และ lyso-Gb3 สะสม", kid:"Albuminuria และ proteinuria อายุ 20–30 ปี, isosthenuria, ESKD ในชาย classic ราว 40 ปี", fem:"หญิง heterozygous อาการแปรผันจาก lyonization บางรายรุนแรงเท่าชาย", extra:"Acroparesthesia, angiokeratoma, hypohidrosis, cornea verticillata, LVH, arrhythmia, stroke อายุน้อย", em:"Zebra bodies (myelin figures) ใน podocyte ระวังยาที่ทำให้เกิดภาพคล้าย (hydroxychloroquine, amiodarone)", test:"ชาย: α-Gal A activity ต่ำ หญิง: activity อาจปกติ ต้องตรวจ GLA gene ติดตาม lyso-Gb3", tx:"ERT (agalsidase alfa/beta หรือ pegunigalsidase) หรือ migalastat ถ้า variant amenable ร่วม RAASi + SGLT2i", kt:"KT ได้ผลดี ต่อการรักษา Fabry หลังปลูกถ่ายเพราะโรคหัวใจและสมองยังดำเนินต่อ", loop:{effacement:0.4}, zebra:true},
+  nphs2:{inh:"AR", gene:"NPHS2 (podocin)", kid:"Steroid-resistant nephrotic syndrome ในเด็ก FSGS ESKD ภายในวัยเด็กถึงวัยรุ่น", fem:"เหมือนชาย", extra:"ไม่มีอาการนอกไต (ต่างจาก syndromic SRNS เช่น WT1, LAMB2)", em:"Effacement กระจาย ไม่มี deposit", test:"Genetic panel ใน SRNS ทุกราย โดยเฉพาะ onset ในขวบปีแรกหรือมีประวัติครอบครัว", tx:"หยุด immunosuppression ที่ไม่ได้ผล RAASi ลด proteinuria", kt:"Recurrence ต่ำ (ยกเว้นบาง variant ที่สร้าง antibody ต่อ podocin)", loop:{effacement:1}},
+  umod:{inh:"AD", gene:"UMOD (uromodulin)", kid:"CKD ค่อยเป็นค่อยไป urinalysis แทบปกติ proteinuria น้อย ESKD อายุ 30–60 ปี", fem:"เหมือนชาย", extra:"Hyperuricemia และ gout อายุน้อย", em:"ไม่มีความผิดปกติของ glomerulus (tubulointerstitial fibrosis)", test:"Genetic testing ใน CKD ไม่ทราบสาเหตุ + gout + ประวัติครอบครัว AD", tx:"Supportive, allopurinol สำหรับ gout, เตรียม KRT", kt:"ไม่ recur ใช้ญาติเป็นผู้บริจาคได้เมื่อตรวจยีนลบ", loop:{effacement:0.1}}
+};
+var S = {
+  xm:{name:"XLAS ชาย", p:{dz:"xlas", sex:"m"}, rows:[["Clinical","เด็กชาย 12 ปี hematuria ตั้งแต่ 3 ขวบ proteinuria 0.8 g/d ได้ยินลดลง"],["Family","น้าชายฟอกไตอายุ 28 แม่ microscopic hematuria"],["Genetics","COL4A5 hemizygous"]], take:["Hematuria ในครอบครัวฝั่งแม่ + hearing loss ชี้ X-linked Alport","ชาย XLAS ส่งต่อให้ลูกสาวทุกคนแต่ไม่ส่งให้ลูกชาย","RAASi เร็วชะลอ ESKD ได้หลายปี"]},
+  xf:{name:"XLAS หญิง heterozygous", p:{dz:"xlas", sex:"f"}, rows:[["Clinical","หญิง 35 ปี hematuria proteinuria 0.6 g/d"],["Family","ลูกชายมี hematuria"],["Genetics","COL4A5 heterozygous"]], take:["หญิง heterozygous ไม่ใช่แค่ carrier มีความเสี่ยง CKD จริง","อาการแปรผันตาม X-inactivation","ลูกชายมีโอกาสเป็นโรค 50%"]},
+  ar:{name:"ARAS", p:{dz:"aras", sex:"f"}, rows:[["Clinical","หญิง 16 ปี proteinuria 2 g/d hearing loss eGFR 60"],["Family","พ่อแม่ microscopic hematuria เล็กน้อย"],["Genetics","COL4A3 compound heterozygous"]], take:["Alport ที่หญิงรุนแรงเท่าชายให้คิด autosomal recessive","พ่อแม่เป็น heterozygous มัก hematuria เล็กน้อย","พี่น้องมีโอกาสเป็นโรค 25%"]},
+  ad:{name:"AD Alport / thin GBM", p:{dz:"adas", sex:"m"}, rows:[["Clinical","ชาย 40 ปี microscopic hematuria ต่อเนื่อง albuminuria 60 mg/g"],["Family","พ่อและพี่สาว hematuria พ่อ CKD G3 อายุ 65"],["EM","GBM บางสม่ำเสมอ"]], take:["Heterozygous COL4A3/4 ไม่ได้ benign เสมอ","Albuminuria และ HT บอกความเสี่ยงที่สูงขึ้น","ญาติที่มี variant เดียวกันของ autosomal dominant Alport ไม่ควรบริจาคไต"]},
+  fabry:{name:"Fabry หญิง", p:{dz:"fabry", sex:"f"}, rows:[["Clinical","หญิง 38 ปี proteinuria 1 g/d ปวดแสบปลายมือตั้งแต่เด็ก LVH"],["Eye","Cornea verticillata"],["Lab","α-Gal A activity ปกติ GLA variant พบ lyso-Gb3 สูง"]], take:["หญิง Fabry อาจมี enzyme activity ปกติ ต้องตรวจยีน","Zebra bodies ใน podocyte บน EM ชี้ Fabry","ERT หรือ migalastat ร่วม RAASi ช่วยชะลอ"]},
+  nphs2:{name:"NPHS2 SRNS", p:{dz:"nphs2", sex:"m"}, rows:[["Clinical","เด็กชาย 3 ปี nephrotic ไม่ตอบสนองต่อ steroid"],["Family","พ่อแม่เป็นญาติกัน"],["Genetics","NPHS2 homozygous"]], take:["SRNS ในเด็กส่ง genetic testing ก่อนเพิ่ม immunosuppression","Autosomal recessive พบบ่อยในครอบครัวที่แต่งงานในเครือญาติ","ไม่ต้องใช้ CNI ระยะยาวเมื่อยืนยัน genetic cause"]}
+};
+var sDz = document.getElementById("sDz"), sSex = document.getElementById("sSex");
+sDz.addEventListener("change", update); sSex.addEventListener("change", update);
+var ped = document.getElementById("ped"), loop = Patho.loop("loop", {labels:true});
+var FT = "IBM Plex Sans Thai, sans-serif";
+function sym(x, y, sex, st, proband, label){
+  var r = 16, g = Sim.svg("g", {}, ped), fill = st === "aff" ? "#0B0B1F" : "#FFFFFF";
+  if(sex === "m") Sim.svg("rect", {x:x - r, y:y - r, width:2 * r, height:2 * r, fill:fill, stroke:"#0B0B1F", "stroke-width":1.8}, g);
+  else Sim.svg("circle", {cx:x, cy:y, r:r, fill:fill, stroke:"#0B0B1F", "stroke-width":1.8}, g);
+  if(st === "het") { if(sex === "f") Sim.svg("path", {d:"M" + x + "," + (y - r) + " A" + r + "," + r + " 0 0 0 " + x + "," + (y + r) + "Z", fill:"#0B0B1F"}, g); else Sim.svg("rect", {x:x - r, y:y - r, width:r, height:2 * r, fill:"#0B0B1F"}, g); }
+  if(st === "car") Sim.svg("circle", {cx:x, cy:y, r:4.5, fill:"#0B0B1F"}, g);
+  if(proband) Sim.svg("path", {d:"M" + (x - 34) + "," + (y + 26) + " l14,-14 m-14,14 l2,-8 m-2,8 l8,-2", stroke:"#B4232A", "stroke-width":2, fill:"none"}, g);
+  if(label) Sim.svg("text", {x:x, y:y + 32, "text-anchor":"middle", "font-family":FT, "font-size":10, fill:"#5E6075", text:label}, g);
+}
+function line(x1, y1, x2, y2){ Sim.svg("line", {x1:x1, y1:y1, x2:x2, y2:y2, stroke:"#0B0B1F", "stroke-width":1.4}, ped); }
+function family(inh, sex){
+  // returns statuses: aff, het (XL female), car (AR carrier), "" normal
+  var f = {I1:"", I2:"", sib:["","","",""], sp:"", kids:["","",""]};
+  if(inh === "XL"){
+    if(sex === "m"){ f.I2 = "het"; f.pro = "aff"; f.sib = ["aff","het","",""]; f.kids = ["het","","het"]; }
+    else { f.I2 = "het"; f.pro = "het"; f.sib = ["aff","","het",""]; f.kids = ["aff","het",""]; }
+  } else if(inh === "AR"){ f.I1 = "car"; f.I2 = "car"; f.pro = "aff"; f.sib = ["car","aff","","car"]; f.kids = ["car","car","car"]; }
+  else { f.I1 = "aff"; f.pro = "aff"; f.sib = ["","aff","aff",""]; f.kids = ["aff","","aff"]; }
+  return f;
+}
+function drawPed(d, sex){
+  ped.innerHTML = "";
+  var f = family(d.inh, sex), yI = 40, yII = 140, yIII = 245;
+  Sim.svg("text", {x:12, y:yI + 5, "font-family":FT, "font-size":12, fill:"#9A9CB2", text:"I"}, ped);
+  Sim.svg("text", {x:12, y:yII + 5, "font-family":FT, "font-size":12, fill:"#9A9CB2", text:"II"}, ped);
+  Sim.svg("text", {x:12, y:yIII + 5, "font-family":FT, "font-size":12, fill:"#9A9CB2", text:"III"}, ped);
+  line(270, yI, 370, yI); line(320, yI, 320, yII - 46); line(110, yII - 46, 530, yII - 46);
+  sym(270, yI, "m", f.I1, false, "Father"); sym(370, yI, "f", f.I2, false, "Mother");
+  var sibSex = ["m","f","f","m"], xs = [110, 210, 410, 530];
+  xs.forEach(function(x, i){ line(x, yII - 46, x, yII - 16); sym(x, yII, sibSex[i], f.sib[i], false, null); });
+  line(310, yII - 46, 310, yII - 16);
+  sym(310, yII, sex, f.pro, true, "Proband");
+  var spx = 330 + 0; line(326, yII, 344, yII); sym(360, yII, sex === "m" ? "f" : "m", "", false, "Spouse");
+  line(335, yII, 335, yIII - 46); line(250, yIII - 46, 420, yIII - 46);
+  var ks = ["f","m","f"], kx = [250, 335, 420];
+  if(sex === "f") ks = ["m","f","m"];
+  kx.forEach(function(x, i){ line(x, yIII - 46, x, yIII - 16); sym(x, yIII, ks[i], f.kids[i], false, null); });
+  Sim.svg("text", {x:628, y:24, "text-anchor":"end", "font-family":FT, "font-size":12, "font-weight":600, fill:"#0B0B1F", text:d.inh === "XL" ? "X-linked" : d.inh === "AR" ? "Autosomal recessive" : "Autosomal dominant"}, ped);
+}
+function update(){
+  var d = D[sDz.value], sex = sSex.value;
+  drawPed(d, sex);
+  var o = {deposits:[], effacement:0, alport:false, thin:false, title:null}; Object.keys(d.loop).forEach(function(k){ o[k] = d.loop[k]; }); loop.update(o);
+  if(d.zebra){ var g = loop.geom; for(var i = 0; i < 4; i++){ var cx = 230 + i * 34, cy = 46 + (i % 2) * 8; for(var r = 3; r <= 12; r += 3) Sim.svg("circle", {cx:cx, cy:cy, r:r, fill:"none", stroke:"#2B2346", "stroke-width":1.2}, loop.svg); }
+    Sim.svg("text", {x:420, y:20, "font-family":FT, "font-size":12, fill:"#2B2346", text:"Zebra bodies in podocyte"}, loop.svg); }
+  var tab = document.getElementById("tab"); tab.innerHTML = "";
+  [["Gene",d.gene],["Inheritance",{XL:"X-linked",AR:"Autosomal recessive",AD:"Autosomal dominant"}[d.inh]],["ไต",d.kid],["เพศหญิง",d.fem],["นอกไต",d.extra],["EM",d.em],["ยืนยัน",d.test]].forEach(function(r){ tab.appendChild(Sim.h("tr", {}, [Sim.h("td", {text:r[0]}), Sim.h("td", {text:r[1]})])); });
+  var risk = d.inh === "XL" ? (sex === "m" ? "ลูกสาวทุกคนได้ variant ลูกชายไม่ได้" : "ลูกแต่ละคนมีโอกาสได้ variant 50% ลูกชายที่ได้จะเป็นโรคเต็มรูป") : d.inh === "AR" ? "พี่น้องเสี่ยงเป็นโรค 25% ลูกเป็น carrier (ถ้าคู่สมรสไม่มี variant)" : "ลูกแต่ละคนเสี่ยง 50%";
+  document.getElementById("act").innerHTML = "<b>Family risk:</b> " + risk + "<br><b>Treatment:</b> " + d.tx + "<br><b>Transplant:</b> " + d.kt;
+}
+Sim.mount({code:"GN-13", title:"Hereditary Glomerular Disease: Pedigree and Phenotype",
+  lead:"เลือกโรคและเพศของ proband ดู pedigree 3 รุ่นตามรูปแบบการถ่ายทอด phenotype ในไตและนอกไต ภาพ EM และสิ่งที่ต้องคิดเรื่องการรักษา การคัดกรองญาติ และการปลูกถ่ายไต",
+  scenarios:S, order:["xm","xf","ar","ad","fabry","nphs2"], captureMs:800,
+  onChange:function(k, s){ sDz.value = s.p.dz; sSex.value = s.p.sex; update(); },
+  refs:["Kashtan CE, Gross O. Clinical practice recommendations for the diagnosis and management of Alport syndrome in children, adolescents, and young adults: an update for 2020. Pediatr Nephrol 2021, 36(3): 711-719",
+        "Savige J, Lipska-Zietkiewicz BS, Watson E, et al. Guidelines for genetic testing and management of Alport syndrome. Clin J Am Soc Nephrol 2022, 17(1): 143-154",
+        "Gross O, Tönshoff B, Weber LT, et al. A multicenter, randomized, placebo-controlled, double-blind phase 3 trial with open-arm comparison indicates safety and efficacy of nephroprotective therapy with ramipril in children with Alport's syndrome (EARLY PRO-TECT). Kidney Int 2020, 97(6): 1275-1286",
+        "Ortiz A, Germain DP, Desnick RJ, et al. Fabry disease revisited: management and treatment recommendations for adult patients. Mol Genet Metab 2018, 123(4): 416-427",
+        "Trautmann A, Vivarelli M, Samuel S, et al. IPNA clinical practice recommendations for the diagnosis and management of children with steroid-resistant nephrotic syndrome. Pediatr Nephrol 2020, 35(8): 1529-1561",
+        "Eckardt KU, Alper SL, Antignac C, et al. Autosomal dominant tubulointerstitial kidney disease: diagnosis, classification, and management. A KDIGO consensus report. Kidney Int 2015, 88(4): 676-683"],
+  note:"Pedigree เป็นตัวอย่างหนึ่งของรูปแบบการถ่ายทอด ครอบครัวจริงแปรผันได้ (de novo variant, penetrance ไม่สมบูรณ์)"
+});
+})();
+</script>
+</body>
+</html>

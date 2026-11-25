@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[MX-01] Diagnostic Test Lab: Bayes, PPV and Likelihood Ratios</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.25fr 1fr}}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:10px}
+.sub{font-size:12.5px;color:var(--muted);margin:14px 0 4px}
+.gap{height:10px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .steps{display:none}
+body.present .card{padding:14px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .ro{padding:6px 12px}
+body.present .ro b{font-size:18px}
+body.present .ctls{gap:2px}
+body.present .ctl{font-size:13px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .tools{margin-top:4px;gap:5px}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+body.present .sub{margin:6px 0 2px}
+body.present .svgwrap svg{max-height:278px}
+body.present .gap{height:2px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>ผู้ป่วย 1,000 คนที่ได้รับการตรวจ</h2>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 640 410" role="img" aria-label="Icon array of one thousand patients with a two by two table and pre to post-test probability"></svg></div>
+      <div class="gap"></div>
+      <div id="curve"></div>
+      <p class="hint no-present">จุดแต่ละจุดคือผู้ป่วย 1 คน สีเข้ม = TP, แดง = FP, วงกลมกลวงสีเข้ม = FN, เทาอ่อน = TN แถบล่างซ้ายคือ probability ก่อนตรวจ หลังผลบวก และหลังผลลบ กราฟล่างแสดงว่า PPV และ NPV เปลี่ยนตาม prevalence อย่างไรเมื่อ sens และ spec คงเดิม (แกน x เป็น log)</p>
+    </div>
+    <div class="card">
+      <h2>คุณสมบัติของ test และ prevalence</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="sub">ตรวจซ้ำแบบ serial (ตรวจที่สองเฉพาะรายที่ผลแรกบวก)</div>
+      <div class="tools" id="tools"></div>
+      <div class="ctls" id="ctls2"></div>
+      <div class="readout">
+        <div class="ro" id="roPPV"><b>-</b><span>PPV</span></div>
+        <div class="ro" id="roNPV"><b>-</b><span>NPV</span></div>
+        <div class="ro" id="roFP"><b>-</b><span>FP ต่อ TP 1 ราย</span></div>
+        <div class="ro" id="roLRp"><b>-</b><span>LR+</span></div>
+        <div class="ro" id="roLRn"><b>-</b><span>LR−</span></div>
+        <div class="ro" id="roSer"><b>-</b><span>Post-test หลังตรวจ 2 ครั้ง</span></div>
+      </div>
+      <div class="act" id="act"></div>
+      <div id="steps" class="no-present"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/calc.js"></script>
+<script src="../core/plot.js"></script>
+<script>
+(function(){
+"use strict";
+function SV(t,a,p){ var b={}; for(var k in a) if(a[k]!==null&&a[k]!==undefined) b[k]=a[k]; return Sim.svg(t,b,p); }
+function P(o){ var d={sens:90,spec:90,prev:10,ser:false,sens2:95,spec2:95,ctx:"",test:"Test"}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  base:{name:"พื้นฐาน sens 90 spec 90", p:P({}),
+    rows:[["Test","sens 90% spec 90%"],["Prevalence","10%"],["ผล","PPV 50% บวก 2 รายเป็นจริง 1 ราย"]],
+    take:["Sensitivity และ specificity เป็นคุณสมบัติของ test ส่วน PPV และ NPV ขึ้นกับ prevalence ของกลุ่มที่ตรวจ","Test ที่ sens และ spec 90% ยังให้ PPV เพียงครึ่งเดียวเมื่อ prevalence 10%","LR+ = sens/(1 − spec) และ LR− = (1 − sens)/spec ใช้แปลง pre-test เป็น post-test odds ได้ทุก prevalence"]},
+  decoy:{name:"Decoy cell กับ BKVAN", p:P({sens:100,spec:71,prev:8,test:"Urine decoy cells",ctx:"bk"}),
+    rows:[["Test","urine decoy cells (sens ราว 100% spec ราว 70%)"],["Prevalence","BKVAN ราว 8% ในผู้รับไตปีแรก"],["ผล","PPV ราว 20% NPV 100%"]],
+    take:["Decoy cell เป็น screening test ที่ดี: ผลลบตัด BKVAN ได้แทบทั้งหมด","ผลบวกส่วนใหญ่เป็น viruria โดยไม่มี nephropathy จึงต้องยืนยันด้วย plasma BK PCR","Screening ใช้ test ที่ sensitivity สูง ยืนยันด้วย test ที่ specificity สูง"]},
+  serial:{name:"Decoy แล้วตาม BK PCR", p:P({sens:100,spec:71,prev:8,ser:true,sens2:100,spec2:88,test:"Urine decoy cells",ctx:"bk"}),
+    rows:[["Test 1","decoy cells (sens 100% spec 71%)"],["Test 2","plasma BK PCR สูงในรายที่ test 1 บวก (spec ราว 88%)"],["ผล","post-test ราว 70% ก่อนตัดสินใจ biopsy หรือลด IS"]],
+    take:["Serial testing: post-test probability ของ test แรกกลายเป็น pre-test ของ test ที่สอง","ตรวจที่สองเฉพาะรายที่บวกช่วยเพิ่ม specificity รวมโดยแลกกับ sensitivity","Biopsy ยืนยัน BKVAN เมื่อ viremia สูงต่อเนื่องหรือ Cr ขึ้น"]},
+  ancaLow:{name:"ANCA ใน prevalence ต่ำ", p:P({sens:85,spec:98,prev:1,test:"MPO/PR3 ANCA ELISA",ctx:"anca"}),
+    rows:[["Test","MPO/PR3 ANCA (sens 85% spec 98%)"],["Prevalence","1% (hematuria เล็กน้อย ไม่มี RPGN)"],["ผล","PPV ราว 30% ผลบวกส่วนใหญ่เป็น false positive"]],
+    take:["Test ที่ specificity สูงมากก็ยังให้ PPV ต่ำเมื่อ prevalence ต่ำ","สั่ง ANCA เมื่อมี clinical picture ของ vasculitis หรือ RPGN","ANCA บวกโดย pre-test ต่ำ ต้องหาเหตุอื่น เช่น ยา, infection, IBD"]},
+  ancaHigh:{name:"ANCA ใน RPGN", p:P({sens:85,spec:98,prev:50,test:"MPO/PR3 ANCA ELISA",ctx:"anca"}),
+    rows:[["Test","MPO/PR3 ANCA เดิม"],["Prevalence","50% (RPGN + pulmonary-renal)"],["ผล","PPV ราว 98% เริ่มรักษาได้ก่อนผล biopsy"]],
+    take:["Test เดียวกันให้ PPV สูงมากเมื่อ pre-test สูง","ใน RPGN ที่ ANCA บวก เริ่ม induction ได้ทันทีถ้า biopsy ต้องรอหรือเสี่ยง","ผลลบใน pre-test สูงยังไม่ตัดโรค (NPV ต่ำลง) โดยเฉพาะ ANCA-negative pauci-immune GN"]},
+  pla2r:{name:"Anti-PLA2R ใน nephrotic", p:P({sens:75,spec:99,prev:35,test:"Anti-PLA2R ELISA",ctx:"pla2r"}),
+    rows:[["Test","anti-PLA2R (sens ราว 75% spec ราว 99%)"],["Prevalence","primary MN ราว 35% ของ adult nephrotic"],["ผล","PPV ราว 98% วินิจฉัย MN ได้โดยไม่ต้อง biopsy ในบางราย"]],
+    take:["Specificity ที่สูงมาก (LR+ สูง) ทำให้ผลบวก rule in ได้","Anti-PLA2R บวก + eGFR ปกติ + ไม่มีเหตุ secondary พิจารณาไม่ biopsy ได้","ผลลบไม่ตัด MN (sensitivity ราว 75%) ยังต้อง biopsy"]}
+};
+var ORDER=["base","decoy","serial","ancaLow","ancaHigh","pla2r"];
+var box=document.getElementById("ctls"), box2=document.getElementById("ctls2"), C={};
+function sl(k,o,b){ o.id="s"+k; o.onInput=function(){ update(); }; C[k]=Sim.slider(o); (b||box).appendChild(C[k].el); }
+sl("sens",{label:"Sensitivity",min:50,max:100,step:1,value:90,unit:" %"});
+sl("spec",{label:"Specificity",min:50,max:100,step:1,value:90,unit:" %"});
+sl("prev",{label:"Prevalence (pre-test)",min:0.5,max:80,step:0.5,value:10,unit:" %"});
+var tb=document.getElementById("tools");
+var serB=Sim.toggle("ตรวจซ้ำในรายที่บวก",function(){ update(); },false); tb.appendChild(serB);
+sl("sens2",{label:"Test 2 sensitivity",min:50,max:100,step:1,value:95,unit:" %"},box2);
+sl("spec2",{label:"Test 2 specificity",min:50,max:100,step:1,value:95,unit:" %"},box2);
+function serOn(){ return serB.getAttribute("aria-pressed")==="true"; }
+var CTX="", TEST="Test";
+var A=Plot.colors;
+var curve=Plot.chart(document.getElementById("curve"),{height:Sim.present?185:210,aria:"PPV and NPV versus prevalence",
+  x:{min:0.5,max:80,log:true,label:"Prevalence (%)"},y:{min:0,max:100,step:20,label:"Predictive value (%)"},
+  series:[{id:"ppv",name:"PPV",color:A.accent,data:[],width:2.4},{id:"npv",name:"NPV",color:A.teal,data:[],width:2.4,dash:[6,4]}],legend:true});
+var svg=document.getElementById("vis"), INK="#0B0B1F", MUT="#5E6075", ACC="#5B4BFF", RED="#B4232A", TEAL="#1F7A72", LINE="#D3D5E2";
+function tx(x,y,s,o){ o=o||{}; return SV("text",{x:x,y:y,"text-anchor":o.a||"middle","font-family":o.mono?"Geist Mono, monospace":"IBM Plex Sans Thai, sans-serif","font-size":o.fs||12,"font-weight":o.fw||400,fill:o.fill||INK,text:s},svg); }
+function draw(r,post2){
+  svg.innerHTML="";
+  var tp=Math.round(r.tp), fn=Math.round(r.fn), fp=Math.round(r.fp), tn=1000-tp-fn-fp;
+  /* icon array 40 x 25, disease first (TP then FN), then FP, then TN */
+  var cells=[]; for(var i=0;i<tp;i++) cells.push("tp"); for(i=0;i<fn;i++) cells.push("fn"); for(i=0;i<fp;i++) cells.push("fp"); while(cells.length<1000) cells.push("tn");
+  tx(20,18,"1,000 patients tested",{a:"start",fs:13,fw:600});
+  var x0=20,y0=30,d=9.2;
+  cells.forEach(function(c,j){ var cx=x0+(j%40)*d+d/2, cy=y0+Math.floor(j/40)*d+d/2;
+    if(c==="tp") SV("circle",{cx:cx,cy:cy,r:3.6,fill:INK},svg);
+    else if(c==="fn") SV("circle",{cx:cx,cy:cy,r:3.1,fill:"#fff",stroke:INK,"stroke-width":1.2},svg);
+    else if(c==="fp") SV("circle",{cx:cx,cy:cy,r:3.6,fill:RED},svg);
+    else SV("circle",{cx:cx,cy:cy,r:3.2,fill:"#E6E7F0"},svg); });
+  /* legend */
+  var ly=y0+25*d+16;
+  [["TP",INK,"fill"],["FN",INK,"ring"],["FP",RED,"fill"],["TN","#E6E7F0","fill"]].forEach(function(l,j){ var lx=24+j*90;
+    if(l[2]==="ring") SV("circle",{cx:lx,cy:ly-4,r:4,fill:"#fff",stroke:l[1],"stroke-width":1.3},svg); else SV("circle",{cx:lx,cy:ly-4,r:4.5,fill:l[1]},svg);
+    tx(lx+10,ly,l[0],{a:"start",fs:11.5,fill:MUT}); });
+  /* 2x2 table */
+  var tx0=412,ty0=30,cw=104,ch=44;
+  tx(tx0+cw,ty0+12,"Disease +",{fs:11.5,fw:600,fill:MUT}); tx(tx0+cw*2,ty0+12,"Disease −",{fs:11.5,fw:600,fill:MUT});
+  var rows=[["Test +",tp,"TP",fp,"FP"],["Test −",fn,"FN",tn,"TN"]];
+  rows.forEach(function(rw,i){ var y=ty0+22+i*ch;
+    tx(tx0+20,y+ch/2+4,rw[0],{fs:11.5,fw:600,fill:MUT});
+    [[rw[1],rw[2]],[rw[3],rw[4]]].forEach(function(v,j){ var x=tx0+cw/2+j*cw+8;
+      var hot=(v[1]==="TP"||v[1]==="TN");
+      SV("rect",{x:x,y:y,width:cw-4,height:ch-4,rx:10,fill:v[1]==="FP"?"#FBE9EA":hot?"#F4F5F9":"#fff",stroke:LINE},svg);
+      tx(x+(cw-4)/2,y+20,String(v[0]),{fs:16,fw:600,mono:true,fill:v[1]==="FP"?RED:INK});
+      tx(x+(cw-4)/2,y+34,v[1],{fs:10,fill:MUT}); }); });
+  var sy=ty0+22+2*ch+18;
+  tx(tx0+cw*1.5+4,sy,"PPV = TP/(TP + FP) = "+tp+"/"+(tp+fp),{fs:11.5,mono:true});
+  tx(tx0+cw*1.5+4,sy+18,"NPV = TN/(TN + FN) = "+tn+"/"+(tn+fn),{fs:11.5,mono:true});
+  /* probability bars */
+  var by=318;
+  tx(20,by-10,"Probability of disease",{a:"start",fs:13,fw:600});
+  var bars=[["Pre-test",r.prev*100,MUT],["After positive",r.ppv*100,ACC],["After negative",(1-r.npv)*100,TEAL]];
+  if(post2!==null) bars.push(["After 2 positives",post2,INK]);
+  bars.forEach(function(b,j){ var y=by+j*24;
+    tx(20,y+13,b[0],{a:"start",fs:11.5,fill:MUT});
+    SV("rect",{x:150,y:y+2,width:400,height:14,rx:7,fill:"#F4F5F9"},svg);
+    SV("rect",{x:150,y:y+2,width:Math.max(2,b[1]/100*400),height:14,rx:7,fill:b[2]},svg);
+    tx(560,y+14,(b[1]<1?b[1].toFixed(1):b[1].toFixed(0))+"%",{a:"start",fs:12,mono:true}); });
+}
+function update(){
+  var sens=C.sens.get()/100, spec=Math.min(0.999,C.spec.get()/100), prev=C.prev.get()/100, ser=serOn();
+  var r=Calc.dx2x2({sens:Math.min(0.9999,sens),spec:spec,prev:prev,n:1000});
+  var post2=null;
+  if(ser){ var s2=Math.min(0.9999,C.sens2.get()/100), sp2=Math.min(0.999,C.spec2.get()/100); post2=Calc.postTest({pre:Math.min(0.999,r.ppv),lr:s2/(1-sp2)}).value; }
+  draw(r,post2);
+  var P1=[],N1=[]; for(var i=0;i<=80;i++){ var pv=0.5*Math.pow(160,i/80)/100; var q=Calc.dx2x2({sens:Math.min(0.9999,sens),spec:spec,prev:pv,n:1000}); P1.push([pv*100,q.ppv*100]); N1.push([pv*100,q.npv*100]); }
+  curve.setSeries("ppv",P1); curve.setSeries("npv",N1);
+  curve.update({vlines:[{x:prev*100,label:"Prev "+(prev*100).toFixed(prev<0.1?1:0)+"%"}],marks:[{x:prev*100,y:r.ppv*100,label:"PPV "+(r.ppv*100).toFixed(0),color:A.accent,below:true}]});
+  Sim.ro("roPPV",(r.ppv*100).toFixed(r.ppv<0.1?1:0)+"%",r.ppv<0.5?"flag":"ok");
+  Sim.ro("roNPV",(r.npv*100).toFixed(r.npv>0.995?1:0)+"%",r.npv<0.9?"flag":"ok");
+  var fpPer=r.tp>0?r.fp/r.tp:Infinity;
+  Sim.ro("roFP",isFinite(fpPer)?fpPer.toFixed(1):"–",fpPer>1?"flag":null);
+  Sim.ro("roLRp",r.lrPos>99?">99":r.lrPos.toFixed(1),r.lrPos>=10?"ok":r.lrPos<2?"flag":null);
+  Sim.ro("roLRn",r.lrNeg.toFixed(2),r.lrNeg<=0.1?"ok":r.lrNeg>0.5?"flag":null);
+  Sim.ro("roSer",post2===null?"–":post2.toFixed(0)+"%",post2!==null?(post2>=70?"ok":"flag"):null);
+  Calc.renderSteps(document.getElementById("steps"),r,{title:"Worked steps (N 1,000)"});
+  var m, bad=false;
+  if(CTX==="bk"&&!ser){ m="<b>Decoy cell บวก</b> PPV ต่ำ ส่ง plasma BK PCR ยืนยันก่อน ผลลบ (NPV สูง) ตัด BKVAN ได้"; bad=r.ppv<0.5; }
+  else if(CTX==="bk"&&ser){ m="<b>Viremia ยืนยันแล้ว</b> ลด antimetabolite ก่อน ติดตาม BK load ทุก 2–4 สัปดาห์ biopsy เมื่อ Cr ขึ้น (ดู KT-06)"; }
+  else if(CTX==="anca"&&prev<0.1){ m="<b>Pre-test ต่ำ</b> ANCA บวกส่วนใหญ่เป็น false positive ประเมิน clinical ซ้ำ ไม่เริ่ม immunosuppression จากผล ANCA อย่างเดียว"; bad=true; }
+  else if(CTX==="anca"){ m="<b>Pre-test สูง</b> ANCA บวกเริ่ม induction ได้ ไม่ต้องรอ biopsy ถ้า biopsy ล่าช้าหรือเสี่ยง (ดู GN-10)"; }
+  else if(CTX==="pla2r"){ m="<b>Anti-PLA2R บวก</b> ถ้า eGFR ปกติและไม่มีเหตุ secondary พิจารณาไม่ biopsy ผลลบยังต้อง biopsy"; }
+  else if(r.ppv<0.5){ m="<b>PPV "+(r.ppv*100).toFixed(0)+"%</b> ผลบวกเป็นจริงไม่ถึงครึ่ง ใช้ test ที่ specificity สูงยืนยัน หรือตรวจเฉพาะกลุ่มที่ pre-test สูงขึ้น"; bad=true; }
+  else m="<b>PPV "+(r.ppv*100).toFixed(0)+"% NPV "+(r.npv*100).toFixed(0)+"%</b> ใช้ผลตัดสินใจได้ ลองลด prevalence เพื่อดู PPV ตก";
+  var a=document.getElementById("act"); a.innerHTML="<b>Next step:</b> "+m; a.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"MX-01", title:"Diagnostic Test Lab: Bayes, PPV and Likelihood Ratios", lead:"ขยับ sensitivity, specificity และ prevalence แล้วดูผู้ป่วย 1,000 คนกระจายเป็น TP, FP, FN, TN ดู PPV และ NPV เปลี่ยนตาม pre-test probability และลองตรวจซ้ำแบบ serial",
+  scenarios:S, order:ORDER, captureMs:800,
+  onChange:function(k,s){ ["sens","spec","prev","sens2","spec2"].forEach(function(x){ C[x].set(s.p[x]); }); serB.setState(s.p.ser); CTX=s.p.ctx; TEST=s.p.test; update(); },
+  refs:["Altman DG, Bland JM. Diagnostic tests 2: predictive values. BMJ 1994, 309(6947): 102",
+        "Deeks JJ, Altman DG. Diagnostic tests 4: likelihood ratios. BMJ 2004, 329(7458): 168-169",
+        "Hirsch HH, Knowles W, Dickenmann M, et al. Prospective study of polyomavirus type BK replication and nephropathy in renal-transplant recipients. N Engl J Med 2002, 347(7): 488-496",
+        "Hirsch HH, Randhawa PS, AST Infectious Diseases Community of Practice. BK polyomavirus in solid organ transplantation. Clin Transplant 2019, 33(9): e13528",
+        "Bossuyt X, Cohen Tervaert JW, Arimura Y, et al. Revised 2017 international consensus on testing of ANCAs in granulomatosis with polyangiitis and microscopic polyangiitis. Nat Rev Rheumatol 2017, 13(11): 683-692",
+        "Du Y, Li J, He F, et al. The diagnosis accuracy of PLA2R-AB in the diagnosis of idiopathic membranous nephropathy: a meta-analysis. PLoS One 2014, 9(8): e104936",
+        "KDIGO Glomerular Diseases Work Group. KDIGO 2021 clinical practice guideline for the management of glomerular diseases. Kidney Int 2021, 100(4S): S1-S276"],
+  note:"ค่า sensitivity และ specificity ในแต่ละ scenario เป็นค่าประมาณจากการศึกษาที่อ้างอิง ใช้เพื่อการสอน Serial test สมมติว่าผลของสอง test เป็นอิสระต่อกันเมื่อรู้สถานะโรค"
+});
+})();
+</script>
+</body>
+</html>

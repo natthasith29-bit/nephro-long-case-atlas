@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[HD-08] Blood Volume Monitoring, Dry Weight and IDH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(120px,160px) 1fr 100px}
+.kv{display:grid;grid-template-columns:1fr auto;gap:2px 12px;font-size:13.5px;margin-top:10px}
+.kv span:nth-child(odd){color:var(--muted)}
+.kv span:nth-child(even){font-family:var(--mono);text-align:right}
+body.present .bench{grid-template-columns:1.5fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .readout{grid-template-columns:repeat(3,1fr)}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Relative blood volume และ SBP ระหว่างฟอก</h2>
+      <div id="chart"></div>
+      <div class="tools no-present">
+        <button class="tog" type="button" id="tDM" aria-pressed="false">Autonomic dysfunction (DM)</button>
+      </div>
+      <p class="hint no-present">RBV ลดเมื่อ UF เร็วกว่า plasma refill เส้นประคือ critical RBV ของผู้ป่วยรายนี้ ถ้า RBV ต่ำกว่าเส้นมักเกิดอาการ</p>
+    </div>
+    <div class="card">
+      <h2>Prescription และสภาพผู้ป่วย</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roUFR"><b>-</b><span>UFR (ml/kg/h)</span></div>
+        <div class="ro" id="roRBV"><b>-</b><span>RBV ท้ายฟอก (%)</span></div>
+        <div class="ro" id="roNadir"><b>-</b><span>SBP ต่ำสุด (mmHg)</span></div>
+        <div class="ro" id="roIDH"><b>-</b><span>IDH</span></div>
+        <div class="ro" id="roRes"><b>-</b><span>น้ำเกินที่เหลือ (L)</span></div>
+        <div class="ro" id="roSlope"><b>-</b><span>RBV slope ชั่วโมงแรก (%/h)</span></div>
+      </div>
+      <div class="kv secondary" id="kv"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script>
+(function(){
+"use strict";
+var S = {
+  normal:{name:"UF เหมาะสม", p:{dw:60,pre:62.5,target:60,t:240,alb:4.0,T:36.5,naD:138,sbp:150}, dm:false,
+    rows:[["IDWG","2.5 kg (ราว 4% ของ dry weight)"],["UFR","ราว 10 ml/kg/h"],["RBV","ลดลงช้าๆ จนเหลือราว 90% ไม่ต่ำกว่า critical RBV"]],
+    take:["RBV สะท้อนความสมดุลระหว่าง UF rate กับ plasma refill ไม่ใช่ volume status โดยตรง","UFR > 13 ml/kg/h สัมพันธ์กับ mortality และ IDH ให้ลด UFR ด้วยการเพิ่มเวลาหรือลด IDWG","RBV ที่แทบไม่ลดเลยทั้งที่ UF ตามปกติ ชวนให้สงสัยว่ายังมีน้ำเกินในช่องนอกหลอดเลือดมาก ต้องยืนยันด้วยการประเมินทางคลินิก"],
+    quiz:[{q:"ผู้ป่วย IDWG 2.5 kg UFR 10 ml/kg/h RBV ท้ายฟอก 90% BP คงที่ ไม่บวม ข้อใดเหมาะที่สุด",opts:["คง dry weight และ prescription เดิม","ลด dry weight ลง 1 kg ทันที","เพิ่ม dialysate Na","ให้ midodrine ก่อนฟอก"],ans:0,why:"UFR ต่ำกว่า 13 ml/kg/h ไม่มีอาการ ไม่มีน้ำเกิน จึงคงเดิม"}]},
+  highUFR:{name:"IDWG มาก UFR สูง", p:{dw:60,pre:64.8,target:60,t:240,alb:4.0,T:36.5,naD:138,sbp:150}, dm:false,
+    rows:[["IDWG","4.8 kg (8% ของ dry weight)"],["UFR","20 ml/kg/h เกิน 13 มาก"],["RBV","ลดชันตั้งแต่ชั่วโมงแรก ต่ำกว่า critical RBV แล้วเกิด IDH และตะคริว"]],
+    take:["แก้ที่ UFR ไม่ใช่ลด dry weight: เพิ่มเวลา, เพิ่ม session, จำกัด Na และน้ำดื่ม","ไม่ควรตั้ง dialysate Na สูงเพื่อกัน IDH เพราะเพิ่มกระหาย IDWG และ BP","Cool dialysate ช่วยลด IDH ได้ระดับหนึ่ง"],
+    quiz:[{q:"ผู้ป่วย 60 kg มา IDWG 4.8 kg ต้องดึงหมดใน 4 ชั่วโมง ชั่วโมงที่ 3 เกิด SBP 82 และตะคริว ข้อใดเป็นการแก้ระยะยาวที่เหมาะที่สุด",opts:["เพิ่ม dialysate Na เป็น 145 ทุกครั้ง","เพิ่มเวลาฟอกหรือเพิ่ม session ร่วมกับให้คำแนะนำจำกัด Na และน้ำ","ลด dry weight ลง","ให้ albumin ทุก session"],ans:1,why:"ปัญหาคือ UFR 20 ml/kg/h ต้องลด UFR ด้วยเวลาหรือความถี่ที่เพิ่มขึ้นและลด IDWG"}]},
+  dwLow:{name:"Dry weight ตั้งต่ำเกิน", p:{dw:60,pre:62.5,target:58.8,t:240,alb:4.0,T:36.5,naD:138,sbp:140}, dm:false,
+    rows:[["Target","58.8 kg ต่ำกว่า dry weight จริง 60 kg"],["RBV","ช่วงแรกปกติ แต่เมื่อน้ำส่วนเกินในเนื้อเยื่อหมด refill ลดลง RBV ดิ่งช่วงท้าย"],["อาการ","ตะคริวและ IDH ชั่วโมงสุดท้าย อ่อนเพลียหลังฟอกนาน"]],
+    take:["อาการช่วงท้ายการฟอกซ้ำๆ ร่วมกับไม่บวม นึกถึง dry weight ต่ำเกิน","ประเมินด้วยคลินิก, lung ultrasound หรือ bioimpedance แล้วปรับขึ้นทีละ 0.3–0.5 kg","RBV ที่ดิ่งชันช่วงท้ายบ่งชี้ refill หมด"],
+    quiz:[{q:"ผู้ป่วยเป็นตะคริวและ SBP ต่ำเฉพาะชั่วโมงสุดท้ายทุกครั้ง ไม่บวม lung ultrasound ไม่มี B-lines อ่อนเพลียหลังฟอก 6 ชั่วโมง ข้อใดเหมาะที่สุด",opts:["ลด dry weight ต่อ","เพิ่ม dry weight ขึ้น 0.5 kg แล้วประเมินซ้ำ","เพิ่ม UFR ช่วงแรกแล้วลดช่วงท้าย","ให้ quinine ก่อนฟอก"],ans:1,why:"อาการช่วงท้ายร่วมกับไม่มีหลักฐานน้ำเกิน บ่งชี้ target ต่ำกว่า dry weight จริง ควรปรับขึ้นทีละน้อย"}]},
+  lowAlb:{name:"IDH แต่ยังบวม", p:{dw:58,pre:62,target:60,t:240,alb:2.6,T:36.5,naD:138,sbp:135}, dm:false,
+    rows:[["ผู้ป่วย","albumin 2.6 g/dL บวมขา dry weight จริง 58 kg"],["RBV","ลดเร็วเพราะ oncotic pressure ต่ำ refill ช้า เกิด IDH ทั้งที่ยังมีน้ำเกิน"],["ผล","ดึงน้ำไม่ได้ตามเป้า น้ำเกินสะสม"]],
+    take:["IDH ไม่ได้แปลว่าไม่มีน้ำเกิน ต้องดูว่า refill ช้าเพราะอะไร","ทางเลือก: เพิ่มเวลาหรือความถี่, cool dialysate, isolated UF แยกจาก diffusion, midodrine, ประเมินหัวใจ","ใช้ lung ultrasound หรือ BIA ช่วยยืนยันน้ำเกิน"],
+    quiz:[{q:"ผู้ป่วย albumin 2.6 บวมขา 2+ มี B-lines เกิด IDH ทุกครั้งเมื่อ UF ได้ 1.5 L ข้อใดเหมาะที่สุด",opts:["หยุด UF และเพิ่ม dry weight","เพิ่มเวลาหรือเพิ่ม session เพื่อลด UFR ร่วมกับ cool dialysate","เพิ่ม UFR ให้ถึงเป้าเร็วขึ้น","ให้ albumin 20% ทุก session เป็นการรักษาหลัก"],ans:1,why:"ยังมีน้ำเกินชัดเจน ปัญหาคือ refill ช้า ต้องลด UFR โดยเพิ่มเวลาหรือความถี่ cool dialysate ช่วยลด IDH"}]},
+  dmCool:{name:"DM autonomic + cool dialysate", p:{dw:65,pre:67.6,target:65,t:240,alb:3.8,T:35.5,naD:138,sbp:160}, dm:true,
+    rows:[["ผู้ป่วย","DM autonomic neuropathy เดิมเกิด IDH ที่ dialysate 37°C"],["การปรับ","dialysate 35.5°C เพิ่ม vasoconstriction"],["ผล","RBV ลดเท่าเดิม แต่ SBP ลดน้อยลง"]],
+    take:["Autonomic dysfunction ทำให้ BP ตกที่ RBV เท่ากัน","Cool dialysate (ต่ำกว่า core temperature 0.5°C หรือ 35.5–36°C) ลด IDH ในการศึกษาขนาดเล็ก แต่ MyTEMP (cluster RCT) ไม่ลด CV events หรือ mortality","ลองกด toggle DM และเลื่อน dialysate temperature เพื่อเทียบ"],
+    quiz:[{q:"ผู้ป่วย DM เกิด IDH บ่อย UFR 11 ml/kg/h ไม่มีน้ำเกิน dialysate 37°C ข้อใดเป็นการปรับขั้นแรกที่เหมาะสม",opts:["ลด dialysate temperature เป็น 35.5–36°C","เพิ่ม dialysate Na เป็น 148","ลด dry weight","หยุด antihypertensive ทั้งหมดถาวร"],ans:0,why:"Cool dialysate เป็นวิธีแรกที่ปลอดภัยและลด IDH ได้ ส่วน high Na เพิ่ม IDWG"}]},
+  idhtn:{name:"Intradialytic hypertension", p:{dw:55,pre:61,target:58.5,t:240,alb:4.0,T:36.5,naD:142,sbp:150}, dm:false,
+    rows:[["ผู้ป่วย","dry weight จริง 55 kg แต่ target 58.5 kg dialysate Na 142 สูงกว่า serum Na 136"],["RBV","แทบไม่ลด เพราะน้ำเกินในเนื้อเยื่อมาก refill เร็ว"],["BP","SBP เพิ่มขึ้นระหว่างฟอก"]],
+    take:["Intradialytic HT: SBP เพิ่ม > 10 mmHg ระหว่างฟอก สัมพันธ์กับ mortality","สาเหตุหลัก volume overload ที่ซ่อนอยู่, Na loading, sympathetic activation, ยาที่ถูก dialyze ออก","แก้: ค่อยๆ probe dry weight ลง, ลด dialysate Na ให้ใกล้ serum Na, ใช้ยาที่ไม่ถูก dialyze"],
+    quiz:[{q:"ผู้ป่วย SBP 150 ก่อนฟอก เพิ่มเป็น 175 ท้ายฟอกทุกครั้ง RBV ลดเพียง 3% dialysate Na 142 serum Na 136 ข้อใดเหมาะที่สุด",opts:["เพิ่ม dialysate Na เพื่อป้องกัน IDH","ค่อยๆ ลด dry weight และลด dialysate Na ให้ใกล้ serum Na","ให้ nifedipine IV ระหว่างฟอกอย่างเดียว","ลดเวลาฟอก"],ans:1,why:"RBV ไม่ลดบ่งชี้น้ำเกินซ่อนอยู่ ร่วมกับ Na loading จาก dialysate ต้อง probe dry weight และลด Na gradient"}]}
+};
+var ORDER=["normal","highUFR","dwLow","lowAlb","dmCool","idhtn"];
+
+var box=document.getElementById("ctls"), C={};
+function sl(k,o){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); box.appendChild(C[k].el); return C[k]; }
+var f1=function(v){return v.toFixed(1);};
+sl("dw",{label:"Dry weight จริง",min:40,max:100,step:0.5,value:60,unit:"kg",fmt:f1});
+sl("pre",{label:"น้ำหนักก่อนฟอก",min:40,max:106,step:0.1,value:62.5,unit:"kg",fmt:f1});
+sl("target",{label:"Target (DW ที่สั่ง)",min:38,max:104,step:0.1,value:60,unit:"kg",fmt:f1});
+sl("t",{label:"เวลาฟอก",min:180,max:360,step:15,value:240,unit:"min"});
+sl("alb",{label:"Albumin",min:2,max:4.8,step:0.1,value:4,unit:"g/dL",fmt:f1});
+sl("T",{label:"Dialysate temp",min:35,max:37.5,step:0.5,value:36.5,unit:"°C",fmt:f1});
+sl("naD",{label:"Dialysate Na",min:134,max:146,step:1,value:138,unit:"mmol/L"}).el.classList.add("secondary");
+sl("sbp",{label:"SBP ก่อนฟอก",min:100,max:190,step:5,value:150,unit:"mmHg"}).el.classList.add("secondary");
+var dm=false, tDM=document.getElementById("tDM");
+tDM.addEventListener("click",function(){ dm=!dm; tDM.setAttribute("aria-pressed",dm?"true":"false"); update(); });
+
+var A=Plot.colors, chart=Plot.chart(document.getElementById("chart"),{height:300, aria:"RBV and SBP during dialysis",
+  x:{min:0,max:240,step:60,label:"Time (min)"}, y:{min:70,max:102,step:5,label:"RBV (%)"}, y2:{min:60,max:200,step:20,label:"SBP (mmHg)"},
+  series:[{id:"rbv",name:"RBV",color:A.accent,data:[],width:2.4,unit:"%",fmt:function(v){return v.toFixed(1);}},{id:"sbp",name:"SBP",color:A.red,data:[],axis:"y2",width:1.8,unit:"mmHg",fmt:function(v){return v.toFixed(0);}}],
+  hlines:[{y:88,label:"critical RBV",color:A.muted,dash:[5,4]}], legend:true});
+
+function simulate(p,dmOn){
+  var OH0=p.pre-p.dw, Ei=OH0*0.8, BV0=0.075*p.dw+0.2*Math.max(OH0,0), BV=BV0;
+  var ufTot=Math.max(0,p.pre-p.target), uf=ufTot/p.t, alb=Math.pow(p.alb/4,3);
+  var kr=0.009*alb, kb=0.014*alb*(1+0.02*(p.naD-138));
+  var alpha=2.2*(dmOn?1.7:1)*(1-0.22*(37-p.T));
+  var crit=88, rbv=[], sbp=[], nadir=p.sbp, idh=false, sym=null, slope=0;
+  for(var m=0;m<=p.t;m++){
+    var R=BV/BV0*100;
+    var frac=m/p.t, htn=6*Math.max(0,OH0-ufTot*frac-2)*frac+1.6*Math.max(0,p.naD-138)*frac;
+    var s=p.sbp-alpha*(100-R)-(R<crit?2.5*(crit-R)*(dmOn?1.5:1):0)+htn;
+    if(m%3===0){ rbv.push([m,R]); sbp.push([m,s]); }
+    if(m===60) slope=100-R;
+    if(s<nadir) nadir=s;
+    if(!idh && (s<90 || (p.sbp-s>=(dmOn?30:20) && (R<crit||dmOn)))){ idh=true; sym=m; }
+    var refill=Math.min(uf*0.96,Math.max(0,kr*Math.min(Ei,1.2)+kb*(BV0-BV)));
+    BV+=refill-uf; Ei-=refill;
+  }
+  var resid=p.target-p.dw;
+  return {rbv:rbv,sbp:sbp,end:BV/BV0*100,nadir:nadir,idh:idh,symAt:sym,crit:crit,ufr:ufTot*1000/(p.t/60)/p.dw,resid:resid,slope:slope,maxSbp:Math.max.apply(null,sbp.map(function(q){return q[1];})),ufTot:ufTot,OH0:OH0};
+}
+function params(){ var o={}; ["dw","pre","target","t","alb","T","naD","sbp"].forEach(function(k){ o[k]=C[k].get(); }); return o; }
+function update(){
+  var p=params(), r=simulate(p,dm);
+  var marks=[]; if(r.symAt!==null) marks.push({x:r.symAt,y:r.rbv[Math.min(r.rbv.length-1,Math.round(r.symAt/3))][1],label:"Symptoms / IDH",color:A.red});
+  chart.update({x:{min:0,max:p.t,step:60,label:"Time (min)"}, hlines:[{y:r.crit,label:"critical RBV "+r.crit+"%",color:A.muted,dash:[5,4]}], marks:marks});
+  chart.setSeries("rbv",r.rbv); chart.setSeries("sbp",r.sbp);
+  Sim.ro("roUFR",Sim.fmt(r.ufr,1),r.ufr>13?"flag":"ok");
+  Sim.ro("roRBV",Sim.fmt(r.end,1),r.end<r.crit?"flag":(r.end>97?"flag":false));
+  Sim.ro("roNadir",Sim.fmt(r.nadir,0),r.nadir<90?"flag":false);
+  var htn=r.maxSbp-p.sbp>10;
+  Sim.ro("roIDH",r.idh?"มี":(htn?"SBP ขึ้น":"ไม่มี"),(r.idh||htn)?"flag":"ok");
+  Sim.ro("roRes",(r.resid>0?"+":"")+Sim.fmt(r.resid,1),Math.abs(r.resid)>0.7?"flag":"ok");
+  Sim.ro("roSlope",Sim.fmt(-r.slope,1),r.slope>6?"flag":false);
+  var kv=document.getElementById("kv"); kv.innerHTML="";
+  [["UF ทั้งหมด",Sim.fmt(r.ufTot,1)+" L"],["IDWG",Sim.fmt(r.OH0,1)+" kg ("+Sim.fmt(r.OH0/p.dw*100,1)+"%)"],["Critical RBV รายนี้",r.crit+"%"],["SBP สูงสุด",Sim.fmt(r.maxSbp,0)+" mmHg"],["Target เทียบ DW จริง",r.resid>0.2?"ยังเหลือน้ำเกิน":(r.resid<-0.2?"ดึงเกิน dry weight":"ใกล้ dry weight")]].forEach(function(x){ kv.appendChild(Sim.h("span",{text:x[0]})); kv.appendChild(Sim.h("span",{text:x[1]})); });
+}
+Sim.mount({code:"HD-08", title:"Blood Volume Monitoring, Dry Weight and IDH", lead:"ปรับ IDWG, เวลา, target weight, albumin และ dialysate แล้วดู RBV, SBP และความเสี่ยง IDH",
+  scenarios:S, order:ORDER, captureMs:2000,
+  onChange:function(k,s){ var p=s.p; ["dw","pre","target","t","alb","T","naD","sbp"].forEach(function(x){ C[x].set(p[x]); }); dm=!!s.dm; tDM.setAttribute("aria-pressed",dm?"true":"false"); update(); },
+  refs:["National Kidney Foundation. KDOQI Clinical Practice Guideline for Hemodialysis Adequacy: 2015 Update. Am J Kidney Dis 2015, 66(5): 884-930",
+        "Flythe JE, Kimmel SE, Brunelli SM. Rapid fluid removal during dialysis is associated with cardiovascular morbidity and mortality. Kidney Int 2011, 79(2): 250-257",
+        "Garg AX, Al-Jaishi AA, Dixon SN, et al (MyTEMP). Personalised cooler dialysate for patients receiving maintenance haemodialysis: a pragmatic, cluster-randomised trial. Lancet 2022, 400(10364): 1693-1703",
+        "Reddan DN, Szczech LA, Hasselblad V, et al. Intradialytic blood volume monitoring in ambulatory hemodialysis patients: a randomized trial. J Am Soc Nephrol 2005, 16(7): 2162-2169",
+        "Inrig JK. Intradialytic hypertension: a less-recognized cardiovascular complication of hemodialysis. Am J Kidney Dis 2010, 55(3): 580-589",
+        "Kooman J, Basci A, Pizzarelli F, et al. EBPG guideline on haemodynamic instability. Nephrol Dial Transplant 2007, 22(Suppl 2): ii22-ii44"],
+  note:"Two-compartment model เพื่อการสอน: refill ขึ้นกับน้ำเกินในเนื้อเยื่อ albumin และการลดลงของ blood volume, SBP ลดตาม RBV (เพิ่มเมื่อ autonomic dysfunction ลดเมื่อ cool dialysate)"
+});
+})();
+</script>
+</body>
+</html>

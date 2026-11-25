@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[HD-14] CRRT Regional Citrate Anticoagulation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(120px,160px) 1fr 108px}
+.pgrid{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+@media (max-width:760px){.pgrid{grid-template-columns:1fr}}
+.readout{grid-template-columns:repeat(3,1fr)}
+.sel{display:grid;grid-template-columns:minmax(120px,160px) 1fr;gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+.sel{grid-template-columns:minmax(120px,160px) minmax(0,1fr)}
+select{max-width:100%;min-width:0;width:100%}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+body.present #bench{grid-template-columns:1.55fr 1fr}
+body.present .pgrid{grid-template-columns:1fr;gap:6px}
+body.present .find .card{display:none}
+body.present #circ{max-height:430px}
+body.present .ctls{gap:4px}
+body.present .find{grid-template-columns:1fr}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench one" id="bench">
+    <div class="card">
+      <h2>CRRT with regional citrate</h2>
+      <div class="svgwrap"><svg id="circ" aria-label="CRRT circuit with citrate and calcium infusion"></svg></div>
+      <p class="hint no-present">Citrate จับ Ca ก่อนเข้า filter (iCa ในวงจรต่ำ เลือดไม่แข็งตัว) citrate-Ca ส่วนหนึ่งออกทาง effluent ส่วนที่เหลือเข้าตัวผู้ป่วยแล้วตับเปลี่ยนเป็น HCO3 (1 citrate ได้ 3 HCO3) ต้องเติม Ca กลับทาง systemic</p>
+    </div>
+    <div class="card">
+      <h2>Citrate และ calcium</h2>
+      <div class="pgrid"><div>
+        <div class="ctls" id="ctls"></div>
+      </div><div>
+        <div class="readout">
+          <div class="ro" id="roPost"><b>-</b><span>Post-filter iCa (mmol/L)</span></div>
+          <div class="ro" id="roSys"><b>-</b><span>Systemic iCa (mmol/L)</span></div>
+          <div class="ro" id="roRatio"><b>-</b><span>Total / ionized Ca</span></div>
+          <div class="ro" id="roHco3"><b>-</b><span>HCO3 (mmol/L)</span></div>
+          <div class="ro" id="roAG"><b>-</b><span>Anion gap</span></div>
+          <div class="ro" id="roNa"><b>-</b><span>Na steady state</span></div>
+        </div>
+        <div class="act" id="act"></div>
+      </div></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/circuit.js"></script>
+<script src="../core/calc.js"></script>
+<script>
+(function(){
+"use strict";
+function P(o){ var d={dose:3,Qb:150,eff:2000,caPct:100,liver:100,naD:140,w:70,hyper:false}; for(var k in o) d[k]=o[k]; return d; }
+var S = {
+  standard:{name:"RCA มาตรฐาน", p:P({}),
+    rows:[["Citrate","3 mmol/L ของเลือด pre-filter"],["Post-filter iCa","ราว 0.35 mmol/L อยู่ในเป้า 0.25–0.35"],["Systemic iCa","ราว 1.1 mmol/L ด้วย Ca infusion ที่ชดเชย Ca ที่เสียทาง effluent"]],
+    take:["Regional citrate เป็น anticoagulant แรกสำหรับ CRRT ถ้าไม่มีข้อห้าม","เป้า post-filter iCa 0.25–0.35 ปรับด้วย citrate dose","เป้า systemic iCa 1.0–1.2 ปรับด้วย Ca infusion","สองค่านี้ปรับแยกกัน คนละ knob"],
+    quiz:[{q:"RCA ได้ post-filter iCa 0.32 systemic iCa 1.12 T/iCa 2.1 HCO3 24 ข้อใดเหมาะที่สุด",opts:["คงการตั้งค่าเดิม","เพิ่ม citrate dose","ลด Ca infusion","หยุด citrate"],ans:0,why:"ทุกค่าอยู่ในเป้า post-filter 0.25–0.35, systemic 1.0–1.2, T/iCa < 2.5"}]},
+  circuitHigh:{name:"Post-filter iCa สูง", p:P({dose:2}),
+    rows:[["ปัญหา","post-filter iCa 0.45 เกินเป้า"],["ผล","anticoagulation ในวงจรไม่พอ filter clot เร็ว"],["ปรับ","เพิ่ม citrate dose (หรือ citrate rate ตาม Qb)"]],
+    take:["Post-filter iCa สูง แก้ที่ citrate ไม่ใช่ Ca infusion","เพิ่ม citrate ทีละขั้นตาม protocol แล้วตรวจซ้ำ 1–2 ชั่วโมง","ระวัง citrate load ที่เพิ่มขึ้น"],
+    quiz:[{q:"RCA post-filter iCa 0.48 systemic iCa 1.10 filter clot ใน 12 ชั่วโมง ข้อใดเหมาะที่สุด",opts:["ลด Ca infusion","เพิ่ม citrate dose","เพิ่ม Ca infusion","เพิ่ม heparin systemic"],ans:1,why:"post-filter iCa สูงแปลว่า citrate ไม่พอจับ Ca ในวงจร ต้องเพิ่ม citrate"}]},
+  sysLow:{name:"Systemic iCa ต่ำ", p:P({caPct:70}),
+    rows:[["ปัญหา","systemic iCa 0.95 ต่ำกว่าเป้า"],["T/iCa","ปกติ (< 2.5) ไม่ใช่ citrate accumulation"],["สาเหตุ","Ca infusion ไม่พอกับ Ca ที่เสียทาง effluent"]],
+    take:["Systemic iCa ต่ำ + T/iCa ปกติ คือ Ca replacement ไม่พอ เพิ่ม Ca infusion","ถ้า effluent เพิ่ม Ca loss เพิ่มตาม ต้องปรับ Ca infusion คู่กัน","Systemic iCa ต่ำ + T/iCa สูง คือ citrate accumulation คนละการแก้ไข"],
+    quiz:[{q:"RCA systemic iCa 0.94 total Ca 2.1 mmol/L (T/iCa 2.2) post-filter iCa 0.31 ข้อใดเหมาะที่สุด",opts:["ลด citrate dose","เพิ่ม Ca infusion","หยุด citrate ทันที","เพิ่ม effluent"],ans:1,why:"T/iCa ปกติ ไม่มี citrate accumulation systemic iCa ต่ำจาก Ca replacement ไม่พอ"}]},
+  accum:{name:"Citrate accumulation", p:P({liver:22}),
+    rows:[["ผู้ป่วย","shock liver lactate 9 ตับเผาผลาญ citrate ได้น้อย"],["Pattern","total Ca สูงขึ้นแต่ iCa ต่ำ T/iCa > 2.5, AG metabolic acidosis, ต้องเพิ่ม Ca infusion เรื่อยๆ"],["ผล","citrate สะสมในเลือด จับ Ca systemic"]],
+    take:["T/iCa > 2.5 บ่งชี้ citrate accumulation","แก้: ลด citrate load (ลด Qb และ citrate dose), เพิ่ม effluent เพื่อเอา citrate ออก, ถ้ารุนแรงหยุด citrate ใช้ heparin หรือไม่ใช้ anticoagulant","Liver failure รุนแรงและ lactate สูงมากเป็นข้อห้ามสัมพัทธ์ของ RCA"],
+    quiz:[{q:"ผู้ป่วย shock liver ได้ RCA systemic iCa 0.88 total Ca 2.9 mmol/L (T/iCa 3.3) AG 22 ต้องเพิ่ม Ca infusion ทุก 2 ชั่วโมง ข้อใดเหมาะที่สุด",opts:["เพิ่ม Ca infusion ต่อ","ลดหรือหยุด citrate เปลี่ยนวิธี anticoagulation","เพิ่ม citrate dose","ให้ NaHCO3"],ans:1,why:"T/iCa > 2.5 ร่วมกับ AG acidosis คือ citrate accumulation ต้องลด citrate load หรือหยุด citrate การเพิ่ม Ca ไม่แก้ต้นเหตุ"}]},
+  alkalosis:{name:"Metabolic alkalosis", p:P({dose:4,Qb:180,eff:1200}),
+    rows:[["Prescription","citrate 4 mmol/L Qb 180 แต่ effluent เพียง 1,200 ml/h"],["ผล","citrate เข้าตัวมาก ตับเปลี่ยนเป็น HCO3 แต่ effluent เอา HCO3 ออกได้น้อย HCO3 สูง"],["ปรับ","เพิ่ม effluent (dialysate) หรือลด Qb และ citrate, ใช้ dialysate HCO3 ต่ำ"]],
+    take:["Citrate load = citrate dose × blood flow","Alkalosis เกิดเมื่อ citrate load สูงเทียบกับ effluent","ลด Qb ลด citrate load ได้โดยไม่เปลี่ยน post-filter iCa"],
+    quiz:[{q:"RCA ได้ HCO3 33 pH 7.52 post-filter iCa 0.30 systemic iCa 1.10 T/iCa 2.0 ข้อใดเหมาะที่สุด",opts:["หยุด citrate","เพิ่ม effluent หรือลด Qb ร่วมกับลด citrate rate ตามสัดส่วน","เพิ่ม Ca infusion","เพิ่ม citrate dose"],ans:1,why:"alkalosis จาก citrate load มากเทียบกับ effluent ไม่ใช่ accumulation (T/iCa ปกติ) ลด load หรือเพิ่มการเอาออก"}]},
+  hyperNa:{name:"Hypernatremia จาก TSC", p:P({hyper:true,dose:3.5,naD:140}),
+    rows:[["Citrate","4% trisodium citrate (hypertonic Na ราว 408 mmol/L)"],["ผล","Na สูงขึ้นจนราว 150 mmol/L"],["ปรับ","ใช้ dialysate หรือ replacement ที่ Na ต่ำลง (เติม sterile water หรือใช้สูตร low-Na) หรือเปลี่ยนเป็น citrate แบบ isotonic"]],
+    take:["Trisodium citrate ให้ Na 3 ตัวต่อ citrate 1 ตัว","Protocol ที่ใช้ 4% TSC ต้องคู่กับ dialysate Na ต่ำ (ราว 130–135)","ลด Na อย่างปลอดภัยไม่เกิน 8–10 mmol/L ต่อวัน"],
+    quiz:[{q:"ผู้ป่วยใช้ RCA ด้วย 4% trisodium citrate และ dialysate Na 140 วันที่ 2 Na 151 ข้อใดเหมาะที่สุด",opts:["ให้ D5W bolus 2 L","ลด Na ของ dialysate และ replacement เช่นเติม sterile water ให้ Na ราว 133 แล้วติดตาม","หยุด CRRT","เพิ่ม citrate"],ans:1,why:"Na load จาก TSC ต้องชดเชยด้วยน้ำยาที่ Na ต่ำลง ปรับค่อยเป็นค่อยไป"}]}
+};
+var ORDER=["standard","circuitHigh","sysLow","accum","alkalosis","hyperNa"];
+
+var box=document.getElementById("ctls"), C={};
+function sl(k,o){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); box.appendChild(C[k].el); return C[k]; }
+var f1=function(v){return v.toFixed(1);};
+sl("dose",{label:"Citrate dose",min:1.5,max:5.5,step:0.1,value:3,unit:"mmol/L",fmt:f1});
+sl("Qb",{label:"Qb",min:80,max:250,step:10,value:150,unit:"ml/min"});
+sl("eff",{label:"Effluent",min:800,max:4000,step:100,value:2000,unit:"ml/h"});
+sl("caPct",{label:"Ca infusion",min:40,max:160,step:5,value:100,unit:"%"});
+sl("liver",{label:"Citrate metabolism",min:10,max:100,step:2,value:100,unit:"%"});
+sl("naD",{label:"Dialysate Na",min:128,max:145,step:1,value:140,unit:"mmol/L"}).el.classList.add("secondary");
+var tSel=Sim.h("select",{id:"sT"},[["iso","Isotonic citrate (Na ราว 140)"],["hyper","4% trisodium citrate (hypertonic)"]].map(function(x){ return Sim.h("option",{value:x[0],text:x[1]}); }));
+tSel.addEventListener("change",update);
+box.appendChild(Sim.h("div",{class:"sel secondary"},[Sim.h("label",{"for":"sT",text:"ชนิด citrate"}),tSel]));
+box.appendChild(Sim.h("p",{class:"hint secondary",style:"margin:0",text:"Ca infusion คิดเป็น % ของ Ca ที่เสียทาง effluent, citrate metabolism คิดเป็น % ของตับปกติ"}));
+
+var c=Circuit.preset.crrt(document.getElementById("circ"),{mode:"CVVHD",citrate:true});
+
+function model(p){
+  var blood=p.Qb*60/1000, load=p.dose*blood; // mmol/h
+  var qp=blood*0.7, sieve=Math.min(0.85,p.eff/1000/(qp+0.0001)); // fraction of citrate removed across filter
+  var toPt=load*(1-sieve);
+  var clr=60*p.liver/100, cit=toPt/clr; // systemic citrate mmol/L
+  var caLoss=2.2*p.eff/1000*0.9 + 0.35*load*sieve*0.1; // mmol/h
+  var caReq=caLoss, caGiven=caReq*p.caPct/100;
+  var post=1.15/(1+0.762*p.dose);
+  var sys=1.12+(caGiven-caReq)*0.075-0.12*cit;
+  var total=sys+0.9+0.8*cit, ratio=total/sys;
+  var metab=toPt*Math.min(1,p.liver/100+0.05);
+  var hco3=22+0.3*metab-2.0*p.eff/1000;
+  var ag=12+3*cit;
+  var na=p.naD+(p.hyper?0.6*load/(p.eff/1000):0);
+  return {load:load,toPt:toPt,cit:cit,post:post,sys:sys,total:total,ratio:ratio,hco3:hco3,ag:ag,na:na,caReq:caReq,caGiven:caGiven,sieve:sieve};
+}
+function params(){ var o={}; ["dose","Qb","eff","caPct","liver","naD"].forEach(function(k){ o[k]=C[k].get(); }); o.hyper=tSel.value==="hyper"; return o; }
+function update(){
+  var p=params(), m=model(p);
+  c.setMode("CVVHD",{citrate:true});
+  c.setFlows({Qb:p.Qb,Qd:p.eff-100,Qeff:p.eff,Qcit:m.load/0.136,Qca:m.caGiven/0.2});
+  c.setPressures({PA:Math.round(-0.55*p.Qb),PF:Math.round(90+0.4*p.Qb+(m.post>0.4?60:0)),PE:Math.round(-40-p.eff/50),PR:Math.round(50+0.3*p.Qb)});
+  c.set("HF",{clot:m.post>0.4?Math.min(0.8,(m.post-0.35)*5):0});
+  c.set("CIT",{opts:{label:p.hyper?"4% TSC":"citrate"}}); c.set("CA",{alarm:m.sys<1.0});
+  var al=[];
+  if(m.ratio>2.5) al.push({text:"T/iCa "+m.ratio.toFixed(1)+", suspect citrate accumulation"});
+  else if(m.sys<1.0) al.push({text:"Low systemic iCa "+m.sys.toFixed(2)});
+  else if(m.post>0.35) al.push({text:"Post-filter iCa "+m.post.toFixed(2)+", filter clot risk",level:"amber"});
+  else if(m.hco3>30) al.push({text:"Metabolic alkalosis HCO3 "+m.hco3.toFixed(0),level:"amber"});
+  else if(m.na>146) al.push({text:"High Na "+m.na.toFixed(0),level:"amber"});
+  c.alarm(al.length?al[0]:null);
+  Sim.ro("roPost",Sim.fmt(m.post,2),m.post>0.35?"flag":(m.post<0.25?"flag":"ok"));
+  Sim.ro("roSys",Sim.fmt(m.sys,2),(m.sys<1.0||m.sys>1.25)?"flag":"ok");
+  Sim.ro("roRatio",Sim.fmt(m.ratio,1),m.ratio>2.5?"flag":"ok");
+  Sim.ro("roHco3",Sim.fmt(m.hco3,0),(m.hco3>30||m.hco3<20)?"flag":"ok");
+  Sim.ro("roAG",Sim.fmt(m.ag,0),m.ag>16?"flag":false);
+  Sim.ro("roNa",Sim.fmt(m.na,0),m.na>146?"flag":"ok");
+  var act=document.getElementById("act"), msg, bad=true;
+  if(m.ratio>2.5) msg="Citrate accumulation: ลด citrate load (ลด Qb และ citrate), เพิ่ม effluent หรือหยุด citrate ไม่ใช่แค่เพิ่ม Ca";
+  else if(m.post>0.35) msg="Post-filter iCa สูง: เพิ่ม citrate dose";
+  else if(m.post<0.25) msg="Post-filter iCa ต่ำกว่าเป้า: citrate มากเกินจำเป็น ลด citrate dose";
+  else if(m.sys<1.0) msg="Systemic iCa ต่ำ T/iCa ปกติ: เพิ่ม Ca infusion";
+  else if(m.sys>1.25) msg="Systemic iCa สูง: ลด Ca infusion";
+  else if(m.hco3>30) msg="Alkalosis: citrate load สูงเทียบกับ effluent เพิ่ม dialysate หรือลด Qb และ citrate";
+  else if(m.hco3<20) msg="Acidosis: ตรวจ AG และ T/iCa ถ้าไม่ใช่ accumulation ลด effluent หรือเพิ่ม citrate load เล็กน้อย";
+  else if(m.na>146) msg="Na สูงจาก trisodium citrate: ลด Na ของ dialysate และ replacement (เติม sterile water) หรือใช้ isotonic citrate";
+  else { msg="ทุกค่าอยู่ในเป้า ตรวจ post-filter และ systemic iCa ทุก 6 ชั่วโมงตาม protocol"; bad=false; }
+  act.className="act"+(bad?" bad":""); act.innerHTML="";
+  act.appendChild(Sim.h("b",{text:"Next step: "})); act.appendChild(document.createTextNode(msg));
+  act.appendChild(Sim.h("div",{class:"hint no-present",style:"margin-top:6px",text:"Citrate load "+Sim.fmt(m.load,1)+" mmol/h, ออกทาง filter "+Sim.fmt(m.sieve*100,0)+"%, เข้าตัว "+Sim.fmt(m.toPt,1)+" mmol/h, Ca ที่ต้องการ "+Sim.fmt(m.caReq,1)+" mmol/h ให้จริง "+Sim.fmt(m.caGiven,1)}));
+}
+Sim.mount({code:"HD-14", title:"CRRT Regional Citrate Anticoagulation", lead:"ปรับ citrate dose, Qb, effluent, Ca infusion และการเผาผลาญ citrate แล้วดู iCa ในวงจรและในตัว, T/iCa, HCO3 และ Na",
+  scenarios:S, order:ORDER, captureMs:2500,
+  onChange:function(k,s){ var p=s.p; ["dose","Qb","eff","caPct","liver","naD"].forEach(function(x){ C[x].set(p[x]); }); tSel.value=p.hyper?"hyper":"iso"; update(); },
+  refs:["Kidney Disease: Improving Global Outcomes (KDIGO) Acute Kidney Injury Work Group. KDIGO Clinical Practice Guideline for Acute Kidney Injury. Kidney Int Suppl 2012, 2(1): 1-138",
+        "Zarbock A, Küllmar M, Kindgen-Milles D, et al (RICH). Effect of regional citrate anticoagulation vs systemic heparin anticoagulation during CRRT on dialysis filter life span and mortality. JAMA 2020, 324(16): 1629-1639",
+        "Schneider AG, Journois D, Rimmelé T. Complications of regional citrate anticoagulation: accumulation or overload? Crit Care 2017, 21(1): 281",
+        "Davenport A, Tolwani A. Citrate anticoagulation for continuous renal replacement therapy (CRRT) in patients with acute kidney injury admitted to the intensive care unit. NDT Plus 2009, 2(6): 439-447",
+        "Khadzhynov D, Schelter C, Lieker I, et al. Incidence and outcome of metabolic disarrangements consistent with citrate accumulation in critically ill patients undergoing continuous venovenous hemodialysis with regional citrate anticoagulation. J Crit Care 2014, 29(2): 265-271"],
+  note:"Model เพื่อการสอน: post-filter iCa จาก citrate dose, systemic citrate = load ที่เข้าตัว / clearance ของตับ, T/iCa = (iCa + protein-bound + citrate-bound) / iCa RICH (n 638): filter life median 47 vs 26 ชั่วโมง กับ citrate เทียบ heparin"
+});
+})();
+</script>
+</body>
+</html>

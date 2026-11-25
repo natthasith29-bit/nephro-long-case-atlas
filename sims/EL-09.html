@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[EL-09] Renal Tubular Acidosis Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.bench{grid-template-columns:1.5fr 1fr}
+@media (max-width:900px){.bench{grid-template-columns:1fr}}
+.split{display:grid;grid-template-columns:0.55fr 1.45fr;gap:14px;align-items:start}
+@media (max-width:760px){.split{grid-template-columns:1fr}}
+.ctl{grid-template-columns:minmax(96px,120px) 1fr 84px}
+.sel{display:grid;grid-template-columns:minmax(96px,120px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.grp{font:500 11.5px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin:10px 0 0}
+.readout{grid-template-columns:repeat(3,1fr)}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,1fr)}}
+#roType b{font-size:18px}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+body.present .bench{grid-template-columns:1.45fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present #steps,body.present .grp{display:none}
+body.present .card{padding:16px 20px}
+body.present .ctls{gap:4px 14px;grid-template-columns:1fr 1fr}
+body.present .ctl{grid-template-columns:70px 1fr 58px;gap:6px;font-size:12px}
+body.present .ctl output{font-size:12px}
+body.present .sel{grid-template-columns:70px minmax(0,1fr);gap:6px;font-size:12px}
+body.present select{font-size:11.5px;padding:3px 6px}
+body.present .ro{padding:8px 12px}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+body.present #cell svg{max-height:300px;width:auto!important;margin:0 auto}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>ตำแหน่ง defect และการขับกรด</h2>
+      <div class="split"><div id="map"></div><div id="cell"></div></div>
+      <div id="steps" class="no-present"></div>
+      <p class="hint no-present">ปรับค่าในปัสสาวะเองได้ ระบบคำนวณ urine AG, urine osmolal gap และ NH4+ ทันที ปุ่มทดสอบ: HCO3 loading (ดู FE HCO3 และ U-B pCO2) และ furosemide + fludrocortisone (urine pH ต่ำสุด)</p>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วยและผล lab</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roUAG"><b>-</b><span>Urine AG</span></div>
+        <div class="ro" id="roNH4"><b>-</b><span>Urine NH4+ (≈ UOG/2)</span></div>
+        <div class="ro" id="roPH"><b>-</b><span>Urine pH</span></div>
+        <div class="ro" id="roTest"><b>-</b><span>ผลการทดสอบ</span></div>
+        <div class="ro" id="roK"><b>-</b><span>Serum K</span></div>
+        <div class="ro" id="roType"><b>-</b><span>แปลผล</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/calc.js"></script>
+<script src="../core/nephron.js"></script>
+<script>
+(function(){
+"use strict";
+/* lab: [pHCO3, pK, UpH, UNa, UK, UCl, Uosm, UUN(mg/dL), Uglu(mg/dL)]  load: [FE HCO3 %, U-B pCO2, urine pH after load]  furo: min urine pH */
+var D={
+  normal:{name:"ไม่มี acidosis",lab:[24,4.1,6.0,100,50,130,650,800,0],load:[3,35,7.8],furo:5.0,seg:"CCD",block:[],type:"ปกติ",feat:"-"},
+  diar:{name:"Diarrhea",lab:[14,3.0,5.6,40,30,100,600,700,0],load:[2,32,7.6],furo:4.9,seg:"PT",block:[],type:"GI HCO3 loss",feat:"NH4+ สูงมาก urine pH อาจ > 5.5 เพราะ NH3 buffer เยอะ"},
+  drta:{name:"Distal RTA (Sjögren)",lab:[14,2.8,6.8,60,40,80,490,700,0],load:[3,8,7.4],furo:6.4,seg:"OMCD",block:["HATP"],type:"Type 1 (distal)",feat:"Nephrocalcinosis, urine citrate ต่ำ, Ca stone, hypoK"},
+  sao:{name:"dRTA (AE1, SAO)",lab:[16,3.1,6.6,55,35,75,500,700,0],load:[3,10,7.4],furo:6.2,seg:"OMCD",block:["AE1"],type:"Type 1 (distal)",feat:"Southeast Asian ovalocytosis เม็ดเลือดแดงรูปไข่"},
+  prta:{name:"Proximal RTA (Fanconi)",lab:[16,3.2,5.1,50,30,95,600,700,300],load:[22,30,7.9],furo:5.0,seg:"PT",block:["NBC","NHE3","NaPi","SGLT2","MEG"],type:"Type 2 (proximal)",feat:"Glycosuria (glucose ในเลือดปกติ), phosphaturia, aminoaciduria, LMW proteinuria, osteomalacia"},
+  t4:{name:"Type 4 (hypoaldosteronism)",lab:[18,6.0,5.3,50,20,55,420,600,0],load:[4,30,7.6],furo:5.1,seg:"CCD",block:["MR"],type:"Type 4 (hyperK)",feat:"HyperK ยับยั้ง ammoniagenesis NH4+ ต่ำ แต่ acidify ได้"},
+  ckd:{name:"CKD G4 acidosis",lab:[18,5.0,5.3,60,25,70,350,400,0],load:[4,28,7.5],furo:5.3,seg:"PT",block:[],type:"Acidosis ของ CKD",feat:"Nephron mass ลด NH4+ รวมต่ำ AG ปกติถึงสูงเล็กน้อย"},
+  tol:{name:"Toluene (glue sniffing)",lab:[14,2.9,5.5,60,30,60,700,700,0],load:[3,30,7.6],furo:5.0,seg:"PT",block:[],type:"Hippurate (NH4+ ปกติ)",feat:"Hippurate เป็น unmeasured anion ทำให้ UAG บวกทั้งที่ NH4+ สูง ใช้ UOG แทน"},
+  inc:{name:"Incomplete dRTA",lab:[23,3.9,6.2,80,40,110,600,800,0],load:[3,15,7.6],furo:5.9,seg:"OMCD",block:["HATP"],type:"Incomplete dRTA",feat:"HCO3 ปกติ แต่ acidify ไม่ได้ Ca phosphate stone, hypocitraturia"}
+};
+var TK={
+  normal:["ไตตอบสนองต่อ acid load ด้วยการเพิ่ม NH4+ excretion เป็นหลัก","Urine pH บอกความเข้มข้นของ H+ อิสระ ไม่ใช่ปริมาณกรดที่ขับ","ประเมิน RTA เมื่อมี normal AG acidosis เท่านั้น"],
+  diar:["UAG ติดลบ (NH4+ สูง) = ไตทำงานปกติ ปัญหาอยู่ที่ GI","Urine pH > 5.5 ได้ใน diarrhea เพราะ NH3 buffer มาก ไม่ใช่ dRTA","HypoK จาก GI loss"],
+  drta:["dRTA: urine pH > 5.5 ขณะ acidosis และ NH4+ ต่ำ (UAG บวก, UOG ต่ำ)","Furosemide + fludrocortisone ไม่ทำให้ urine pH < 5.3","Sjögren, autoimmune, lithium, amphotericin (gradient defect) เป็นสาเหตุในผู้ใหญ่"],
+  sao:["AE1 (SLC4A1) mutation พบบ่อยในไทยและ Southeast Asia","SAO ร่วม dRTA มักเป็น recessive หรือ compound heterozygous","อาการ: hypoK paralysis, nephrocalcinosis, growth failure"],
+  prta:["pRTA: threshold การดูดกลับ HCO3 ต่ำลง HCO3 คงที่ราว 15–18","เมื่อ HCO3 ต่ำกว่า threshold urine pH < 5.5 ได้ ต้องดู FE HCO3 หลัง loading > 15%","Fanconi: tenofovir, ifosfamide, myeloma light chain, cystinosis, Wilson"],
+  t4:["Type 4: hyperK เป็นตัวหลัก ลด ammoniagenesis ที่ PT","Urine pH < 5.5 ได้ (H+ secretion พอ แต่ NH3 buffer น้อย)","สาเหตุ: hyporeninemic hypoaldosteronism, ACEi/ARB, MRA, CNI, trimethoprim, heparin"],
+  ckd:["CKD: NH4+ รวมลดตาม nephron mass","รักษาเมื่อ HCO3 < 18–22 ด้วย NaHCO3 หรือเพิ่มผักผลไม้","Acidosis เร่ง bone loss, muscle wasting และ CKD progression"],
+  tol:["UAG ไม่น่าเชื่อถือเมื่อมี unmeasured urine anion (hippurate, ketone, D-lactate)","Urine osmolal gap วัด NH4+ ได้ตรงกว่า","Toluene ทำ HAGMA ระยะแรก แล้วเป็น NAGMA เมื่อ hippurate ถูกขับออก"],
+  inc:["Incomplete dRTA: HCO3 ปกติแต่ acidify ไม่ได้เมื่อถูกทดสอบ","มักพบใน recurrent Ca phosphate stone และ medullary sponge kidney","ให้ citrate ลดการเกิด stone"]
+};
+var KEYS=Object.keys(D), S={};
+KEYS.forEach(function(k){ var d=D[k]; S[k]={name:d.name,p:{k:k,test:k==="prta"?"load":k==="inc"||k==="drta"?"furo":"none"},rows:[["Plasma","HCO3 "+d.lab[0]+" K "+d.lab[1]],["Urine","pH "+d.lab[2]+" Na "+d.lab[3]+" K "+d.lab[4]+" Cl "+d.lab[5]+" osm "+d.lab[6]],["Clue",d.feat]],take:TK[k]}; });
+
+var box=document.getElementById("ctls"), C={}, SEL={};
+var ks=Sim.h("select",{id:"sk"},KEYS.map(function(k){ return Sim.h("option",{value:k,text:D[k].name}); })); ks.addEventListener("change",function(){ load(ks.value); update(); });
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"sk",text:"ภาวะ"}),ks]));
+var ts=Sim.h("select",{id:"st"},[["none","ไม่ทำ"],["load","HCO3 loading"],["furo","Furosemide + fludrocortisone"]].map(function(o){ return Sim.h("option",{value:o[0],text:o[1]}); })); ts.addEventListener("change",update);
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"st",text:"การทดสอบ"}),ts]));
+box.appendChild(Sim.h("p",{class:"grp",text:"Urine (spot)"}));
+function sl(k,o){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("uph",{label:"Urine pH",min:4.5,max:8,step:0.1,value:6,fmt:function(v){ return v.toFixed(1); }});
+sl("una",{label:"UNa",min:5,max:200,step:5,value:60});
+sl("uk",{label:"UK",min:5,max:120,step:5,value:40});
+sl("ucl",{label:"UCl",min:5,max:220,step:5,value:80});
+sl("uosm",{label:"Uosm",min:150,max:1000,step:10,value:500});
+sl("uun",{label:"UUN mg/dL",min:100,max:1500,step:50,value:700});
+sl("uglu",{label:"Uglu mg/dL",min:0,max:1000,step:25,value:0});
+
+var map=Nephron.map("map",{selected:"OMCD"}), cell=Nephron.cell("cell","OMCD",{});
+function load(k){ var L=D[k].lab; C.uph.set(L[2]); C.una.set(L[3]); C.uk.set(L[4]); C.ucl.set(L[5]); C.uosm.set(L[6]); C.uun.set(L[7]); C.uglu.set(L[8]); }
+function update(){
+  var d=D[ks.value], t=ts.value;
+  var uag=Calc.urineAG({una:C.una.get(),uk:C.uk.get(),ucl:C.ucl.get()});
+  var uog=Calc.urineOsmGap({uosm:C.uosm.get(),una:C.una.get(),uk:C.uk.get(),uurea:C.uun.get(),uglu:C.uglu.get()});
+  var steps={steps:uag.steps.concat(uog.steps),note:uog.note,flag:uog.flag};
+  Calc.renderSteps("steps",steps,{title:"Urine AG และ osmolal gap"});
+  map.select(d.seg); map.block(d.block); map.highlight(d.block.length?[d.seg]:[],"#FFDE59");
+  cell.update(d.seg,{blocked:d.block,highlight:d.seg==="PT"&&!d.block.length?["NHE3"]:[]});
+  var nh4=uog.nh4, uph=C.uph.get(), acid=d.lab[0]<22;
+  var res="-", rflag=false;
+  if(t==="load"){ res="FE HCO3 "+d.load[0]+"%  U-B pCO2 "+d.load[1]; rflag=d.load[0]>15||d.load[1]<20?"flag":"ok"; }
+  else if(t==="furo"){ res="urine pH ต่ำสุด "+d.furo.toFixed(1); rflag=d.furo>5.3?"flag":"ok"; }
+  Sim.ro("roUAG",(uag.value>0?"+":"")+uag.value,uag.value>0&&acid?"flag":"ok");
+  Sim.ro("roNH4",Math.round(nh4),nh4<75&&acid?"flag":"ok");
+  Sim.ro("roPH",uph.toFixed(1),acid&&uph>5.5?"flag":false);
+  Sim.ro("roTest",res,rflag);
+  Sim.ro("roK",d.lab[1].toFixed(1),d.lab[1]<3.5||d.lab[1]>5.2?"flag":"ok");
+  Sim.ro("roType",d.type,d.type==="ปกติ"?"ok":"flag");
+  var a=document.getElementById("act"), m;
+  if(!acid&&ks.value!=="inc") m="<b>ไม่มี acidosis</b> ไม่ต้องตรวจ RTA ถ้าสงสัย incomplete dRTA (stone ซ้ำ) ให้ทำ furosemide + fludrocortisone test";
+  else if(ks.value==="tol") m="<b>UAG บวกแต่ UOG สูง</b> NH4+ ขับได้ดี UAG ถูกบิดจาก hippurate ซักประวัติสูดดมสารระเหย";
+  else if(nh4>=75&&ks.value!=="prta") m="<b>NH4+ สูง</b> ไตตอบสนองปกติ หาสาเหตุ GI loss (diarrhea, fistula, ureteral diversion)";
+  else if(ks.value==="prta") m="<b>Proximal RTA</b> ตรวจ glucose/phosphate/uric acid ในปัสสาวะ และ LMW protein หาสาเหตุ (tenofovir, myeloma) รักษาด้วย alkali ขนาดสูง 10–15 mmol/kg/วัน + K";
+  else if(d.lab[1]>5.2) m="<b>Type 4 RTA</b> ทบทวนยา (ACEi/ARB, MRA, trimethoprim, CNI) แก้ hyperK แล้ว acidosis จะดีขึ้น ตรวจ renin และ aldosterone";
+  else if(ks.value==="ckd") m="<b>CKD acidosis</b> ให้ NaHCO3 เมื่อ HCO3 < 18 (หลายแนวทางใช้ < 22) เพิ่มผักผลไม้ถ้า K ไม่สูง";
+  else m="<b>Distal RTA</b> ตรวจ autoimmune (Sjögren), Ca/citrate ในปัสสาวะ, US หา nephrocalcinosis รักษาด้วย citrate 1–2 mmol/kg/วัน แก้ K ก่อน alkali";
+  a.innerHTML="<b>Next step:</b> "+m;
+}
+Sim.mount({code:"EL-09", title:"Renal Tubular Acidosis Lab", lead:"เลือกภาวะหรือใส่ค่าปัสสาวะเอง คำนวณ urine AG, urine osmolal gap และ NH4+ แล้วทำ HCO3 loading หรือ furosemide + fludrocortisone test เพื่อแยก RTA type 1, 2, 4",
+  scenarios:S, order:KEYS, captureMs:1000,
+  onChange:function(k,s){ ks.value=k; ts.value=s.p.test; load(k); update(); },
+  refs:["Batlle D, Arruda J. Hyperkalemic forms of renal tubular acidosis: clinical and pathophysiological aspects. Adv Chronic Kidney Dis 2018, 25(4): 321-333",
+        "Walsh SB, Shirley DG, Wrong OM, Unwin RJ. Urinary acidification assessed by simultaneous furosemide and fludrocortisone treatment: an alternative to ammonium chloride. Kidney Int 2007, 71(12): 1310-1316",
+        "Kim GH, Han JS, Kim YS, et al. Evaluation of urine acidification by urine anion gap and urine osmolal gap in chronic metabolic acidosis. Am J Kidney Dis 1996, 27(1): 42-47",
+        "Khositseth S, Sirikanerat A, Wongbenjarat K, et al. Distal renal tubular acidosis associated with anion exchanger 1 mutations in children in Thailand. Am J Kidney Dis 2007, 49(6): 841-850",
+        "Khositseth S, Bruce LJ, Walsh SB, et al. Tropical distal renal tubular acidosis: clinical and epidemiological studies in 78 patients. QJM 2012, 105(9): 861-877",
+        "Palmer BF, Kelepouris E, Clegg DJ. Renal tubular acidosis and management strategies: a narrative review. Adv Ther 2021, 38(2): 949-968"],
+  note:"ค่า lab ของแต่ละภาวะเป็นตัวอย่างทั่วไป urine NH4+ ประมาณจาก UOG/2 เกณฑ์ใช้ NH4+ < 75 mmol/L หรือ UOG < 150 ชี้ว่าขับ NH4+ ไม่พอ furosemide + fludrocortisone: urine pH ต่ำสุด > 5.3 = acidification defect"
+});
+})();
+</script>
+</body>
+</html>

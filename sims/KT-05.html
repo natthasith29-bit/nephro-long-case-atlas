@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[KT-05] Banff Rejection Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.35fr 1fr}}
+.pics{display:grid;grid-template-columns:1.75fr 1fr;gap:10px;align-items:start}
+.pics .lab{font:500 11.5px var(--mono);color:var(--muted);margin:4px 0 0;text-align:center}
+.sc{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 16px}
+.sc .ctl{grid-template-columns:minmax(64px,90px) 1fr 34px}
+@media (max-width:520px){.sc{grid-template-columns:1fr}.sc .ctl{grid-template-columns:minmax(64px,90px) 1fr 34px}.sc .ctl label{grid-column:auto}}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.ro b{font-size:18px}
+.dx{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--ink);color:#fff;font-size:14.5px}
+.dx b{font-weight:600;color:var(--accent2)}
+.act{margin-top:10px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.sub{font-size:12.5px;color:var(--muted);margin:12px 0 4px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .act{display:none}
+body.present .card{padding:14px 18px}
+body.present .sc{gap:0 14px}
+body.present .ctl{font-size:13.5px}
+body.present .tools{margin-top:4px;gap:5px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .ro{padding:5px 10px}
+body.present .ro b{font-size:16px}
+body.present .dx{margin-top:6px;padding:8px 12px;font-size:13.5px}
+body.present .sub{margin:4px 0 2px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Biopsy: tubulointerstitium, artery, PTC และ glomerulus</h2>
+      <div class="pics">
+        <div><div class="svgwrap"><svg id="ti" viewBox="0 0 600 400" role="img" aria-label="Schematic cortex with interstitial inflammation, tubulitis, arteritis and peritubular capillaritis"></svg></div></div>
+        <div><div id="glom"></div><div class="lab" id="glab">Glomerulus</div><div class="svgwrap no-present" style="margin-top:8px"><svg id="key" viewBox="0 0 260 150" role="img" aria-label="Legend"></svg></div></div>
+      </div>
+      <p class="hint no-present">ภาพเป็น schematic ไม่ใช่ histology จริง จุดม่วงคือ mononuclear cell, วงสีน้ำตาลรอบ PTC คือ C4d, พื้นสีฟ้าคือ interstitial fibrosis ตาม ci และท่อที่หดเล็กผนังหนาคือ tubular atrophy ตาม ct</p>
+    </div>
+    <div class="card">
+      <h2>Banff lesion scores</h2>
+      <div class="sub">Acute</div>
+      <div class="sc" id="scA"></div>
+      <div class="sub">Chronic และ antibody</div>
+      <div class="sc" id="scC"></div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roMVI"><b>-</b><span>MVI (g + ptc)</span></div>
+        <div class="ro" id="roTC"><b>-</b><span>TCMR</span></div>
+        <div class="ro" id="roAB"><b>-</b><span>ABMR</span></div>
+      </div>
+      <div class="dx" id="dx"></div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/patho.js"></script>
+<script>
+(function(){
+"use strict";
+function Z(o){ var d = {i:0, t:0, v:0, g:0, ptc:0, ci:0, ct:0, cg:0, c4d:0, dsa:false, cifta:false, tma:false}; Object.keys(o).forEach(function(k){ d[k] = o[k]; }); return d; }
+var S = {
+  normal:{name:"Protocol biopsy ปกติ", p:Z({}),
+    rows:[["Clinical","Protocol biopsy เดือนที่ 3 Cr คงที่ 1.1"],["Scores","i0 t0 v0 g0 ptc0 C4d0"],["DSA","ลบ"],["Banff","No evidence of rejection"]],
+    take:["Banff ใช้ lesion score แบบ semi-quantitative 0–3","ต้องมี cortex เพียงพอ (อย่างน้อย 10 glomeruli และ 2 arteries)","การวินิจฉัยต้องอ่านร่วมกับ DSA และ C4d"]},
+  bl:{name:"Borderline", p:Z({i:1, t:1}),
+    rows:[["Clinical","Cr ขึ้น 15% เดือนที่ 2"],["Scores","i1 t1 v0"],["DSA","ลบ"],["Banff","Borderline (suspicious) for acute TCMR"]],
+    take:["Borderline คือ tubulitis ร่วม interstitial inflammation ที่ไม่ถึงเกณฑ์ TCMR","มี graft dysfunction ควรพิจารณารักษา","ตรวจ tacrolimus level และ BK เพราะ BKVAN ให้ภาพคล้ายกัน"]},
+  ia:{name:"Acute TCMR IA", p:Z({i:2, t:2}),
+    rows:[["Clinical","Cr 1.2 เป็น 1.8 เดือนที่ 4 tac trough 4"],["Scores","i2 t2 v0 g0 ptc0"],["DSA","ลบ C4d0"],["Banff","Acute TCMR grade IA"]],
+    take:["TCMR IA ต้องมี i ≥ 2 และ t2 ส่วน IB คือ t3","รักษาด้วย steroid pulse แล้วปรับ maintenance ให้พอ","หาสาเหตุ เช่น tacrolimus ต่ำหรือ non-adherence"]},
+  iia:{name:"Acute TCMR IIA", p:Z({i:2, t:2, v:1}),
+    rows:[["Clinical","Cr ขึ้นเร็ว เดือนที่ 1"],["Scores","i2 t2 v1 (intimal arteritis)"],["DSA","ลบ C4d0"],["Banff","Acute TCMR grade IIA"]],
+    take:["Intimal arteritis (v ≥ 1) ทำให้เป็น TCMR grade II ไม่ว่า i และ t เท่าไร","Grade II ขึ้นไปรักษาด้วย ATG โดยมักให้ร่วมกับ pulse steroid","v lesion นับเป็น histologic injury ของ ABMR ได้ด้วย ต้องดู DSA และ C4d"]},
+  aabmr:{name:"Active ABMR", p:Z({g:2, ptc:2, c4d:3, dsa:true}),
+    rows:[["Clinical","Cr ขึ้น proteinuria 1 g เดือนที่ 8 de novo DSA anti-DQ7 MFI 9,000"],["Scores","g2 ptc2 C4d3 cg0"],["Criteria","MVI + C4d + DSA ครบ 3 ข้อ"],["Banff","Active ABMR"]],
+    take:["Active ABMR ต้องมี histologic injury, หลักฐาน antibody กับ endothelium และ DSA หรือ C4d","MVI (g + ptc ≥ 2) เป็นทั้ง injury และหลักฐาน antibody interaction","รักษาด้วย PLEX + IVIG และ optimize maintenance"]},
+  caabmr:{name:"Chronic active ABMR", p:Z({g:1, ptc:2, cg:2, ci:1, ct:1, c4d:1, dsa:true}),
+    rows:[["Clinical","ปีที่ 6 proteinuria 2.5 g tac trough 3 ไม่สม่ำเสมอ"],["Scores","g1 ptc2 cg2 C4d1 ci1 ct1"],["DSA","Class II DSA"],["Banff","Chronic active ABMR (transplant glomerulopathy)"]],
+    take:["Transplant glomerulopathy (cg) คือ double contour ของ GBM จาก endothelial injury ซ้ำ","C4d มักลบในระยะ chronic ใช้ MVI และ DSA แทน","ยังไม่มีการรักษาที่พิสูจน์ได้ ต้องแก้ adherence และคุม IS ให้พอ"]},
+  prob:{name:"Probable ABMR", p:Z({g:1, ptc:0, c4d:0, dsa:true}),
+    rows:[["Clinical","Protocol biopsy ปีที่ 1 มี de novo DSA"],["Scores","g1 ptc0 C4d0"],["Criteria","DSA บวกแต่ MVI ไม่ถึง 2"],["Banff","Probable ABMR (Banff 2022)"]],
+    take:["Probable ABMR คือ DSA บวกร่วม MVI ที่ยังไม่ถึงเกณฑ์","เสี่ยงพัฒนาเป็น ABMR มากกว่าไม่มี MVI","ติดตาม DSA และ biopsy ซ้ำ แก้ปัจจัยเสี่ยงเช่น tac ต่ำ"]},
+  mvi:{name:"MVI, DSA ลบ C4d ลบ", p:Z({g:2, ptc:1, c4d:0, dsa:false}),
+    rows:[["Clinical","Cr ขึ้นเล็กน้อย DSA ลบ"],["Scores","g2 ptc1 C4d0"],["Criteria","MVI ถึงเกณฑ์แต่ไม่มี DSA และ C4d"],["Banff","Microvascular inflammation, DSA-negative and C4d-negative"]],
+    take:["Banff 2022 แยก MVI ที่ไม่มี DSA และ C4d เป็นกลุ่มของตัวเอง","กลไกอาจเป็น non-HLA antibody หรือ NK cell (missing self)","Graft survival แย่กว่าไม่มี MVI แต่ยังไม่มีการรักษาเฉพาะ"]},
+  mixed:{name:"Mixed rejection", p:Z({i:2, t:3, v:1, g:2, ptc:2, c4d:2, dsa:true}),
+    rows:[["Clinical","Non-adherence 3 เดือน Cr 1.3 เป็น 3.2"],["Scores","i2 t3 v1 g2 ptc2 C4d2"],["DSA","DSA หลายตัว"],["Banff","Active ABMR + acute TCMR IIA"]],
+    take:["ABMR และ TCMR เกิดพร้อมกันได้","เมื่อมี TCMR หรือ borderline ร่วม MVI ต้องมี g ≥ 1","รักษาทั้งสองแขน: steroid + ATG และ PLEX + IVIG"]},
+  c4d:{name:"C4d อย่างเดียว (ABOi)", p:Z({c4d:3, dsa:false}),
+    rows:[["Clinical","ABO-incompatible KT เดือนที่ 3 Cr คงที่"],["Scores","C4d3 แต่ g0 ptc0"],["Context","Accommodation หลัง ABOi"],["Banff","C4d staining without evidence of rejection"]],
+    take:["C4d บวกโดยไม่มี MVI ใน ABOi KT เป็น accommodation ที่พบบ่อย","ใน ABO-compatible ที่มี DSA ให้ติดตามใกล้ชิด","อย่ารักษาจาก C4d อย่างเดียว"]}
+};
+var ORDER = ["normal","bl","ia","iia","aabmr","caabmr","prob","mvi","mixed","c4d"];
+var C = {};
+function sc(box, k, label){ C[k] = Sim.slider({id:"s" + k, label:label, min:0, max:3, step:1, value:0, unit:"", onInput:update}); document.getElementById(box).appendChild(C[k].el); }
+sc("scA", "i", "i"); sc("scA", "t", "t"); sc("scA", "v", "v"); sc("scA", "g", "g"); sc("scA", "ptc", "ptc");
+sc("scC", "ci", "ci"); sc("scC", "ct", "ct"); sc("scC", "cg", "cg"); sc("scC", "c4d", "C4d");
+var F = {dsa:false, cifta:false, tma:false}, TG = {};
+[["dsa","HLA-DSA บวก"],["cifta","ti ≥ 2 และ i-IFTA ≥ 2"],["tma","TMA ใน graft"]].forEach(function(x){ TG[x[0]] = Sim.toggle(x[1], function(on){ F[x[0]] = on; update(); }, false); document.getElementById("tools").appendChild(TG[x[0]]); });
+function P(){ var p = {}; Object.keys(C).forEach(function(k){ p[k] = C[k].get(); }); Object.keys(F).forEach(function(k){ p[k] = F[k]; }); return p; }
+
+/* ---------- Banff logic ---------- */
+function banff(p){
+  var tc = null, tcg = 0;
+  if(p.v >= 1){ tc = ["IIA","IIB","III"][p.v - 1]; tcg = 2 + p.v; }
+  else if(p.i >= 2 && p.t >= 2){ tc = p.t === 2 ? "IA" : "IB"; tcg = p.t === 2 ? 1 : 2; }
+  var chronicTC = null;
+  if(p.cifta && p.t >= 2) chronicTC = p.t === 2 ? "IA" : "IB";
+  var borderline = !tc && !chronicTC && p.t >= 1 && p.i >= 1;
+  var tcPresent = !!tc || borderline || !!chronicTC;
+  var mviSum = p.g + p.ptc, mvi2 = mviSum >= 2 && (p.g >= 1 || !tcPresent);
+  var c1 = mvi2 || p.v >= 1 || p.tma, c2 = p.c4d >= 2 || mvi2, c3 = p.dsa || p.c4d >= 2;
+  var ab = null;
+  if(c1 && c2 && c3) ab = p.cg >= 1 ? "Chronic active ABMR" : "Active ABMR";
+  else if(mvi2 && !p.dsa && p.c4d < 2) ab = "MVI, DSA-neg C4d-neg";
+  else if(p.dsa && p.c4d < 2 && mviSum >= 1 && !mvi2) ab = "Probable ABMR";
+  else if(p.c4d >= 2 && mviSum === 0 && p.v === 0) ab = "C4d without rejection";
+  else if(p.cg >= 1) ab = "TG, criteria not met";
+  var tcTxt = tc ? "Acute TCMR " + tc : chronicTC ? "Chronic active TCMR " + chronicTC : borderline ? "Borderline" : "None";
+  var ifta = Math.max(p.ci, p.ct), iftaTxt = ["None","Mild IFTA","Moderate IFTA","Severe IFTA"][ifta];
+  var dx = [];
+  if(ab === "Active ABMR" || ab === "Chronic active ABMR") dx.push(ab);
+  if(tc || chronicTC || borderline) dx.push(tcTxt);
+  if(ab && dx.indexOf(ab) < 0) dx.push(ab === "MVI, DSA-neg C4d-neg" ? "Microvascular inflammation, DSA-negative and C4d-negative" : ab === "C4d without rejection" ? "C4d staining without evidence of rejection" : ab === "TG, criteria not met" ? "Transplant glomerulopathy, ABMR criteria not currently met" : ab);
+  if(!dx.length) dx.push("No evidence of rejection");
+  if(ifta) dx.push(iftaTxt);
+  return {tc:tc, tcg:tcg, chronicTC:chronicTC, borderline:borderline, tcTxt:tcTxt, ab:ab, mviSum:mviSum, mvi2:mvi2, c1:c1, c2:c2, c3:c3, dx:dx, ifta:ifta};
+}
+
+/* ---------- drawing ---------- */
+var ti = document.getElementById("ti"), FT = "IBM Plex Sans Thai, sans-serif", MO = "Geist Mono, monospace";
+function SV(t, a, p){ var o = {}; Object.keys(a).forEach(function(k){ if(a[k] !== null && a[k] !== undefined) o[k] = a[k]; }); return Sim.svg(t, o, p); }
+var TUB = [[80,80,44],[190,62,40],[300,96,46],[92,200,42],[208,178,44],[318,214,40],[96,318,44],[210,300,42],[330,330,40],[430,300,42],[530,330,40],[540,220,38]];
+var PTC = [[140,130],[250,128],[150,250],[262,240],[380,160],[150,360],[268,360],[385,262],[480,250],[470,370],[40,140],[30,260]];
+var ART = [470,96,72];
+function rng(seed){ var s = seed; return function(){ s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; }; }
+function inTub(x, y){ for(var i = 0; i < TUB.length; i++){ var t = TUB[i]; if(Math.hypot(x - t[0], y - t[1]) < t[2] + 6) return true; } return Math.hypot(x - ART[0], y - ART[1]) < ART[2] + 6; }
+function lymph(x, y, r, g){ SV("circle", {cx:x, cy:y, r:r || 4.2, fill:"#5B4BFF", stroke:"#2E22A8", "stroke-width":0.8}, g || ti); }
+function drawTI(p){
+  ti.innerHTML = "";
+  SV("rect", {x:0, y:0, width:600, height:400, rx:14, fill:"#FBF6F8"}, ti);
+  // fibrosis
+  var R = rng(7), fib = [0, 0.15, 0.38, 0.65][p.ci];
+  if(fib){ for(var k = 0; k < 900 * fib; k++){ var x = R() * 600, y = R() * 400; if(!inTub(x, y)) SV("circle", {cx:x, cy:y, r:5 + R() * 4, fill:"#9CC3E6", "fill-opacity":0.35}, ti); } }
+  // tubules
+  var atro = [0, 2, 4, 7][p.ct];
+  TUB.forEach(function(t, idx){
+    var at = idx >= TUB.length - atro, r = at ? t[2] * 0.62 : t[2];
+    SV("circle", {cx:t[0], cy:t[1], r:r, fill:"#F6D9E3", stroke:at ? "#7E6AA8" : "#D9A8BC", "stroke-width":at ? 4 : 1.5}, ti);
+    SV("circle", {cx:t[0], cy:t[1], r:r * 0.45, fill:"#FFFFFF", stroke:"#E9C6D4"}, ti);
+    // nuclei ring
+    for(var n = 0; n < 10; n++){ var a = n / 10 * Math.PI * 2; SV("circle", {cx:t[0] + Math.cos(a) * r * 0.72, cy:t[1] + Math.sin(a) * r * 0.72, r:2.6, fill:"#B98AA3"}, ti); }
+    // tubulitis
+    var nt = [0, 2, 6, 11][p.t] * (idx % 3 === 2 ? 0.5 : 1);
+    for(var m = 0; m < nt; m++){ var b = (m / Math.max(1, nt)) * Math.PI * 2 + idx; lymph(t[0] + Math.cos(b) * r * 0.62, t[1] + Math.sin(b) * r * 0.62, 3.6); }
+  });
+  // artery
+  var lumR = ART[2] * (p.v >= 2 ? 0.22 : 0.42);
+  SV("circle", {cx:ART[0], cy:ART[1], r:ART[2], fill:"#F2C9D2", stroke:"#C78B9C", "stroke-width":2}, ti);
+  SV("circle", {cx:ART[0], cy:ART[1], r:ART[2] * 0.62, fill:p.v >= 1 ? "#F7EEF3" : "#FBF6F8", stroke:"#C78B9C"}, ti);
+  SV("circle", {cx:ART[0], cy:ART[1], r:lumR, fill:"#FFFFFF", stroke:"#B98AA3", "stroke-width":1.4}, ti);
+  if(p.v >= 1){ var Rv = rng(31), nv = p.v === 1 ? 9 : 22; for(var q = 0; q < nv; q++){ var a2 = Rv() * Math.PI * 2, d2 = lumR + 3 + Rv() * (ART[2] * 0.6 - lumR - 6); lymph(ART[0] + Math.cos(a2) * d2, ART[1] + Math.sin(a2) * d2, 3.4); } }
+  if(p.v === 3){ for(var s = 0; s < 5; s++){ var a3 = s / 5 * Math.PI * 2 + 0.3; SV("path", {d:"M" + (ART[0] + Math.cos(a3) * ART[2] * 0.64) + "," + (ART[1] + Math.sin(a3) * ART[2] * 0.64) + " L" + (ART[0] + Math.cos(a3 + 0.4) * ART[2] * 0.98) + "," + (ART[1] + Math.sin(a3 + 0.4) * ART[2] * 0.98), stroke:"#B4232A", "stroke-width":7, "stroke-linecap":"round", "stroke-opacity":0.8}, ti); } }
+  // PTC
+  var c4dFrac = [0, 0.06, 0.35, 0.85][p.c4d], Rp = rng(13);
+  PTC.forEach(function(c, idx){
+    var brown = Rp() < c4dFrac;
+    SV("ellipse", {cx:c[0], cy:c[1], rx:15, ry:10, fill:"#FFFFFF", stroke:brown ? "#8A5A2B" : "#D0A9B8", "stroke-width":brown ? 4 : 1.4}, ti);
+    var np = [0, 2, 4, 7][p.ptc] * (idx % 4 === 3 ? 0.4 : 1);
+    for(var m = 0; m < np; m++){ lymph(c[0] - 9 + (m % 4) * 6, c[1] - 3 + Math.floor(m / 4) * 6, 2.8); }
+  });
+  // interstitial infiltrate
+  var Ri = rng(3), ni = [4, 22, 60, 120][p.i], placed = 0, tries = 0;
+  while(placed < ni && tries < 4000){ tries++; var x = Ri() * 590 + 5, y = Ri() * 390 + 5; if(inTub(x, y)) continue; lymph(x, y, 3.8); placed++; }
+  // labels
+  [["Tubule (t)", 80, 136],["Artery (v)", 470, 184],["PTC (ptc)", 250, 156]].forEach(function(l){ SV("rect", {x:l[1] - 38, y:l[2] - 12, width:76, height:17, rx:8, fill:"rgba(255,255,255,.85)"}, ti); SV("text", {x:l[1], y:l[2], "text-anchor":"middle", "font-family":FT, "font-size":11, fill:"#0B0B1F", text:l[0]}, ti); });
+  SV("text", {x:590, y:392, "text-anchor":"end", "font-family":MO, "font-size":11, fill:"#5E6075", text:"i" + p.i + " t" + p.t + " v" + p.v + " ptc" + p.ptc + " ci" + p.ci + " ct" + p.ct + " C4d" + p.c4d}, ti);
+}
+var key = document.getElementById("key");
+function drawKey(){
+  key.innerHTML = "";
+  var items = [["#5B4BFF","circle","Mononuclear cell"],["#8A5A2B","ring","C4d in PTC"],["#9CC3E6","blob","Fibrosis (ci)"],["#7E6AA8","ring","Atrophic tubule (ct)"]];
+  items.forEach(function(it, i){ var y = 18 + i * 30;
+    if(it[1] === "circle") SV("circle", {cx:16, cy:y, r:5, fill:it[0]}, key);
+    else if(it[1] === "ring") SV("circle", {cx:16, cy:y, r:7, fill:"#fff", stroke:it[0], "stroke-width":3.5}, key);
+    else SV("circle", {cx:16, cy:y, r:8, fill:it[0], "fill-opacity":0.6}, key);
+    SV("text", {x:34, y:y + 4, "font-family":FT, "font-size":12.5, fill:"#0B0B1F", text:it[2]}, key); });
+}
+drawKey();
+var G = Patho.glom(document.getElementById("glom"), {seed:5, stain:"PAS"});
+function update(){
+  var p = P(), B = banff(p);
+  drawTI(p);
+  G.update({endocap:[0, 0.25, 0.5, 0.8][p.g], hyper:[0.1, 0.25, 0.4, 0.55][p.g], doubleContour:p.cg >= 1, thrombi:p.tma ? 0.4 : 0, thrombusType:"fibrin", mesExpand:p.cg >= 2 ? 0.3 : 0, label:"g" + p.g + " cg" + p.cg});
+  document.getElementById("glab").textContent = "Glomerulus: g" + p.g + (p.cg ? ", cg" + p.cg + " double contour" : "");
+  Sim.ro("roMVI", B.mviSum + (B.mvi2 ? " ✓" : ""), B.mvi2 ? "flag" : B.mviSum ? null : "ok");
+  Sim.ro("roTC", B.tc || (B.chronicTC ? "cTCMR " + B.chronicTC : B.borderline ? "BL" : "None"), B.tc || B.chronicTC ? "flag" : B.borderline ? null : "ok");
+  var abShort = B.ab === "Active ABMR" ? "Active" : B.ab === "Chronic active ABMR" ? "Chr. active" : B.ab === "Probable ABMR" ? "Probable" : B.ab === "MVI, DSA-neg C4d-neg" ? "MVI only" : B.ab === "C4d without rejection" ? "C4d only" : B.ab ? "TG" : "None";
+  Sim.ro("roAB", abShort, /Active|active/.test(B.ab || "") ? "flag" : B.ab ? null : "ok");
+  document.getElementById("dx").innerHTML = "<b>Banff diagnosis:</b> " + B.dx.join(" + ") + "<br><span style='font-size:12.5px;opacity:.8'>ABMR criteria: injury " + (B.c1 ? "✓" : "✗") + " antibody interaction " + (B.c2 ? "✓" : "✗") + " DSA or C4d " + (B.c3 ? "✓" : "✗") + "</span>";
+  var n = [];
+  if(B.ab === "Active ABMR") n.push("Active ABMR: PLEX + IVIG optimize tacrolimus และ steroid พิจารณา rituximab ตามบริบท ตรวจ DSA ซ้ำและ biopsy ติดตาม");
+  if(B.ab === "Chronic active ABMR") n.push("Chronic active ABMR: ยังไม่มีการรักษาที่พิสูจน์ได้ แก้ adherence ให้ tacrolimus trough พอ (ราว > 6) คง steroid คุม BP และ proteinuria ด้วย RAASi พิจารณา clinical trial");
+  if(B.tc){ if(B.tcg >= 3) n.push("TCMR grade " + B.tc + ": methylprednisolone pulse ร่วม rabbit ATG"); else n.push("TCMR " + B.tc + ": methylprednisolone 250–500 mg x 3 วันแล้ว taper ปรับ tacrolimus ให้ถึงเป้า ถ้าไม่ตอบสนองใน 5–7 วันให้ ATG"); }
+  if(B.chronicTC) n.push("Chronic active TCMR: steroid pulse อาจช่วยบางราย เพิ่ม maintenance และแก้ adherence");
+  if(B.borderline) n.push("Borderline: ถ้ามี graft dysfunction ให้ steroid pulse ตรวจ BK PCR และ SV40 ก่อนเพราะ BKVAN เลียนแบบ TCMR");
+  if(B.ab === "Probable ABMR") n.push("Probable ABMR: ติดตาม DSA และ eGFR ใกล้ชิด biopsy ซ้ำเมื่อ MFI เพิ่มหรือไตแย่ลง แก้ tac ต่ำหรือ non-adherence");
+  if(B.ab === "MVI, DSA-neg C4d-neg") n.push("MVI ไม่มี DSA และ C4d: ตัด viral infection, glomerulonephritis และ TMA ตรวจ non-HLA antibody ถ้าทำได้ ยังไม่มีการรักษาเฉพาะ ติดตาม DSA");
+  if(B.ab === "C4d without rejection") n.push(p.dsa ? "C4d บวกร่วม DSA แต่ไม่มี injury: ติดตาม DSA และ biopsy ซ้ำ" : "C4d อย่างเดียว ถ้าเป็น ABOi ถือเป็น accommodation ไม่ต้องรักษา");
+  if(B.ab === "TG, criteria not met") n.push("Transplant glomerulopathy โดยไม่มี DSA หรือ C4d ตอนนี้: ทบทวน DSA เดิม, HCV และ TMA เก่า ตรวจ DSA ซ้ำ");
+  if(!n.length) n.push(B.ifta ? "ไม่มี rejection มี IFTA ตรวจ CNI toxicity, BK, BP, obstruction และ adherence" : "ไม่มี rejection ติดตาม Cr, DSA และ tacrolimus ตามรอบ");
+  document.getElementById("act").innerHTML = "<b>Next step:</b> " + n.join(" ");
+}
+Sim.mount({code:"KT-05", title:"Banff Rejection Explorer",
+  lead:"ปรับ Banff lesion score, DSA และ C4d ดูภาพ biopsy เปลี่ยนตาม แล้วให้ระบบจัด TCMR grade, active หรือ chronic active ABMR และกลุ่มใหม่ของ Banff 2022 พร้อมแนวการรักษา",
+  scenarios:S, order:ORDER, captureMs:900,
+  onChange:function(k, s){ var q = s.p; Object.keys(C).forEach(function(x){ C[x].set(q[x]); }); Object.keys(F).forEach(function(x){ F[x] = !!q[x]; TG[x].setState(F[x]); }); update(); },
+  refs:["Naesens M, Roufosse C, Haas M, et al. The Banff 2022 Kidney Meeting Report: reappraisal of microvascular inflammation and the role of biopsy-based transcript diagnostics. Am J Transplant 2024, 24(3): 338-349",
+        "Loupy A, Haas M, Roufosse C, et al. The Banff 2019 Kidney Meeting Report (I): updates on and clarification of criteria for T cell- and antibody-mediated rejection. Am J Transplant 2020, 20(9): 2318-2331",
+        "Roufosse C, Simmonds N, Clahsen-van Groningen M, et al. A 2018 reference guide to the Banff classification of renal allograft pathology. Transplantation 2018, 102(11): 1795-1814",
+        "Schinstock CA, Mannon RB, Budde K, et al. Recommended treatment for antibody-mediated rejection after kidney transplantation: the 2019 expert consensus from the Transplantation Society Working Group. Transplantation 2020, 104(5): 911-922",
+        "Kidney Disease: Improving Global Outcomes (KDIGO) Transplant Work Group. KDIGO clinical practice guideline for the care of kidney transplant recipients. Am J Transplant 2009, 9(Suppl 3): S1-S155"],
+  note:"Algorithm ย่อจาก Banff 2019 และ 2022: TCMR IA/IB = i ≥ 2 + t2/t3, IIA/IIB/III = v1/v2/v3, borderline = t ≥ 1 + i ≥ 1 ที่ไม่ถึงเกณฑ์, MVI = g + ptc ≥ 2 (ต้องมี g ≥ 1 เมื่อมี TCMR หรือ borderline), ABMR ต้องครบ injury + antibody interaction + DSA หรือ C4d (C4d ≥ 2 แบบ IF) ไม่ได้รวม molecular diagnostics, i-IFTA เต็มรูปแบบ และ cv grading"
+});
+})();
+</script>
+</body>
+</html>

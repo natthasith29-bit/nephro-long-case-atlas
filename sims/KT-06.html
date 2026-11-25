@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[KT-06] BK Polyomavirus: Screening, Kinetics and Immunosuppression Reduction</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.35fr 1fr}}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.sel{display:grid;grid-template-columns:minmax(110px,150px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px;margin:6px 0}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.sub{font-size:12.5px;color:var(--muted);margin:14px 0 4px}
+h3.bay{font-size:14px;margin:16px 0 6px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present #live,body.present .act{display:none}
+body.present .card{padding:14px 18px}
+body.present .ctls{gap:2px}
+body.present .ctl{font-size:13.5px}
+body.present .sel{margin:2px 0;font-size:13.5px}
+body.present .tools{margin-top:4px;gap:5px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .ro{padding:5px 10px}
+body.present .ro b{font-size:18px}
+body.present .sub,body.present h3.bay{margin:5px 0 2px}
+body.present #bay{max-height:150px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Plasma BK DNA 18 เดือน: พบเร็วแค่ไหนและ clear เมื่อไร</h2>
+      <div id="chart"></div>
+      <div id="live"></div>
+      <h3 class="bay">Screening test ใน 100 คน</h3>
+      <div class="svgwrap"><svg id="bay" viewBox="0 0 680 190" role="img" aria-label="Natural frequency grid of true and false positives for the selected BK screening test"></svg></div>
+      <p class="hint no-present">เส้นม่วงคือ plasma BK DNA (log10 copies/mL) จุดดำคือวันที่ตรวจตามตาราง screening eGFR ดูที่ readout กล่อง 100 ช่องด้านล่างแปลง sensitivity, specificity และ prevalence ของ BKVAN เป็นจำนวนคน</p>
+    </div>
+    <div class="card">
+      <h2>Screening และการลด immunosuppression</h2>
+      <div class="sel"><label for="sScr">Screening</label><select id="sScr">
+        <option value="plasma">Plasma BK DNA ทุกเดือนถึงเดือน 9 แล้วทุก 3 เดือน</option><option value="urine">Urine decoy cell ตามรอบเดียวกัน แล้วตรวจ plasma เมื่อบวก</option><option value="none">ไม่ screen (ตรวจเมื่อ Cr ขึ้น)</option></select></div>
+      <div class="sel"><label for="sStr">เมื่อพบ</label><select id="sStr">
+        <option value="step">Stepwise: ลด MPA 50% → หยุด MPA → ลด tacrolimus</option><option value="cni">ลด tacrolimus ก่อน → ลด MPA</option><option value="mild">ลด MPA 50% อย่างเดียว</option><option value="none">ไม่ปรับยา</option></select></div>
+      <div class="tools" id="tools"></div>
+      <div class="ctls" id="ctls" style="margin-top:12px"></div>
+      <div class="readout">
+        <div class="ro" id="roDet"><b>-</b><span>พบ viremia เดือนที่</span></div>
+        <div class="ro" id="roPeak"><b>-</b><span>Peak (copies/mL)</span></div>
+        <div class="ro" id="roHi"><b>-</b><span>เดือนที่ &gt; 10,000</span></div>
+        <div class="ro" id="roClr"><b>-</b><span>Clear เดือนที่</span></div>
+        <div class="ro" id="roGFR"><b>-</b><span>eGFR เดือน 18</span></div>
+        <div class="ro" id="roRej"><b>-</b><span>Rejection risk</span></div>
+      </div>
+      <div class="no-present"><div class="sub">Bayes ของ screening test</div>
+      <div class="sel"><label for="sTest">Test</label><select id="sTest"><option value="decoy">Urine decoy cell</option><option value="pl4">Plasma BK DNA &gt; 10,000</option></select></div>
+      <div class="ctls" id="ctlsB"></div></div>
+      <div class="readout">
+        <div class="ro" id="roPPV"><b>-</b><span>PPV ต่อ BKVAN</span></div>
+        <div class="ro" id="roNPV"><b>-</b><span>NPV</span></div>
+        <div class="ro" id="roLR"><b>-</b><span>LR+</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/live.js"></script>
+<script>
+(function(){
+"use strict";
+var S = {
+  screen:{name:"Plasma screening + stepwise", p:{scr:"plasma", str:"step", atg:false, tcmr:false, imm:50, egfr:60, test:"decoy", se:99, sp:80, prev:8},
+    rows:[["Recipient","KT เดือนที่ 3 basiliximab + tac + MPA + pred eGFR 60"],["Screening","Plasma BK DNA 4,500 แล้ว 18,000 copies/mL ในเดือนถัดมา"],["Plan","ลด MPA 50% แล้วหยุดเมื่อ load ยังไม่ลด"],["ผล","Clear ก่อนเกิด nephropathy eGFR คงที่"]],
+    take:["Screen plasma BK DNA ทุกเดือนถึงเดือน 9 แล้วทุก 3 เดือนถึง 2 ปี","Plasma BK DNA > 1,000 copies/mL ต่อเนื่อง > 2 สัปดาห์ (probable) หรือ > 10,000 copies/mL (presumptive) ให้ลด immunosuppression เป็นขั้น","ไม่ต้อง biopsy ถ้า graft function ปกติและ immunologic risk ไม่สูง"]},
+  noscr:{name:"ไม่ screen: BKVAN", p:{scr:"none", str:"step", atg:false, tcmr:false, imm:50, egfr:60, test:"decoy", se:99, sp:80, prev:8},
+    rows:[["Recipient","ไม่ได้ screen BK"],["Clinical","Cr 1.3 เป็น 2.1 เดือนที่ 8"],["Biopsy","SV40 บวก tubulointerstitial nephritis (BKVAN)"],["ผล","ลด IS แล้ว clear แต่ eGFR ไม่กลับเดิม"]],
+    take:["BKVAN ที่พบเมื่อ Cr ขึ้นแล้วมักเหลือ graft damage ถาวร","Screening เปลี่ยนเวลาที่พบจาก nephropathy เป็น viremia","Cidofovir, leflunomide, quinolone และ IVIG ไม่มีหลักฐานพอ"]},
+  atg:{name:"ATG + tac สูง", p:{scr:"plasma", str:"step", atg:true, tcmr:false, imm:40, egfr:60, test:"decoy", se:99, sp:80, prev:8},
+    rows:[["Recipient","Sensitized ได้ ATG tac trough 10–12"],["Screening","Viremia เร็วและ load สูงกว่า"],["Plan","Stepwise reduction"],["ผล","ใช้เวลานานกว่าจะ clear"]],
+    take:["Immunosuppression รวมสูงเป็นปัจจัยเสี่ยงหลักของ BK viremia","T-cell depletion และ tac สูงทำให้ BK-specific immunity มาช้า","High immunologic risk ทำให้ลดยาได้ยากขึ้น ควร biopsy เมื่อสงสัย"]},
+  mild:{name:"ลดยาไม่พอ", p:{scr:"plasma", str:"mild", atg:false, tcmr:false, imm:35, egfr:60, test:"decoy", se:99, sp:80, prev:8},
+    rows:[["Recipient","ตรวจพบเร็ว"],["Plan","ลด MPA 50% แล้วไม่ปรับต่อ"],["ผล","Load ค้าง > 10,000 หลายเดือน"],["ตามมา","Presumptive BKVAN และ eGFR ลดลง"]],
+    take:["ประเมิน load ทุก 2–4 สัปดาห์หลังลดยา","ถ้า load ไม่ลดอย่างน้อย 10 เท่าใน 1–2 เดือน ให้ลดยาขั้นต่อไป","Load ที่ค้างนานคือ nephropathy ที่กำลังเกิด"]},
+  tcmr:{name:"BKVAN + TCMR", p:{scr:"none", str:"step", atg:false, tcmr:true, imm:50, egfr:60, test:"pl4", se:93, sp:93, prev:8},
+    rows:[["Clinical","Cr ขึ้นเดือนที่ 7 plasma BK 10^5"],["Biopsy","SV40 บวก และ tubulitis + intimal arteritis (v1) ในบริเวณที่ไม่มี SV40"],["Dilemma","ลดยาเพื่อ BK แต่มี rejection"],["Plan","รักษา rejection ก่อน แล้วลด maintenance IS"]],
+    take:["Tubulitis ใน BKVAN อาจเป็น virus หรือ rejection ร่วม","v lesion, C4d หรือ DSA บ่งชี้ rejection จริง","รักษา rejection ก่อนแล้วลด IS พร้อมติดตาม load ใกล้ชิด"]},
+  urine:{name:"Urine cytology (ทรัพยากรจำกัด)", p:{scr:"urine", str:"step", atg:false, tcmr:false, imm:50, egfr:60, test:"decoy", se:99, sp:80, prev:8},
+    rows:[["Setting","ตรวจ plasma PCR ทุกเดือนไม่ได้"],["Screening","Urine decoy cell ตามรอบ ถ้าบวกตรวจ plasma"],["Test","Sensitivity สูง NPV เกือบ 100% แต่ PPV ต่ำ"],["ผล","พบช้ากว่าเล็กน้อยแต่ยังก่อน nephropathy"]],
+    take:["Decoy cell ลบทำให้ BKVAN เป็นไปได้น้อย (NPV สูง) แต่ไม่ได้ตัดโรค","Decoy cell บวกต้องตรวจ plasma ก่อนลดยา (PPV ต่ำ)","PPV ขึ้นกับ prevalence ของ BKVAN ในประชากรที่ตรวจ"]}
+};
+var ORDER = ["screen","noscr","atg","mild","tcmr","urine"];
+var sScr = document.getElementById("sScr"), sStr = document.getElementById("sStr"), sTest = document.getElementById("sTest");
+[sScr, sStr].forEach(function(s){ s.addEventListener("change", function(){ update(); }); });
+sTest.addEventListener("change", function(){ if(sTest.value === "decoy"){ C.se.set(99); C.sp.set(80); } else { C.se.set(93); C.sp.set(93); } bayes(); });
+var C = {};
+function sl(box, k, o, fn){ o.id = "s" + k; o.onInput = fn; C[k] = Sim.slider(o); document.getElementById(box).appendChild(C[k].el); }
+sl("ctls", "imm", {label:"BK-specific immunity", min:10, max:90, step:5, value:50, unit:"%"}, function(){ update(true); });
+sl("ctls", "egfr", {label:"eGFR ตั้งต้น", min:30, max:90, step:1, value:60, unit:""}, function(){ update(true); });
+sl("ctlsB", "se", {label:"Sensitivity", min:50, max:100, step:1, value:99, unit:"%"}, function(){ bayes(); });
+sl("ctlsB", "sp", {label:"Specificity", min:50, max:100, step:1, value:80, unit:"%"}, function(){ bayes(); });
+sl("ctlsB", "prev", {label:"BKVAN prevalence", min:1, max:30, step:1, value:8, unit:"%"}, function(){ bayes(); });
+var F = {atg:false, tcmr:false}, TG = {};
+[["atg","ATG induction + tac สูง"],["tcmr","มี TCMR ร่วม"]].forEach(function(x){ TG[x[0]] = Sim.toggle(x[1], function(on){ F[x[0]] = on; update(); }, false); document.getElementById("tools").appendChild(TG[x[0]]); });
+
+/* ---------- model ---------- */
+var TM = 18, DT = 0.02;
+function screens(scr){ var s = []; if(scr === "none") return s; for(var m = 1; m <= 9; m++) s.push(m); for(var q = 12; q <= TM; q += 3) s.push(q); return s; }
+function simulate(p){
+  var IS = p.atg ? 1.25 : 1, I = 0, L = 0.5, N = 0, rej = 0, gfr = p.egfr;
+  var immK = 0.4 + p.imm / 100 * 0.9;
+  var sch = screens(p.scr), schI = 0, det = null, lastScr = null, step = 0, stepT = null, ref = null, highM = 0, clr = null, rejEv = null, gfrMin = gfr;
+  var VL = [], GF = [], SC = [], ev = [];
+  for(var it = 0; it <= Math.round(TM / DT); it++){
+    var t = it * DT;
+    var onset = t >= 1.2 ? 1 : 0;
+    var rep = 1.45 * IS * onset, clear = immK * I;
+    L += (rep - clear - (L > 6.8 ? (L - 6.8) * 2 : 0)) * DT * 1.2;
+    if(L < 0.5) L = 0.5;
+    I += ((1.05 - 0.75 * Math.min(1.2, IS)) * (0.4 + Math.max(0, L - 2) * 0.35) - 0.25 * I) * DT;
+    if(L > 4) highM += DT;
+    if(L > 4.3) N += Math.pow(L - 4.3, 1.5) * DT;
+    // TCMR: concurrent toggled at month 6.5 makes graft injury unless treated
+    gfr = Math.max(8, p.egfr - 4.5 * N);
+    if(p.tcmr && det !== null) gfr -= 5 * (1 - Math.exp(-(t - det) / 0.6));
+    gfrMin = Math.min(gfrMin, gfr);
+    // detection
+    if(det === null){
+      if(p.scr === "none"){ if(gfr < p.egfr * 0.8){ det = t; ev.push({t:t, kind:"warn", text:"Cr ขึ้น ตรวจ plasma BK " + fmtVL(L) + " copies/mL" + (p.tcmr ? " biopsy พบ SV40 ร่วม TCMR" : " biopsy พบ BKVAN")}); } }
+      else if(schI < sch.length && t >= sch[schI] - 1e-9){
+        var v = L; SC.push([t, v]);
+        var thr = p.scr === "urine" ? 3.2 : 3;
+        var trig = v >= 4 || (v >= thr && lastScr !== null && lastScr >= thr);
+        if(p.scr === "urine" && v >= 3.2){ trig = v >= 3.6; }
+        if(trig){ det = t; ev.push({t:t, kind:"warn", text:(p.scr === "urine" ? "Decoy cell บวก ตรวจ plasma " : "Plasma BK ") + fmtVL(v) + " copies/mL เข้าเกณฑ์ลด immunosuppression"}); }
+        else if(v >= thr) ev.push({t:t, kind:"phys", text:"Plasma BK " + fmtVL(v) + " copies/mL ตรวจซ้ำใน 2–4 สัปดาห์"});
+        lastScr = v; schI++;
+      }
+      if(det !== null && p.str !== "none"){ step = 1; stepT = t; ref = L; IS = (p.atg ? 1.25 : 1) * (p.str === "cni" ? 0.7 : 0.65); ev.push({t:t, kind:"rx", text:p.str === "cni" ? "ลด tacrolimus target เหลือ 4–6 ng/mL" : "ลด mycophenolate 50%"}); if(p.tcmr) ev.push({t:t, kind:"rx", text:"รักษา TCMR ด้วย steroid pulse ก่อนลด maintenance"}); }
+    } else if(p.str === "step" || p.str === "cni"){
+      if(step > 0 && step < 3 && clr === null && t - stepT >= 1.0){
+        if(L > ref - 1){ step++; stepT = t; ref = L;
+          if(p.str === "step"){ IS = (p.atg ? 1.25 : 1) * (step === 2 ? 0.45 : 0.32); ev.push({t:t, kind:"rx", text:step === 2 ? "Load ลดไม่ถึง 10 เท่า หยุด mycophenolate" : "ลด tacrolimus target เหลือ 3–5 ng/mL"}); }
+          else { IS = (p.atg ? 1.25 : 1) * (step === 2 ? 0.48 : 0.34); ev.push({t:t, kind:"rx", text:step === 2 ? "ลด mycophenolate 50%" : "หยุด mycophenolate"}); }
+        } else { stepT = t; ref = L; }
+      }
+    }
+    if(det !== null && clr === null && L < 2.7 && t > det) { clr = t; ev.push({t:t, kind:"ok", text:"Plasma BK ต่ำกว่า 500 copies/mL (clear)"}); }
+    if(IS < 0.5 && det !== null) rej += (0.5 - IS) * DT * 0.12;
+    if(it % 5 === 0){ VL.push([+t.toFixed(2), +L.toFixed(3)]); GF.push([+t.toFixed(2), +gfr.toFixed(2)]); }
+  }
+  if(p.scr !== "none"){ /* continue screen dots after detection */
+    SC = []; sch.forEach(function(m){ var pt = VL.filter(function(x){ return Math.abs(x[0] - m) < 0.06; })[0]; if(pt) SC.push(pt); });
+  }
+  var peak = Math.max.apply(null, VL.map(function(x){ return x[1]; }));
+  if(p.tcmr) rej += 1;
+  return {VL:VL, GF:GF, SC:SC, ev:ev, det:det, peak:peak, highM:highM, clr:clr, gfr:GF[GF.length - 1][1], rej:rej, IS:IS};
+}
+function fmtVL(l){ var v = Math.pow(10, l); return v >= 1e6 ? (v / 1e6).toFixed(1) + " million" : Math.round(v).toLocaleString("en-US"); }
+
+/* ---------- chart ---------- */
+var A = Plot.colors;
+var chart = Plot.chart(document.getElementById("chart"), {height:Sim.present ? 280 : 270, aria:"Plasma BK virus load and eGFR over eighteen months after transplant",
+  x:{min:0, max:TM, step:3, label:"Months after transplant"}, y:{min:2, max:7, step:1, label:"Plasma BK DNA (log10 copies/mL)", fmt:function(v){ return v.toFixed(0); }},
+  series:[{id:"vl", name:"BK load", color:A.accent, data:[], width:2.4},
+          {id:"sc", name:"Screening test", color:A.ink, data:[], line:false, points:true}],
+  hlines:[{y:4, label:"10,000", color:A.red, dash:[4,3]},{y:3, label:"1,000", color:A.gold, dash:[2,4]}], legend:true});
+var live = Live.player(chart, {mount:"live"}), LAST = null;
+function P(){ return {scr:sScr.value, str:sStr.value, atg:F.atg, tcmr:F.tcmr, imm:C.imm.get(), egfr:C.egfr.get()}; }
+function update(deb){
+  var p = P(), R = simulate(p);
+  chart.setSeries("vl", R.VL.map(function(x){ return [x[0], Math.max(2, x[1])]; })); chart.setSeries("sc", R.SC.map(function(x){ return [x[0], Math.max(2, x[1])]; }));
+  var rejL = R.rej > 0.6 ? "High" : R.rej > 0.08 ? "Moderate" : "Low";
+  var msg, bad = false;
+  if(p.tcmr) { msg = "BKVAN ร่วม TCMR (v lesion หรือ tubulitis นอกบริเวณ SV40): ให้ steroid pulse รักษา rejection ก่อน แล้วลด maintenance (MPA ก่อน) ติดตาม plasma BK ทุก 2 สัปดาห์ และตรวจ DSA"; bad = true; }
+  else if(p.str === "none" && R.det !== null){ bad = true; msg = "ต้องลด immunosuppression เมื่อ load > 1,000 ที่คงอยู่หรือ > 10,000 ไม่มียาต้านไวรัสที่ได้ผลชัดเจน"; }
+  else if(R.det === null) msg = "ไม่พบ viremia ที่เข้าเกณฑ์ screen ต่อตามรอบจนครบ 2 ปี";
+  else if(R.highM > 3){ bad = true; msg = "Load > 10,000 นาน " + R.highM.toFixed(1) + " เดือน (presumptive BKVAN) ลดยาขั้นต่อไปเมื่อ load ไม่ลด 10 เท่าใน 4–8 สัปดาห์ ถ้า Cr ขึ้นให้ biopsy เพื่อแยก rejection"; }
+  else msg = "ติดตาม plasma BK ทุก 2–4 สัปดาห์จน clear แล้วค่อยๆ เพิ่มยากลับอย่างระวัง ตรวจ DSA เพราะการลดยาเพิ่มความเสี่ยง de novo DSA";
+  LAST = {p:p, R:R, rejL:rejL, act:"<b>Next step:</b> " + msg, bad:bad};
+  live.load({tMax:TM, unit:"เดือน", ms:7500, debounce:deb === true, num:function(x){ return x.toFixed(1); }, events:R.ev.sort(function(a, b){ return a.t - b.t; }), onFrame:onFrame,
+    cursorLabel:function(t){ return "Month " + t.toFixed(1); }});
+  bayes();
+}
+function onFrame(t, done){
+  var M = LAST, R = M.R;
+  Sim.ro("roDet", R.det !== null && t >= R.det ? R.det.toFixed(1) : (done ? "-" : "…"), R.det !== null && t >= R.det ? (M.p.scr === "none" ? "flag" : "ok") : null);
+  var cur = R.VL.filter(function(x){ return x[0] <= t; }), pk = cur.length ? Math.max.apply(null, cur.map(function(x){ return x[1]; })) : 0.5;
+  Sim.ro("roPeak", pk > 2.4 ? fmtVL(pk).replace(" million", "M") : "< 250", pk >= 4 ? "flag" : null);
+  Sim.ro("roHi", done ? R.highM.toFixed(1) : "…", done ? (R.highM > 3 ? "flag" : R.highM === 0 ? "ok" : null) : null);
+  Sim.ro("roClr", done ? (R.clr !== null ? R.clr.toFixed(1) : "-") : "…", done && R.clr !== null ? "ok" : null);
+  var g = R.GF.filter(function(x){ return x[0] <= t; }); var gv = g.length ? g[g.length - 1][1] : M.p.egfr;
+  Sim.ro("roGFR", gv.toFixed(0), gv < M.p.egfr * 0.85 ? "flag" : "ok");
+  Sim.ro("roRej", done ? M.rejL : "…", done ? (M.rejL === "High" ? "flag" : M.rejL === "Low" ? "ok" : null) : null);
+  var a = document.getElementById("act");
+  if(done){ a.innerHTML = M.act; a.className = "act" + (M.bad ? " bad" : ""); }
+  else { a.innerHTML = "<b>กำลังจำลอง</b> เดือนที่ " + t.toFixed(1); a.className = "act"; }
+}
+/* ---------- Bayes ---------- */
+var bay = document.getElementById("bay"), FT = "IBM Plex Sans Thai, sans-serif", MO = "Geist Mono, monospace";
+function bayes(){
+  var se = C.se.get() / 100, sp = C.sp.get() / 100, pr = C.prev.get() / 100;
+  var tp = se * pr, fn = (1 - se) * pr, fp = (1 - sp) * (1 - pr), tn = sp * (1 - pr);
+  var ppv = tp / (tp + fp), npv = tn / (tn + fn), lr = se / Math.max(0.001, 1 - sp);
+  Sim.ro("roPPV", Math.round(ppv * 100) + "%", ppv < 0.5 ? "flag" : "ok");
+  Sim.ro("roNPV", (npv * 100).toFixed(1) + "%", npv > 0.98 ? "ok" : null);
+  Sim.ro("roLR", lr > 50 ? "> 50" : lr.toFixed(1));
+  bay.innerHTML = "";
+  var nTP = Math.round(tp * 100), nFN = Math.round(fn * 100), nFP = Math.round(fp * 100), nTN = 100 - nTP - nFN - nFP;
+  var cells = [];
+  for(var i = 0; i < nTP; i++) cells.push("tp"); for(i = 0; i < nFN; i++) cells.push("fn"); for(i = 0; i < nFP; i++) cells.push("fp"); for(i = 0; i < nTN; i++) cells.push("tn");
+  var col = {tp:"#B4232A", fn:"#F2B8BB", fp:"#5B4BFF", tn:"#E6E7F0"};
+  cells.forEach(function(c, j){ var x = 16 + (j % 25) * 17, y = 10 + Math.floor(j / 25) * 17; Sim.svg("rect", {x:x, y:y, width:14, height:14, rx:3.5, fill:col[c]}, bay); });
+  var lg = [["tp","BKVAN, test positive", nTP],["fp","No BKVAN, test positive", nFP],["fn","BKVAN, test negative", nFN],["tn","No BKVAN, test negative", nTN]];
+  lg.forEach(function(l, i){ var y = 22 + i * 22; Sim.svg("rect", {x:446, y:y - 11, width:13, height:13, rx:3, fill:col[l[0]]}, bay); Sim.svg("text", {x:466, y:y, "font-family":FT, "font-size":13, fill:"#0B0B1F", text:l[1] + ": " + l[2]}, bay); });
+  Sim.svg("text", {x:16, y:112, "font-family":FT, "font-size":14, fill:"#0B0B1F", text:"Of " + (nTP + nFP) + " positive tests, " + nTP + " have BKVAN (PPV " + Math.round(ppv * 100) + "%)."}, bay);
+  Sim.svg("text", {x:16, y:134, "font-family":FT, "font-size":14, fill:"#0B0B1F", text:"Of " + (nTN + nFN) + " negative tests, " + nTN + " are truly free of BKVAN (NPV " + (npv * 100).toFixed(1) + "%)."}, bay);
+  Sim.svg("text", {x:16, y:158, "font-family":FT, "font-size":12, fill:"#5E6075", text:"PPV = sens x prev / [sens x prev + (1 - spec) x (1 - prev)]"}, bay);
+  Sim.svg("text", {x:16, y:178, "font-family":FT, "font-size":12, fill:"#5E6075", text:"Each square = 1 recipient (rounded)."}, bay);
+}
+Sim.mount({code:"KT-06", title:"BK Polyomavirus: Screening, Kinetics and Immunosuppression Reduction",
+  lead:"เลือกวิธี screen และแผนลดยา ดู plasma BK DNA และ eGFR 18 เดือนแบบ real time ว่าพบเร็วหรือช้า clear เมื่อไร และแลกกับ rejection แค่ไหน แล้วใช้ Bayes ดู PPV ของ decoy cell",
+  scenarios:S, order:ORDER, captureMs:1200,
+  onChange:function(k, s){ var q = s.p; sScr.value = q.scr; sStr.value = q.str; sTest.value = q.test; C.imm.set(q.imm); C.egfr.set(q.egfr); C.se.set(q.se); C.sp.set(q.sp); C.prev.set(q.prev);
+    F.atg = q.atg; TG.atg.setState(q.atg); F.tcmr = q.tcmr; TG.tcmr.setState(q.tcmr); update(); },
+  refs:["Kotton CN, Kamar N, Wojciechowski D, et al. The Second International Consensus Guidelines on the Management of BK Polyomavirus in Kidney Transplantation. Transplantation 2024, 108(9): 1834-1866",
+        "Hirsch HH, Randhawa PS, AST Infectious Diseases Community of Practice. BK polyomavirus in solid organ transplantation: guidelines from the American Society of Transplantation Infectious Diseases Community of Practice. Clin Transplant 2019, 33(9): e13528",
+        "Hirsch HH, Knowles W, Dickenmann M, et al. Prospective study of polyomavirus type BK replication and nephropathy in renal-transplant recipients. N Engl J Med 2002, 347(7): 488-496",
+        "Knoll GA, Humar A, Fergusson D, et al. Levofloxacin for BK virus prophylaxis following kidney transplantation: a randomized clinical trial. JAMA 2014, 312(20): 2106-2114",
+        "Schaub S, Hirsch HH, Dickenmann M, et al. Reducing immunosuppression preserves allograft function in presumptive and definitive polyomavirus-associated nephropathy. Am J Transplant 2010, 10(12): 2615-2623"],
+  note:"Model เพื่อการสอน: log10 load เพิ่มตาม replication ∝ immunosuppression และลดตาม BK-specific immunity ที่ค่อยๆ ขึ้นเมื่อ IS ลดลง ระดับขั้นการลดยา (MPA 50% เหลือ IS 65%, หยุด MPA 45%, ลด tac 32%) และ graft damage ∝ เวลาที่ load > 10,000 เป็นค่าประมาณ ค่า sensitivity และ specificity เริ่มต้นของ decoy cell และ plasma load เป็นค่าโดยประมาณจากการศึกษาต้นฉบับ"
+});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[AKI-09] Rhabdomyolysis and Pigment Nephropathy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.sel{display:grid;grid-template-columns:minmax(80px,170px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:12px}
+details{margin-top:10px;font-size:13.5px}
+summary{cursor:pointer;color:var(--accent);font-weight:500}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present details{display:none}
+body.present .card{padding:14px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .ro{padding:6px 12px}
+body.present .ro b{font-size:19px}
+body.present .ctls{gap:2px}
+body.present .ctl{font-size:13px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .tools{margin-top:4px;gap:5px}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>CK, myoglobin และ Cr ใน 5 วัน</h2>
+      <div id="chart"></div>
+      <div id="live"></div>
+      <p class="hint no-present">Myoglobin (t½ ไม่กี่ชั่วโมง) ขึ้นและลงก่อน CK (t½ ราว 1.5 วัน) การบาดเจ็บของท่อไตขึ้นกับ myoglobin ที่ผ่านท่อไตใน urine ที่ไหลช้าและเป็นกรด การให้สารน้ำเร็วในชั่วโมงแรกจึงสำคัญที่สุด</p>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วยและการรักษา</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roMc"><b>-</b><span>McMahon score</span></div>
+        <div class="ro" id="roUO"><b>-</b><span>UO 24 ชม. แรก (mL/h)</span></div>
+        <div class="ro" id="roK"><b>-</b><span>K สูงสุด</span></div>
+        <div class="ro" id="roCa"><b>-</b><span>Ca ต่ำสุด → วันที่ 5</span></div>
+        <div class="ro" id="roCr"><b>-</b><span>Cr สูงสุด</span></div>
+        <div class="ro" id="roKRT"><b>-</b><span>ต้อง KRT</span></div>
+      </div>
+      <div class="act" id="act"></div>
+      <details><summary>McMahon score</summary><div id="mc"></div></details>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/live.js"></script>
+<script>
+(function(){
+"use strict";
+var CAU={exer:"Exertional/heat stroke",crush:"Crush/trauma",sepsis:"Sepsis/infection",statin:"Statin/drug",seizure:"Seizure",immob:"Immobilization (นอนนาน)"};
+function P(o){ var d={c:"exer",ck:30000,age:25,delay:2,rate:300,dep:1,rx:[]}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  exer:{name:"Exertional ให้น้ำเร็ว", p:P({c:"exer",ck:45000,age:22,delay:1,rate:400,dep:1}),
+    rows:[["ผู้ป่วย","ทหารฝึกหนัก กลางแดด ปัสสาวะสีโคล่า"],["รักษา","isotonic crystalloid 400 mL/h ภายใน 1 ชม."],["ผล","UO > 200 mL/h Cr ขึ้นเล็กน้อยแล้วลง"]],
+    take:["CK > 5 เท่าของ ULN (มักใช้ > 1,000 U/L) ร่วมกับประวัติ เป็นนิยาม rhabdomyolysis","Urine dipstick blood บวกแต่ไม่มี RBC บอก myoglobinuria","ให้ isotonic crystalloid เร็วที่สุด เป้า UO 200–300 mL/h"]},
+  crush:{name:"Crush ให้น้ำช้า", p:P({c:"crush",ck:120000,age:45,delay:8,rate:250,dep:2}),
+    rows:[["ผู้ป่วย","ถูกอาคารทับ 6 ชม. ได้สารน้ำหลังเอาออก 8 ชม."],["ผล","K สูงเร็ว Ca ต่ำ AKI รุนแรง"],["ต่อ","ต้อง KRT ระวัง compartment syndrome"]],
+    take:["Crush syndrome: เริ่มสารน้ำตั้งแต่ก่อนเอาผู้ป่วยออกจากซาก","K สูงเฉียบพลันหลังปลดการกดทับเป็นสาเหตุเสียชีวิตเร็ว","ตรวจ compartment pressure และ fasciotomy ตามข้อบ่งชี้"]},
+  late:{name:"Exertional ให้น้ำช้า", p:P({c:"exer",ck:45000,age:22,delay:12,rate:200,dep:2}),
+    rows:[["ผู้ป่วย","เหมือนเคสแรกแต่มาถึงโรงพยาบาลช้า 12 ชม."],["ผล","AKI รุนแรงกว่าเมื่อ CK เท่ากัน"],["บทเรียน","เวลาสำคัญกว่า CK สูงสุด"]],
+    take:["การบาดเจ็บของท่อไตเกิดเร็วในช่วงที่ myoglobin สูง การให้น้ำช้าลดประโยชน์","CK สูงสุดทำนาย AKI ได้ไม่ดีเท่า volume status และเวลา","Risk score ที่รวมอายุ, Cr, Ca, CK, phosphate, HCO3 และสาเหตุ ช่วยคัดผู้ที่เสี่ยง KRT หรือเสียชีวิต"]},
+  bicarb:{name:"Bicarbonate + Ca ต่ำ", p:P({c:"crush",ck:80000,age:40,delay:3,rate:300,dep:1,rx:["bic"]}),
+    rows:[["ให้","NaHCO3 ให้ urine pH > 6.5"],["ผล","iCa ลดลงอีก เสี่ยง tetany และ arrhythmia"],["หลักฐาน","ไม่ดีกว่า saline อย่างเดียว"]],
+    take:["Bicarbonate และ mannitol ไม่มีหลักฐานว่าดีกว่า isotonic saline","Alkalinization ลด iCa และเพิ่ม CaP deposition ในกล้ามเนื้อ","ไม่ให้ Ca แก้ hypocalcemia ที่ไม่มีอาการ เพราะเกิด rebound hypercalcemia ในระยะฟื้น"]},
+  old:{name:"ผู้สูงอายุนอนนาน", p:P({c:"immob",ck:12000,age:82,delay:6,rate:150,dep:2}),
+    rows:[["ผู้ป่วย","หญิงอายุ 82 ล้มนอนอยู่บ้าน 2 วัน"],["ข้อจำกัด","HF ให้น้ำเร็วไม่ได้"],["ผล","McMahon สูงแม้ CK ไม่สูงมาก"]],
+    take:["อายุมาก หญิง Cr แรกรับสูง P สูง HCO3 ต่ำ เพิ่มความเสี่ยงแม้ CK ปานกลาง","ผู้ป่วย HF/CKD ปรับอัตราสารน้ำตาม volume status และ urine output","Hypercalcemia ระยะฟื้นพบได้จาก Ca ที่สะสมในกล้ามเนื้อถูกปล่อยออก"]},
+  statin:{name:"Statin + CKD", p:P({c:"statin",ck:20000,age:68,delay:4,rate:200,dep:1}),
+    rows:[["ผู้ป่วย","simvastatin + clarithromycin ปวดกล้ามเนื้อ CK 20,000"],["กลไก","CYP3A4 inhibitor ทำให้ statin level สูง"],["รักษา","หยุดยาทั้งคู่ สารน้ำ"]],
+    take:["Statin myopathy เพิ่มเมื่อใช้ CYP3A4 inhibitor (macrolide, azole, diltiazem) หรือ gemfibrozil","หยุด statin และยาที่ interact","ตรวจ TSH และ CK ซ้ำจนลง"]}
+};
+var ORDER=["exer","crush","late","bicarb","old","statin"];
+var box=document.getElementById("ctls"), C={};
+var cs=Sim.h("select",{id:"cau"},Object.keys(CAU).map(function(k){ return Sim.h("option",{value:k,text:CAU[k]}); })); cs.addEventListener("change",function(){ update(); });
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"cau",text:"สาเหตุ"}),cs]));
+function sl(k,o){ o.id="s"+k; o.onInput=function(){ update(true); }; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("ck",{label:"CK สูงสุด",min:2000,max:200000,step:1000,value:30000,unit:" U/L",fmt:function(v){ return v>=10000?(v/1000).toFixed(0)+"k":String(v); }});
+sl("age",{label:"อายุ",min:18,max:90,step:1,value:25,unit:" ปี"});
+sl("delay",{label:"เริ่มสารน้ำหลังเกิดเหตุ",min:0,max:24,step:1,value:2,unit:" ชม."});
+sl("rate",{label:"อัตราสารน้ำ",min:50,max:600,step:25,value:300,unit:" mL/h"});
+sl("dep",{label:"Volume depletion ตอนแรก",min:0,max:3,step:1,value:1,unit:"",fmt:function(v){ return ["none","mild","moderate","severe"][v]; }});
+var RX={bic:"NaHCO3 alkalinization",ca:"IV Ca สำหรับ Ca ต่ำไม่มีอาการ",krt:"KRT เมื่อมีข้อบ่งชี้"};
+var T={}, tb=document.getElementById("tools");
+Object.keys(RX).forEach(function(k){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:RX[k]}); b.addEventListener("click",function(){ b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); tb.appendChild(b); T[k]=b; });
+function on(k){ return T[k].getAttribute("aria-pressed")==="true"; }
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?270:290,aria:"CK, myoglobin and creatinine over five days",
+  x:{min:0,max:5,step:1,label:"Days after injury"},y:{min:100,max:300000,log:true,label:"CK, myoglobin (U/L, ng/mL)"},y2:{min:0,max:8,step:1,label:"Creatinine (mg/dL)"},
+  series:[{id:"ck",name:"CK",color:A.accent,data:[],width:2.4},{id:"mb",name:"Myoglobin",color:"#8E3B2E",data:[],width:1.8,dash:[4,3]},{id:"cr",name:"Cr",color:A.red,data:[],width:2.4,axis:"y2"}],legend:true});
+var live=Live.player(chart,{mount:"live"}), LAST=null;
+function model(){
+  var c=cs.value, ck=C.ck.get(), age=C.age.get(), dl=C.delay.get(), rate=C.rate.get(), dep=C.dep.get();
+  var bic=on("bic"), caRx=on("ca"), krt=on("krt");
+  var CK=[],MB=[],CR=[], cr=0.9, gfr0=100, gfr=gfr0, k=4.2, ca=9.0, p=3.8, hco3=24, uo24=0, kmax=0, camin=9, crmax=0, ev=[], krtAt=null, ca5=9;
+  var V=420, G=20*70*(ck>50000?1.4:1.15);
+  var tpk=c==="crush"?1.2:1.5;
+  for(var h=0;h<=120;h++){
+    var t=h/24;
+    var ckv=ck*(t<tpk?Math.pow(t/tpk,1.4):Math.exp(-(t-tpk)*0.46))+150;
+    var mb=Math.max(40,ck*0.35*(t<0.5?Math.pow(t/0.5,1.2):Math.exp(-(t-0.5)*2.2)));
+    /* volume and urine flow */
+    var fluid=h>=dl?rate:0, volDef=Math.max(0,dep*1.2-(h>=dl?(h-dl)*rate/1000*0.6:0)+(c==="crush"?Math.min(3,t*2):0)*(h<dl?1:0.4));
+    var uo=Math.max(5,(h>=dl?Math.min(rate*0.75,350):25)*(gfr/gfr0)*(1/(1+volDef*0.8)));
+    if(h<24) uo24+=uo/24;
+    var acid=bic?0.75:1;
+    var injury=Math.max(0,(mb-1500)/20000)*(60/Math.max(15,uo))*acid*(1+volDef*0.4);
+    gfr=Math.max(5,gfr-Math.min(0.06,injury*0.04)*gfr+(injury<0.02&&t>1.5?(gfr0-gfr)*0.02:0));
+    var tgt=G/(gfr*14.4); cr+=(tgt-cr)/Math.max(6,V/(gfr*1.44*10)*24*0.8);
+    /* electrolytes */
+    var rel=ck/100000*(t<tpk?1:Math.exp(-(t-tpk)));
+    k+=rel*(c==="crush"&&h<=dl+3&&h>=Math.min(dl,6)?0.3:0.035)-0.03*(gfr/gfr0)*Math.max(0,k-4)-(krtAt!==null?0.1*(k-4):0);
+    p+=rel*0.06-0.03*(gfr/gfr0)*Math.max(0,p-3.5)-(krtAt!==null?0.05*(p-3.5):0);
+    var seq=ck/100000*(t<2.5?1:Math.max(0,1-(t-2.5)/1.5));
+    ca=9.0-1.9*seq*(bic?1.25:1)+(t>3.5?Math.min(1.8,(t-3.5)*1.4*(ck/100000)*(caRx?1.6:1)):0)+(caRx&&t<3?0.4:0);
+    hco3=24-6*seq*(1/(1+(bic?1:0)))-(gfr<30?3:0);
+    if(krt&&krtAt===null&&(k>=6.5||(gfr<12&&t>1.5))){ krtAt=t; ev.push({t:t,kind:"rx",text:"เริ่ม KRT: "+(k>=6.5?"K "+k.toFixed(1)+" ดื้อการรักษา":"oliguric AKI")}); }
+    kmax=Math.max(kmax,k); camin=Math.min(camin,ca); crmax=Math.max(crmax,cr); if(h===120) ca5=ca;
+    CK.push([t,ckv]); MB.push([t,mb]); CR.push([t,cr]);
+  }
+  /* McMahon (admission values approximated) */
+  var cr1=CR[12][1], ca1=9.0-1.9*Math.min(1,ck/100000), p1=3.8+ck/100000*1.6, h1=24-6*Math.min(1,ck/100000);
+  var mcR=[["Age",age>80?3:age>70?2.5:age>50?1.5:0],["Initial Cr",cr1>2.2?3:cr1>=1.4?1.5:0],["Initial Ca < 7.5",ca1<7.5?2:0],["CK > 40,000",ck>40000?2:0],["Origin not seizure, syncope, exercise, statin, myositis",(["exer","statin","seizure"].indexOf(c)<0)?3:0],["Phosphate",p1>5.4?3:p1>=4?1.5:0],["HCO3 < 19",h1<19?2:0]];
+  var mc=mcR.reduce(function(a,r){ return a+r[1]; },0);
+  ev.push({t:0,kind:"phys",text:CAU[c]+": กล้ามเนื้อสลาย myoglobin เข้ากระแสเลือดทันที"});
+  ev.push({t:dl/24,kind:"rx",text:"เริ่ม isotonic crystalloid "+rate+" mL/h"+(dl>6?" (ช้า)":"")});
+  if(bic) ev.push({t:dl/24+0.02,kind:"rx",text:"NaHCO3 drip urine pH > 6.5 (iCa ลดลง)"});
+  ev.push({t:0.5,kind:"phys",text:"Myoglobin สูงสุด (t½ สั้น) urine สีน้ำตาลเข้ม dipstick blood บวก"});
+  ev.push({t:tpk,kind:"phys",text:"CK สูงสุด "+Math.round(ck).toLocaleString("en-US")+" U/L"});
+  if(kmax>=6) ev.push({t:Math.max(0.05,(dl+2)/24),kind:"warn",text:"K สูงถึง "+kmax.toFixed(1)+" ทำ ECG ให้ Ca gluconate ถ้ามี ECG change"});
+  if(caRx) ev.push({t:1,kind:"warn",text:"ให้ Ca ทั้งที่ไม่มีอาการ: เพิ่ม Ca สะสมในกล้ามเนื้อ เสี่ยง rebound hypercalcemia"});
+  if(ca5>10.5) ev.push({t:4.5,kind:"warn",text:"Rebound hypercalcemia ระยะฟื้น Ca "+ca5.toFixed(1)});
+  ev.push({t:5,kind:crmax>2?"warn":"ok",text:"วันที่ 5: Cr "+CR[120][1].toFixed(1)});
+  return {CK:CK,MB:MB,CR:CR,ev:ev,mc:mc,mcR:mcR,uo24:uo24,kmax:kmax,camin:camin,ca5:ca5,crmax:crmax,krtAt:krtAt,dl:dl,rate:rate,bic:bic,caRx:caRx,krt:krt,c:c};
+}
+function onFrame(t,done){
+  var M=LAST;
+  Sim.ro("roMc",M.mc.toFixed(1),M.mc>=6?"flag":"ok");
+  Sim.ro("roUO",t>=1?M.uo24.toFixed(0):"…",t>=1?(M.uo24<200?"flag":"ok"):null);
+  Sim.ro("roK",done?M.kmax.toFixed(1):"…",done?(M.kmax>=6?"flag":"ok"):null);
+  Sim.ro("roCa",done?Math.max(5,M.camin).toFixed(1)+" → "+M.ca5.toFixed(1):"…",done?(M.camin<7.5||M.ca5>10.5?"flag":null):null);
+  Sim.ro("roCr",done?M.crmax.toFixed(1):"…",done?(M.crmax>2?"flag":"ok"):null);
+  Sim.ro("roKRT",done?(M.krtAt!==null?"วันที่ "+M.krtAt.toFixed(1):(M.crmax>4||M.kmax>=6.5?"ข้อบ่งชี้":"ไม่ต้อง")):"…",done?(M.krtAt!==null||M.crmax>4||M.kmax>=6.5?"flag":"ok"):null);
+  var a=document.getElementById("act");
+  if(done){ a.innerHTML=M.act; a.className=M.actCls; } else { a.innerHTML="<b>กำลังจำลอง</b> วันที่ "+t.toFixed(1)+" CK "+Math.round(Live.valueAt(M.CK,t)).toLocaleString("en-US")+" Cr "+Live.valueAt(M.CR,t).toFixed(1); a.className="act"; }
+}
+function update(deb){
+  var M=model();
+  chart.update({y2:{min:0,max:Math.max(4,Math.ceil(M.crmax*1.2)),step:1,label:"Creatinine (mg/dL)"},hlines:[{y:5000,label:"CK 5,000",color:A.gold,dash:[3,3]}]});
+  chart.setSeries("ck",M.CK); chart.setSeries("mb",M.MB); chart.setSeries("cr",M.CR);
+  var m, bad=M.crmax>2||M.kmax>=6;
+  if(M.dl>6) m="<b>เริ่มสารน้ำช้า</b> ใน rhabdomyolysis ควรเริ่ม isotonic crystalloid ทันที (crush: ก่อนเอาออกจากซาก) ปรับอัตราให้ UO 200–300 mL/h";
+  else if(M.krtAt===null&&(M.kmax>=6.5||M.crmax>4)) m="<b>มีข้อบ่งชี้ KRT</b> K "+M.kmax.toFixed(1)+" หรือ oliguric AKI ปรึกษาทำ HD/CRRT (myoglobin เอาออกได้ไม่มาก ใช้เพื่อแก้ K, acidosis, น้ำเกิน)";
+  else if(M.bic) m="<b>หยุด bicarbonate</b> ไม่มีประโยชน์เหนือ saline ทำให้ iCa ต่ำลง ใช้ isotonic crystalloid และติดตาม iCa";
+  else if(M.caRx) m="<b>ไม่ให้ Ca ถ้าไม่มีอาการหรือ ECG change</b> เพราะ Ca ที่ให้สะสมในกล้ามเนื้อและเกิด hypercalcemia ระยะฟื้น";
+  else if(M.mc>=6&&M.crmax>2) m="<b>McMahon ≥ 6 และ AKI</b> สารน้ำต่อพร้อมติดตาม volume ทุก 4–6 ชม. ตรวจ K, Ca, P ทุก 6–12 ชม. ระวังน้ำเกินเมื่อ oliguria หยุดสารน้ำเร็วถ้าไม่ตอบสนอง";
+  else if(M.uo24<200) m="<b>UO ต่ำกว่าเป้า</b> เพิ่มอัตราสารน้ำถ้า volume ยังไม่เกิน ถ้าไม่ตอบสนองหยุดเพิ่มและเตรียม KRT";
+  else { bad=false; m="<b>ตอบสนองดี</b> ให้สารน้ำต่อจน CK < 5,000 และ urine ใสขึ้น ตรวจ CK และ Cr ทุกวัน หาสาเหตุ (ยา, infection, genetic myopathy ถ้าเป็นซ้ำ)"; }
+  M.act="<b>Next step:</b> "+m; M.actCls="act"+(bad?" bad":"");
+  var mc=document.getElementById("mc"); mc.innerHTML="";
+  var ol=Sim.h("ol",{class:"steps"}); M.mcR.forEach(function(r){ ol.appendChild(Sim.h("li",{text:r[0]+": "+r[1]})); }); ol.appendChild(Sim.h("li",{text:"รวม "+M.mc.toFixed(1)+(M.mc>=6?" (≥ 6 เสี่ยงต่อ KRT หรือเสียชีวิตสูง)":" (< 6 เสี่ยงต่ำ)")})); mc.appendChild(ol);
+  LAST=M;
+  live.load({tMax:5,unit:"วัน",ms:8000,debounce:deb===true,num:function(x){ return x.toFixed(1); },events:M.ev.sort(function(a,b){ return a.t-b.t; }),onFrame:onFrame,
+    cursorLabel:function(t){ return "Cr "+Live.valueAt(M.CR,t).toFixed(1); }});
+}
+Sim.mount({code:"AKI-09", title:"Rhabdomyolysis and Pigment Nephropathy", lead:"ตั้งสาเหตุ, CK, อายุ, เวลาที่เริ่มสารน้ำและอัตราที่ให้ ดู myoglobin, CK, Cr, K และ Ca ใน 5 วัน พร้อม McMahon score และผลของ bicarbonate หรือการให้ Ca ที่ไม่จำเป็น",
+  scenarios:S, order:ORDER, captureMs:1000,
+  onChange:function(k,s){ cs.value=s.p.c; ["ck","age","delay","rate","dep"].forEach(function(x){ C[x].set(s.p[x]); }); Object.keys(T).forEach(function(x){ T[x].setAttribute("aria-pressed",s.p.rx.indexOf(x)>=0||x==="krt"?"true":"false"); }); update(); },
+  refs:["Bosch X, Poch E, Grau JM. Rhabdomyolysis and acute kidney injury. N Engl J Med 2009, 361(1): 62-72",
+        "McMahon GM, Zeng X, Waikar SS. A risk prediction score for kidney failure or mortality in rhabdomyolysis. JAMA Intern Med 2013, 173(19): 1821-1828",
+        "Brown CV, Rhee P, Chan L, et al. Preventing renal failure in patients with rhabdomyolysis: do bicarbonate and mannitol make a difference? J Trauma 2004, 56(6): 1191-1196",
+        "Sever MS, Vanholder R (RDRTF of ISN). Recommendation for the management of crush victims in mass disasters. Nephrol Dial Transplant 2012, 27(Suppl 1): i1-i67",
+        "Petejova N, Martinek A. Acute kidney injury due to rhabdomyolysis and renal replacement therapy: a critical review. Crit Care 2014, 18(3): 224",
+        "Michelsen J, Cordtz J, Liboriussen L, et al. Prevention of rhabdomyolysis-induced acute kidney injury: a DASAIM/DSIT clinical practice guideline. Acta Anaesthesiol Scand 2019, 63(5): 576-586"],
+  note:"Model เพื่อการสอน: CK สูงสุดราว 1.5 วันแล้วลด t½ ราว 1.5 วัน myoglobin สูงสุด 12 ชม. ลดเร็ว การบาดเจ็บ ∝ (myoglobin − 1,500) x 1/urine flow x volume depletion (bicarbonate ลดเล็กน้อย) Ca ลดจากการสะสมในกล้ามเนื้อแล้ว rebound ในวันที่ 3–5 McMahon score ใช้ค่าแรกรับโดยประมาณจาก model ไม่รวมเพศ"
+});
+})();
+</script>
+</body>
+</html>

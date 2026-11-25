@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[AKI-01] Creatinine Kinetics and KDIGO/AKD Staging</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.sel{display:grid;grid-template-columns:minmax(80px,170px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+body.present .bench{grid-template-columns:1.35fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:14px 18px}
+body.present .ro{padding:7px 12px}
+body.present .ro b{font-size:20px}
+body.present .ctls{gap:4px}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+body.present #live{display:none}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>GFR ตกทันที แต่ Cr ตามมาช้า</h2>
+      <div id="gchart"></div>
+      <div class="panel-gap"></div>
+      <div id="chart"></div>
+      <div id="live"></div>
+      <p class="takeaway" id="tk"></p>
+      <details class="more"><summary>ลำดับเหตุการณ์ทีละวัน</summary><div class="more-body" id="logbox"></div></details>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วยและการบาดเจ็บ</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roPk"><b>-</b><span>Cr สูงสุด (mg/dL)</span></div>
+        <div class="ro" id="roSt"><b>-</b><span>KDIGO stage สูงสุด</span></div>
+        <div class="ro" id="roDet"><b>-</b><span>วันที่ถึงเกณฑ์ AKI</span></div>
+      </div>
+      <div class="act" id="act"></div>
+      <details class="more"><summary>ตัวเลขเพิ่มเติม</summary><div class="more-body"><div class="readout">
+        <div class="ro" id="roD7"><b>-</b><span>Cr วันที่ 7 / baseline</span></div>
+        <div class="ro" id="roEg"><b>-</b><span>eGFR จาก Cr วันที่ 1 vs GFR จริง</span></div>
+        <div class="ro" id="roAdj"><b>-</b><span>Cr ปรับ fluid ที่จุดสูงสุด</span></div>
+      </div></div></details>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/live.js"></script>
+<script>
+(function(){
+"use strict";
+function P(o){ var d={cr0:1.0,w:70,musc:1,drop:60,dur:2,rec:100,fluid:0,fpat:"early"}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  pre:{name:"Prerenal ฟื้นเร็ว", p:P({drop:50,dur:1,rec:100}),
+    rows:[["ผู้ป่วย","ท้องเสีย 2 วัน baseline Cr 1.0"],["GFR","ลด 50% นาน 1 วันแล้วกลับปกติหลังให้สารน้ำ"],["Cr","ผ่านเกณฑ์ +0.3 mg/dL ภายในไม่กี่ชั่วโมง แต่ค่าสูงสุดมาหลัง GFR ฟื้นแล้ว และกลับ baseline ภายใน 72 ชม."]],
+    take:["Cr ตามหลัง GFR เพราะต้องสะสมจนถึง steady state ใหม่ (time constant = V/GFR)","ถ้า Cr กลับสู่ baseline ภายใน 48 ชม. เรียก rapid reversal ซึ่งพยากรณ์ดีกว่า persistent AKI","การวัด Cr ครั้งเดียวในวันแรกประเมินความรุนแรงต่ำเกินจริง"]},
+  atn:{name:"ATN ฟื้นช้า", p:P({drop:90,dur:7,rec:75}),
+    rows:[["ผู้ป่วย","septic shock baseline Cr 1.0"],["GFR","ลด 90% นาน 7 วัน ฟื้นได้ 75% ของเดิม"],["Cr","ขึ้นต่อเนื่องหลาย วันแม้ GFR คงที่ เพราะยังไม่ถึง steady state ใหม่"]],
+    take:["Cr ที่ยังขึ้นไม่ได้แปลว่าไตแย่ลงเสมอ อาจเป็นแค่การเข้าสู่ steady state ใหม่","AKI ที่ยังไม่หายเมื่อเกิน 7 วันเข้าสู่ AKD (7–90 วัน) ต้องติดตามการฟื้นตัว","ฟื้นไม่ครบ = เสี่ยง CKD ใหม่หรือ CKD แย่ลง ต้องนัดตรวจ Cr และ albuminuria หลังจำหน่าย"]},
+  fluid:{name:"Fluid overload บดบัง AKI", p:P({drop:70,dur:4,rec:90,fluid:8}),
+    rows:[["ผู้ป่วย","resuscitation รวมสมดุลน้ำบวก 8 ลิตรใน 48 ชม."],["ผล","Cr ถูก dilute จน stage ต่ำกว่าจริง"],["แก้","Cr x (1 + สมดุลน้ำสะสม / TBW)"]],
+    take:["Fluid accumulation เพิ่ม volume of distribution ทำให้ Cr ต่ำกว่าความจริงและวินิจฉัย AKI ช้าลง","ใช้ urine output และ Cr ที่ปรับตาม fluid balance ร่วมประเมิน","เมื่อเริ่ม diurese ได้ Cr อาจขึ้นปลอมจาก hemoconcentration ไม่ใช่ไตแย่ลง"]},
+  musc:{name:"Sarcopenia และ sepsis", p:P({drop:70,dur:4,rec:90,musc:0.55,w:50}),
+    rows:[["ผู้ป่วย","หญิงสูงอายุ 50 kg กล้ามเนื้อน้อย sepsis baseline Cr 0.6"],["ผล","Cr generation ต่ำ Cr ขึ้นน้อยแม้ GFR ลด 70%"],["จุดหลอก","Cr ไม่ถึง 1.5 แต่เป็น AKI stage 2"]],
+    take:["Sepsis ลด creatinine generation ราว 30–50% Cr จึงขึ้นช้าและน้อยกว่าความรุนแรงจริง","ใช้สัดส่วนเทียบ baseline ไม่ใช่ค่าสัมบูรณ์ Cr 1.2 อาจเป็น stage 2 ในคนที่ baseline 0.6","Cystatin C ช่วยเมื่อ Cr ไม่แม่น (กล้ามเนื้อน้อย, amputee, cirrhosis)"]},
+  ckd:{name:"AKI บน CKD", p:P({cr0:2.5,drop:30,dur:5,rec:100}),
+    rows:[["ผู้ป่วย","CKD G4 baseline Cr 2.5 ได้ NSAID"],["ผล","GFR ลด 30% Cr ขึ้นเกิน 0.3 ใน 48 ชม. ก่อนถึง 1.5 เท่า"],["เกณฑ์","ขึ้น ≥ 0.3 mg/dL ใน 48 ชม. = stage 1 และถ้า Cr ≥ 4.0 = stage 3"]],
+    take:["ในคนที่ baseline สูง time constant ยาว Cr ใช้เวลานานกว่าจะถึง 1.5 เท่า เกณฑ์ 0.3 mg/dL ใน 48 ชม. จับได้เร็วกว่า","Cr ≥ 4.0 mg/dL จัดเป็น stage 3 เมื่อมีเกณฑ์ AKI ร่วม","GFR ที่เหลือน้อย การเสียไปเพียงเล็กน้อยทำให้ Cr ขึ้นมาก"]},
+  total:{name:"GFR หายเกือบหมด", p:P({drop:98,dur:10,rec:60,fluid:3}),
+    rows:[["ผู้ป่วย","cortical necrosis หลังตกเลือดหลังคลอด"],["GFR","แทบเป็นศูนย์ Cr ขึ้นเกือบเป็นเส้นตรง"],["อัตราขึ้น","ขึ้นวันละ G/V ซึ่งบอกว่า GFR ใกล้ศูนย์"]],
+    take:["เมื่อ GFR ใกล้ศูนย์ Cr ขึ้นเป็นเส้นตรงตาม generation ต่อ volume ไม่บอกความรุนแรงเพิ่มอีก","อัตราการขึ้นของ Cr ช่วยประเมินว่าไตเหลือการทำงานเท่าไร","eGFR สูตรใดๆ ใช้ไม่ได้ระหว่าง Cr ยังไม่ steady state"]}
+};
+var ORDER=["pre","atn","fluid","musc","ckd","total"];
+var box=document.getElementById("ctls"), C={};
+function sl(k,o){ o.id="s"+k; o.onInput=function(){ update(true); }; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("cr0",{label:"Baseline Cr",min:0.4,max:4,step:0.1,value:1,unit:" mg/dL",fmt:function(v){ return v.toFixed(1); }});
+sl("w",{label:"น้ำหนัก",min:40,max:110,step:1,value:70,unit:" kg"});
+sl("musc",{label:"Cr generation",min:0.4,max:1.3,step:0.05,value:1,unit:" x",fmt:function(v){ return v.toFixed(2); }});
+sl("drop",{label:"GFR ลดลง",min:0,max:100,step:1,value:60,unit:" %"});
+sl("dur",{label:"ระยะบาดเจ็บ",min:0.5,max:12,step:0.5,value:2,unit:" วัน",fmt:function(v){ return v.toFixed(1); }});
+sl("rec",{label:"ฟื้นตัว (% ของเดิม)",min:20,max:100,step:5,value:100,unit:" %"});
+sl("fluid",{label:"สมดุลน้ำสะสม",min:0,max:12,step:0.5,value:0,unit:" L",fmt:function(v){ return v.toFixed(1); }});
+var A=Plot.colors;
+/* rule v6: two stacked panels on one time axis (no dual axis), end labels, 1-2 callouts per panel */
+var NARROW=window.innerWidth<600&&!Sim.present, PAD={padL:44,padR:NARROW?62:92}, D7=[{x:7,label:"Day 7: AKD",color:A.muted,dash:[3,4],width:1.2}];
+var gchart=Plot.chart(document.getElementById("gchart"),{height:Sim.present?120:118,aria:"True GFR over fourteen days",padL:PAD.padL,padR:PAD.padR,xAxis:false,
+  x:{min:-1,max:14,step:NARROW?2:1},y:{min:0,max:120,ticks:2,label:"True GFR (mL/min)",labelPos:"top",color:A.teal},
+  series:[{id:"g",name:"True GFR",color:A.teal,data:[],width:2.4,fill:{to:0},fillColor:"rgba(31,122,114,0.10)",unit:"mL/min",fmt:function(v){ return v.toFixed(0); }}],legend:false});
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?250:250,aria:"Serum creatinine over fourteen days",padL:PAD.padL,padR:PAD.padR,
+  x:{min:-1,max:14,step:NARROW?2:1,label:"Days after injury"},y:{min:0,max:4,label:"Creatinine (mg/dL)",labelPos:"top",color:A.accent},
+  series:[{id:"nf",name:"No fluid",color:A.muted,data:[],width:1.6,dash:[5,4],endLabel:NARROW?"No fluid":"Cr if no fluid",fmt:function(v){ return v.toFixed(2); }},{id:"cr",name:"Cr",color:A.accent,data:[],width:3,endLabel:NARROW?"Cr":"Measured Cr",fmt:function(v){ return v.toFixed(2); }}],legend:false});
+Plot.link([gchart,chart]);
+var live=Live.player(chart,{mount:"live"}), LAST=null;
+document.getElementById("logbox").appendChild(live.log);
+function v(k){ return C[k].get(); }
+function stageOf(cr,base,min48){
+  var r=cr/base;
+  if(r>=3||(cr>=4&&(r>=1.5||cr-min48>=0.3))) return 3;
+  if(r>=2) return 2;
+  if(r>=1.5||cr-min48>=0.3) return 1;
+  return 0;
+}
+function model(){
+  var cr0=v("cr0"), W=v("w"), G=20*W*v("musc"), drop=v("drop")/100, dur=v("dur"), rec=v("rec")/100, fl=v("fluid");
+  var tbw=0.6*W, g0=G/(cr0*14.4), dt=0.025;
+  function gfr(t){ if(t<0) return g0; if(t<dur) return g0*(1-drop); var low=g0*(1-drop), tgt=g0*rec; if(t<dur+3) return low+(tgt-low)*(t-dur)/3; return tgt; }
+  function vol(t){ return tbw+fl*Math.min(1,Math.max(0,t)/2); }
+  /* sepsis lowers generation during the injury window if generation slider < 1 already set by user, so constant G */
+  var crm=cr0*vol(0)*10, crn=cr0*tbw*10, out=[], nf=[], gs=[];
+  var N=Math.round(14/dt);
+  for(var n=0;n<=N;n++){ var t=n*dt;
+    var V=vol(t)*10, cr=crm/V, crN=crn/(tbw*10);
+    if(n%Math.round(0.25/dt)===0){ out.push([+t.toFixed(2),cr]); nf.push([+t.toFixed(2),crN]); gs.push([+t.toFixed(2),gfr(t)]); }
+    var g=gfr(t)*14.4; crm+=(G-g*cr)*dt; crn+=(G-g*crN)*dt;
+    /* volume change itself carries Cr mass, already in crm */
+  }
+  /* stage over time using 48 h minimum */
+  var st=[], det=null, maxSt=0, peak=0, tp=0;
+  for(var i=0;i<out.length;i++){ var t=out[i][0], m=Infinity; for(var j=i;j>=0&&out[j][0]>=t-2;j--) m=Math.min(m,out[j][1]); m=Math.min(m,out[i][0]<=2?cr0:m);
+    var s=stageOf(out[i][1],cr0,m); st.push(s); if(s>0&&det===null) det=t; if(s>maxSt) maxSt=s; if(out[i][1]>peak){ peak=out[i][1]; tp=t; } }
+  var d7=out[28][1], d1=out[4][1];
+  return {cr0:cr0,W:W,G:G,g0:g0,tbw:tbw,fl:fl,out:out,nf:nf,gs:gs,st:st,det:det,maxSt:maxSt,peak:peak,tp:tp,d7:d7,d1:d1,gfr:gfr,drop:drop,dur:dur,rec:rec,
+    egfr1:g0*cr0/d1, adjPk:peak*(1+Math.min(1,tp/2)*fl/tbw), musc:v("musc")};
+}
+function events(M){
+  var E=[], b=M.cr0;
+  E.push({t:0,kind:"phys",text:"วันที่ 0: GFR ลด "+Math.round(M.drop*100)+"% จาก "+M.g0.toFixed(0)+" เป็น "+(M.g0*(1-M.drop)).toFixed(0)+" mL/min ทันที แต่ Cr ยัง "+b.toFixed(1)});
+  var tau=M.tbw/(Math.max(0.5,M.g0*(1-M.drop))*1.44);
+  E.push({t:0.05,kind:"phys",text:"Time constant V/GFR ช่วงบาดเจ็บ ≈ "+(tau>30?"> 30":tau.toFixed(1))+" วัน ต้องราว 3–5 เท่าจึงถึง steady state"});
+  if(M.fl>0) E.push({t:0.5,kind:"warn",text:"สมดุลน้ำบวกสะสมถึง "+M.fl.toFixed(1)+" L ใน 48 ชม. Cr ถูก dilute"});
+  [1.5,2,3].forEach(function(r){ var x=Live.cross(M.out,b*r,1); if(x!==null) E.push({t:x,kind:"warn",text:"Cr ถึง "+r+" เท่าของ baseline ("+(b*r).toFixed(1)+")"}); });
+  if(M.det!==null) E.push({t:M.det,kind:"warn",text:"เข้าเกณฑ์ AKI ครั้งแรก (ช้ากว่าการบาดเจ็บจริง "+M.det.toFixed(1)+" วัน)"});
+  if(M.dur<14) E.push({t:M.dur,kind:"ok",text:"GFR เริ่มฟื้น เป้าหมาย "+Math.round(M.rec*100)+"% ของเดิม"});
+  if(M.peak>b*1.05) E.push({t:M.tp,kind:"phys",text:"Cr สูงสุด "+M.peak.toFixed(2)+" วันที่ "+M.tp.toFixed(1)});
+  var r7=M.d7/b; E.push({t:7,kind:r7>=1.5?"warn":"ok",text:"วันที่ 7: Cr "+M.d7.toFixed(2)+" ("+r7.toFixed(1)+" เท่า) "+(r7>=1.5?"ยังไม่หาย = เข้าสู่ AKD":"ไม่เข้าเกณฑ์ AKD")});
+  E.push({t:14,kind:"phys",text:"วันที่ 14: Cr "+M.out[56][1].toFixed(2)+" GFR "+M.gfr(14).toFixed(0)+" mL/min"});
+  return E.sort(function(a,b){ return a.t-b.t; });
+}
+function onFrame(t,done){
+  var M=LAST, i=Math.max(0,Math.min(M.out.length-1,Math.round(t*4)));
+  gchart.progress=chart.progress; gchart.opts.vlines=chart.opts.vlines.filter(function(l){ return l.x!==7; }).map(function(l){ return {x:l.x,color:l.color,dash:l.dash,width:l.width}; }).concat([{x:7,color:A.muted,dash:[3,4],width:1.2}]); gchart.draw();
+  if(t>=7-1e-6){ var r7=M.d7/M.cr0; Sim.ro("roD7",r7.toFixed(2)+"x",r7>=1.5?"flag":"ok"); } else Sim.ro("roD7","…");
+  if(t>=M.tp-1e-6||done){ Sim.ro("roPk",M.peak.toFixed(2),M.maxSt>0?"flag":"ok"); Sim.ro("roAdj",M.fl>0?M.adjPk.toFixed(2):"-",M.fl>0?"flag":null); } else { Sim.ro("roPk","…"); Sim.ro("roAdj","…"); }
+  var cur=0; for(var j=0;j<=i;j++) cur=Math.max(cur,M.st[j]);
+  Sim.ro("roSt",cur?String(cur):"0",cur>=2?"flag":cur===1?null:"ok");
+  Sim.ro("roDet",M.det!==null&&t>=M.det?"วันที่ "+M.det.toFixed(1):(M.det===null&&done?"ไม่ถึง":"…"),M.det!==null&&t>=M.det?"flag":null);
+  var a=document.getElementById("act");
+  if(done){ a.innerHTML=M.act; a.className=M.actCls; } else { a.innerHTML="<b>กำลังจำลอง</b> วันที่ "+t.toFixed(1)+" Cr "+(t<0?M.cr0:Live.valueAt(M.out,t)).toFixed(2)+" GFR จริง "+M.gfr(t).toFixed(0)+" mL/min"; a.className="act"; }
+}
+function update(deb){
+  var M=model(), b=M.cr0;
+  var ymax=Math.max(b*3.4,M.peak*1.15,4.4); ymax=Math.ceil(ymax);
+  /* stage zones instead of four dashed threshold lines */
+  var t1=b*1.5, t2=b*2, t3=b*3; if(t3>4) t3=Math.max(4,t1); if(t2>t3) t2=t3;
+  var Z=[]; if(t2>t1) Z.push({y0:t1,y1:t2,color:"rgba(168,132,44,0.08)",label:"Stage 1",mid:true}); else Z.push({y0:t1,y1:t3,color:"rgba(168,132,44,0.08)",label:"Stage 1",mid:true});
+  if(t3>t2&&t2>t1) Z.push({y0:t2,y1:t3,color:"rgba(168,132,44,0.16)",label:"Stage 2",mid:true});
+  Z.push({y0:t3,y1:ymax,color:"rgba(180,35,42,0.09)",label:"Stage 3",mid:true});
+  var crAt=function(x){ return x<0?b:Live.valueAt(M.out,x); };
+  var CO=[];
+  if(M.det!==null) CO.push({x:M.det,y:crAt(M.det),text:"AKI criteria: day "+M.det.toFixed(1),color:A.red,dx:62,dy:-30});
+  if(M.peak>b*1.05&&(M.det===null||M.tp-M.det>0.4)) CO.push({x:M.tp,y:M.peak,text:"Peak "+M.peak.toFixed(1)+" on day "+M.tp.toFixed(1),color:A.ink,dx:(M.tp>9?-40:20),dy:-26});
+  chart.update({y:{min:0,max:ymax,label:"Creatinine (mg/dL)",labelPos:"top",color:A.accent},bands:Z,callouts:CO,
+    hlines:[{y:b,color:A.muted,dash:[2,3]}]});
+  chart.setSeries("cr",[[-1,b]].concat(M.out)); chart.setSeries("nf",M.fl>0?[[-1,b]].concat(M.nf):[]);
+  var gmax=Math.ceil(M.g0*1.15/20)*20;
+  gchart.update({y:{min:0,max:gmax,step:gmax/2,label:"True GFR (mL/min)",labelPos:"top",color:A.teal},
+    callouts:M.drop>0.05?[{x:0,y:M.g0*(1-M.drop),text:"Day 0: GFR −"+Math.round(M.drop*100)+"%",color:A.teal,dx:70,dy:M.drop>0.6?-22:22}]:[]});
+  gchart.setSeries("g",[[-1,M.g0],[-0.001,M.g0]].concat(M.gs));
+  /* one-line reading of the graph */
+  var tk="GFR ตก <b>"+Math.round(M.drop*100)+"%</b> ตั้งแต่วันที่ 0 ";
+  if(M.det===null) tk+="แต่ Cr <b>ไม่ถึงเกณฑ์ AKI</b> เลย ";
+  else tk+="แต่ Cr เพิ่งเข้าเกณฑ์ AKI วันที่ <b class=\"num\">"+M.det.toFixed(1)+"</b> ";
+  if(M.peak>b*1.05) tk+="และขึ้นสูงสุดวันที่ <b class=\"num\">"+M.tp.toFixed(1)+"</b>"+(M.tp>M.dur+0.2&&M.dur<14?" ซึ่ง<b>หลัง</b> GFR เริ่มฟื้นแล้ว":"")+" ";
+  if(M.fl>0) tk+="ส่วน fluid "+M.fl.toFixed(0)+" L ทำให้ Cr ที่วัดต่ำกว่าจริง (ปรับแล้ว "+M.adjPk.toFixed(1)+") ";
+  else if(M.musc<0.8) tk+="Cr generation ต่ำทำให้ Cr ขึ้นน้อยกว่าความรุนแรงจริง ";
+  tk+="เพราะ Cr ต้องค่อยๆ สะสมจนถึง steady state ใหม่";
+  document.getElementById("tk").innerHTML=tk;
+  var e1=M.egfr1, real1=M.gfr(1);
+  Sim.ro("roEg",e1.toFixed(0)+" vs "+real1.toFixed(0),e1>real1*1.3?"flag":null);
+  var m, bad=true, r7=M.d7/b;
+  if(M.maxSt===0){ bad=false; m=M.drop>0.25?"<b>ไม่เข้าเกณฑ์ Cr แต่ GFR ลดจริง</b> ใช้ urine output, cystatin C หรือ biomarker ร่วมถ้าสงสัย subclinical AKI":"<b>ไม่มี AKI</b> ติดตาม Cr ตามความเสี่ยง"; }
+  else if(M.fl>=4&&M.adjPk/b>=M.peak/b+0.3) m="<b>Fluid ทำให้ stage ต่ำกว่าจริง</b> Cr ปรับ fluid "+M.adjPk.toFixed(2)+" ("+(M.adjPk/b).toFixed(1)+" เท่า) หยุดให้สารน้ำที่ไม่จำเป็น พิจารณา diuretic หรือ KRT เมื่อน้ำเกินดื้อต่อการรักษา";
+  else if(r7>=1.5) m="<b>AKD</b> ยังไม่ฟื้นที่วันที่ 7 หา cause ที่ยังค้าง (obstruction, nephrotoxin, AIN, GN) ปรับยาตาม GFR จริงไม่ใช่ eGFR และนัดตรวจ Cr กับ UACR ภายใน 3 เดือน";
+  else if(M.rec<0.9) m="<b>ฟื้นไม่ครบ</b> Cr baseline ใหม่สูงกว่าเดิม เสี่ยง CKD ติดตาม eGFR, UACR, BP หลังจำหน่าย หลีกเลี่ยง nephrotoxin";
+  else if(M.dur<=1.5&&M.rec>=0.95&&M.maxSt<=2){ bad=false; m="<b>Transient AKI</b> Cr ขึ้นหลังจากแก้สาเหตุแล้ว ยืนยันด้วยการลงภายใน 48–72 ชม. หลีกเลี่ยงการวินิจฉัย ATN จาก Cr ค่าเดียว"; }
+  else m="<b>AKI stage "+M.maxSt+"</b> หาสาเหตุ หยุด nephrotoxin ปรับ dose ยา ติดตาม Cr และ UO ทุกวัน eGFR ใช้ไม่ได้ระหว่าง Cr ไม่ steady state";
+  M.act="<b>Next step:</b> "+m; M.actCls="act"+(bad?" bad":"");
+  LAST=M;
+  live.load({tMin:-1,tMax:14,unit:"วัน",ms:8000,debounce:deb===true,num:function(x){ return x.toFixed(1); },events:events(M),onFrame:onFrame,baseVlines:D7,
+    cursorLabel:function(t){ return "Cr "+(t<0?M.cr0:Live.valueAt(M.out,t)).toFixed(2); }});
+}
+Sim.mount({code:"AKI-01", title:"Creatinine Kinetics and KDIGO/AKD Staging", lead:"ตั้ง baseline Cr, ขนาดตัว, ความรุนแรงและระยะเวลาของการบาดเจ็บ ดูว่า Cr ตามหลัง GFR จริงอย่างไร stage ที่ได้เมื่อไร และ fluid หรือ muscle mass บิดค่า Cr อย่างไร",
+  scenarios:S, order:ORDER, captureMs:1000,
+  onChange:function(k,s){ Object.keys(C).forEach(function(x){ if(s.p[x]!==undefined) C[x].set(s.p[x]); }); update(); },
+  refs:["KDIGO Clinical Practice Guideline for Acute Kidney Injury. Kidney Int Suppl 2012, 2(1): 1-138",
+        "KDIGO 2026 Clinical Practice Guideline for AKI and AKD, public review draft (2026)",
+        "Chawla LS, Bellomo R, Bihorac A, et al (ADQI 16). Acute kidney disease and renal recovery. Nat Rev Nephrol 2017, 13(4): 241-257",
+        "Waikar SS, Bonventre JV. Creatinine kinetics and the definition of acute kidney injury. J Am Soc Nephrol 2009, 20(3): 672-679",
+        "Macedo E, Bouchard J, Soroko SH, et al. Fluid accumulation, recognition and staging of acute kidney injury in critically-ill patients. Crit Care 2010, 14(3): R82",
+        "Doi K, Yuen PST, Eisner C, et al. Reduced production of creatinine limits its use as marker of kidney injury in sepsis. J Am Soc Nephrol 2009, 20(6): 1217-1221",
+        "Kellum JA, Sileanu FE, Bihorac A, et al. Recovery after acute kidney injury. Am J Respir Crit Care Med 2017, 195(6): 784-791"],
+  note:"Model เพื่อการสอน: single-pool d(Cr x V)/dt = G − GFR x Cr, G = 20 mg/kg/วัน x generation factor, V = 0.6 x น้ำหนัก + สมดุลน้ำสะสม (เพิ่มเป็นเส้นตรงใน 48 ชม.), baseline GFR = G/(Cr0 x 14.4), ฟื้นตัวเป็นเส้นตรงใน 3 วัน stage ใช้เกณฑ์ Cr ของ KDIGO (ไม่รวม urine output) eGFR วันที่ 1 คำนวณแบบ steady-state เพื่อแสดงว่าประเมิน GFR สูงเกินจริง"
+});
+})();
+</script>
+</body>
+</html>

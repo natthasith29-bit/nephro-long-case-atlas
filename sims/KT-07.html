@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[KT-07] Post-Transplant Infection Timeline and CMV Strategy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.35fr 1fr}}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.sel{display:grid;grid-template-columns:minmax(110px,150px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px;margin:6px 0}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:10px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present #live,body.present .act{display:none}
+body.present .card{padding:14px 18px}
+body.present .ctls{gap:3px}
+body.present .ctl{font-size:14px}
+body.present .sel{margin:2px 0;font-size:14px}
+body.present .tools{margin-top:4px;gap:5px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .ro{padding:6px 12px}
+body.present .ro b{font-size:19px}
+body.present #tl{max-height:210px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Hazard ของการติดเชื้อตามเวลาหลังปลูกถ่าย</h2>
+      <div id="chart"></div>
+      <div id="live"></div>
+      <div class="svgwrap" style="margin-top:10px"><svg id="tl" viewBox="0 0 680 230" role="img" aria-label="Classic timeline of infections after kidney transplantation with the selected month highlighted"></svg></div>
+      <p class="hint no-present">กราฟแสดง hazard สัมพัทธ์ (ไม่ใช่ % ต่อเดือน) เพื่อดูว่าความเสี่ยงอยู่ช่วงไหน แถบล่างคือ timeline แบบคลาสสิกของเชื้อที่คาดได้ในแต่ละช่วง ลาก slider "ดูเดือนที่" เพื่อดูรายชื่อเชื้อ</p>
+    </div>
+    <div class="card">
+      <h2>Serostatus, prophylaxis และ immunosuppression</h2>
+      <div class="sel"><label for="sSero">CMV D/R</label><select id="sSero"><option value="dpos">D+/R−</option><option value="rpos">R+</option><option value="dneg">D−/R−</option></select></div>
+      <div class="sel"><label for="sCmv">CMV strategy</label><select id="sCmv"><option value="v6">Valganciclovir prophylaxis 6 เดือน</option><option value="v3">Valganciclovir prophylaxis 3 เดือน</option><option value="l6">Letermovir prophylaxis 6 เดือน</option><option value="pre">Preemptive (PCR ทุกสัปดาห์ 3 เดือน)</option><option value="none">ไม่มี</option></select></div>
+      <div class="sel"><label for="sPjp">PJP prophylaxis</label><select id="sPjp"><option value="6">TMP-SMX 6 เดือน</option><option value="12">TMP-SMX 12 เดือน</option><option value="0">ไม่มี</option></select></div>
+      <div class="tools" id="tools"></div>
+      <div class="ctls" id="ctls" style="margin-top:12px"></div>
+      <div class="readout">
+        <div class="ro" id="roCmv"><b>-</b><span>CMV disease ใน 24 เดือน</span></div>
+        <div class="ro" id="roCmvT"><b>-</b><span>CMV peak เดือนที่</span></div>
+        <div class="ro" id="roPjp"><b>-</b><span>PJP ใน 24 เดือน</span></div>
+        <div class="ro" id="roLeu"><b>-</b><span>Leukopenia จากยา</span></div>
+        <div class="ro" id="roPer"><b>-</b><span>ช่วงที่เลือก</span></div>
+        <div class="ro" id="roTB"><b>-</b><span>TB reactivation</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/live.js"></script>
+<script>
+(function(){
+"use strict";
+var S = {
+  dpos6:{name:"CMV D+/R− + prophylaxis 6 เดือน", p:{sero:"dpos", cmv:"v6", pjp:"6", atg:false, rej:false, tb:true, now:2},
+    rows:[["Recipient","CMV D+/R− basiliximab induction"],["Prophylaxis","Valganciclovir 6 เดือน ปรับตาม CrCl TMP-SMX 6 เดือน"],["ช่วงเดือน 1–6","Opportunistic infection ถูกกดด้วย prophylaxis"],["ระวัง","Late-onset CMV หลังหยุดยา"]],
+    take:["D+/R− เสี่ยง CMV สูงสุด ให้ prophylaxis 6 เดือน","หลังหยุด prophylaxis ความเสี่ยงเลื่อนไปเป็น late-onset CMV","ปรับขนาด valganciclovir ตาม CrCl ป้องกัน leukopenia และ resistance"]},
+  dpos3:{name:"D+/R− แต่ให้แค่ 3 เดือน", p:{sero:"dpos", cmv:"v3", pjp:"6", atg:false, rej:false, tb:true, now:5},
+    rows:[["Recipient","CMV D+/R−"],["Prophylaxis","Valganciclovir 3 เดือน"],["เดือน 4–6","CMV syndrome ไข้ leukopenia transaminitis"],["บทเรียน","3 เดือนไม่พอสำหรับ D+/R−"]],
+    take:["Prophylaxis 6 เดือนใน D+/R− ลด CMV disease ได้มากกว่า 3 เดือน","Late-onset CMV มักเกิดใน 3 เดือนหลังหยุดยา","ให้ความรู้ผู้ป่วยเรื่องอาการหลังหยุด prophylaxis"]},
+  lete:{name:"Letermovir (leukopenia)", p:{sero:"dpos", cmv:"l6", pjp:"6", atg:false, rej:false, tb:true, now:3},
+    rows:[["Recipient","D+/R− WBC 2,800 จาก valganciclovir + MPA"],["Prophylaxis","เปลี่ยนเป็น letermovir 6 เดือน"],["ข้อดี","ป้องกันได้ไม่ด้อยกว่าและ leukopenia น้อยกว่า"],["ข้อควรรู้","เพิ่มระดับ tacrolimus ไม่ป้องกัน HSV/VZV"]],
+    take:["Letermovir เป็นทางเลือก prophylaxis ใน D+/R− ที่ leukopenia น้อยกว่า","Letermovir ไม่ครอบคลุม HSV/VZV ต้องให้ acyclovir ร่วม","ใช้รักษา CMV disease ไม่ได้"]},
+  rpos:{name:"R+ preemptive", p:{sero:"rpos", cmv:"pre", pjp:"6", atg:false, rej:false, tb:true, now:2},
+    rows:[["Recipient","CMV R+ (พบมากในไทย)"],["Strategy","CMV PCR ทุกสัปดาห์ 12 สัปดาห์ รักษาเมื่อ load เกินเกณฑ์"],["ข้อดี","ลดการใช้ยาและ leukopenia เกิด CMV-specific immunity"],["ข้อจำกัด","ต้องมีระบบตรวจและติดตามที่เชื่อถือได้"]],
+    take:["R+ เลือกได้ทั้ง prophylaxis 3 เดือนหรือ preemptive","Preemptive ต้องตรวจ PCR สม่ำเสมอและเริ่มยาทันเวลา","ใช้ assay และเกณฑ์ load เดียวกันตลอด"]},
+  atgrej:{name:"ATG + รักษา rejection", p:{sero:"rpos", cmv:"v3", pjp:"6", atg:true, rej:true, tb:true, now:9},
+    rows:[["Recipient","R+ ได้ ATG induction"],["เดือน 8","Acute TCMR รักษาด้วย ATG"],["ผล","Hazard ของ CMV และ PJP กลับมาใหม่"],["Plan","เริ่ม CMV และ PJP prophylaxis ใหม่หลังรักษา rejection"]],
+    take:["รักษา rejection ด้วย T-cell depletion เท่ากับเริ่มนาฬิกา opportunistic infection ใหม่","ให้ CMV prophylaxis 1–3 เดือนและ PJP prophylaxis ใหม่","ATG induction เพิ่มความเสี่ยง CMV และ BK"]},
+  late:{name:"เกิน 12 เดือน", p:{sero:"dneg", cmv:"none", pjp:"12", atg:false, rej:false, tb:true, now:18},
+    rows:[["Recipient","D−/R− ปีที่ 2 IS ระดับ maintenance"],["เชื้อที่พบ","Community-acquired (influenza, COVID-19, pneumococcus, UTI)"],["Late OI","PTLD, cryptococcus, nocardia, TB, JC virus ถ้า IS สูง"],["Prevention","วัคซีนเชื้อตาย ห้ามวัคซีนเชื้อเป็น"]],
+    take:["หลัง 6–12 เดือนส่วนใหญ่เป็น community-acquired infection","ถ้ายังใช้ IS สูงหรือเพิ่งรักษา rejection ยังเสี่ยง opportunistic","TB ในประเทศ endemic เกิดได้ตลอดเวลา"]}
+};
+var ORDER = ["dpos6","dpos3","lete","rpos","atgrej","late"];
+var sSero = document.getElementById("sSero"), sCmv = document.getElementById("sCmv"), sPjp = document.getElementById("sPjp");
+[sSero, sCmv, sPjp].forEach(function(s){ s.addEventListener("change", function(){ update(); }); });
+var F = {atg:false, rej:false, tb:true}, TG = {};
+[["atg","ATG induction"],["rej","รักษา rejection ด้วย ATG เดือน 8"],["tb","Latent TB / endemic"]].forEach(function(x){ TG[x[0]] = Sim.toggle(x[1], function(on){ F[x[0]] = on; update(); }, F[x[0]]); document.getElementById("tools").appendChild(TG[x[0]]); });
+var C = {};
+C.now = Sim.slider({id:"sNow", label:"ดูเดือนที่", min:0, max:24, step:0.5, value:2, unit:"", onInput:function(){ drawTL(); }}); document.getElementById("ctls").appendChild(C.now.el);
+function P(){ return {sero:sSero.value, cmv:sCmv.value, pjp:+sPjp.value, atg:F.atg, rej:F.rej, tb:F.tb, now:C.now.get()}; }
+
+/* ---------- model ---------- */
+var TM = 24, DT = 0.05, REJ = 8;
+function bump(t, peak, width){ if(t <= 0) return 0; var x = t / peak; return x * Math.exp(1 - x) * (width ? 1 : 1); }
+function simulate(p){
+  var sero = {dpos:1, rpos:0.32, dneg:0.025}[p.sero], isF = p.atg ? 1.45 : 1;
+  var stop = {v6:6, v3:3, l6:6, pre:0, none:0}[p.cmv], proph = stop > 0;
+  var cmv = [], pjp = [], bk = [], bac = [], cumC = 0, cumP = 0, peakT = 0, peakV = 0;
+  for(var i = 0; i <= TM / DT; i++){
+    var t = i * DT;
+    // CMV: exposure clock starts at transplant (and again after rejection treatment)
+    var hc = 0;
+    var clocks = [0].concat(p.rej ? [REJ] : []);
+    clocks.forEach(function(c0, k){
+      var dt0 = t - c0; if(dt0 < 0) return;
+      var s = k === 0 ? stop : (proph ? 3 : 0);
+      var f = (k === 0 ? isF : 1.5);
+      var h;
+      if(s > 0){ h = dt0 < s ? 0.06 * bump(dt0, 2) : 0.95 * Math.exp(-s / 3.5) * bump(dt0 - s + 0.4, 1.4); }
+      else h = bump(dt0, 1.8);
+      if(p.cmv === "pre" && k === 0) h *= 0.15;
+      hc += h * f;
+    });
+    hc *= sero;
+    // PJP
+    var hp = 0;
+    [0].concat(p.rej ? [REJ] : []).forEach(function(c0, k){ var d0 = t - c0; if(d0 < 0) return; var cov = k === 0 ? p.pjp : (p.pjp > 0 ? 6 : 0); hp += (d0 < cov ? 0.04 : 1) * bump(d0, 3) * (k === 0 ? isF : 1.4) * (cov > 0 && d0 >= cov ? 0.45 : 1); });
+    var hb = bump(t, 5) * isF * 0.9 + (p.rej ? 0.6 * bump(t - REJ, 3) : 0);
+    var hbac = 1.4 * Math.exp(-t / 0.7) + 0.18;
+    cumC += hc * DT; cumP += hp * DT;
+    if(hc > peakV){ peakV = hc; peakT = t; }
+    if(i % 2 === 0){ cmv.push([t, hc * 2.5]); pjp.push([t, hp * 0.8]); bk.push([t, hb * 0.4]); bac.push([t, hbac * 0.5]); }
+  }
+  var cmvDis = 1 - Math.exp(-cumC * 0.28), pjpRisk = 1 - Math.exp(-cumP * 0.012);
+  var leu = p.cmv === "v6" ? "สูง" : p.cmv === "v3" ? "ปานกลาง" : p.cmv === "l6" ? "ต่ำ" : "ต่ำ";
+  return {cmv:cmv, pjp:pjp, bk:bk, bac:bac, cmvDis:cmvDis, pjpRisk:pjpRisk, peakT:peakT, leu:leu, stop:stop};
+}
+
+/* ---------- chart ---------- */
+var A = Plot.colors;
+var chart = Plot.chart(document.getElementById("chart"), {height:Sim.present ? 250 : 240, aria:"Relative hazard of CMV, PJP, BK and bacterial infection over 24 months after transplant",
+  x:{min:0, max:TM, step:3, label:"Months after transplant"}, y:{min:0, max:1.6, step:0.4, label:"Relative hazard"},
+  series:[{id:"cmv", name:"CMV disease", color:A.red, data:[], width:2.4},{id:"pjp", name:"PJP", color:A.gold, data:[], width:2},{id:"bk", name:"BK", color:A.accent, data:[], width:1.8, dash:[5,3]},{id:"bac", name:"Bacterial, UTI", color:A.muted, data:[], width:1.6, dash:[2,3]}],
+  legend:true});
+var live = Live.player(chart, {mount:"live"}), LAST = null;
+
+/* ---------- timeline svg ---------- */
+var tl = document.getElementById("tl"), FT = "IBM Plex Sans Thai, sans-serif", MO = "Geist Mono, monospace";
+var PER = [
+  {a:0, b:1, n:"Early: first month", c:"#F4F5F9", o:["Surgical site, UTI","Line infection, C. difficile","Donor-derived infection","HSV reactivation","Candida"]},
+  {a:1, b:6, n:"Peak immunosuppression: 1 to 6 months", c:"#EFEDFF", o:["CMV, BK, EBV","PJP (if no prophylaxis)","HBV, HCV reactivation","Listeria, Nocardia, Toxoplasma","TB, Strongyloides"]},
+  {a:6, b:12, n:"Transition", c:"#F4F5F9", o:["Late-onset CMV after prophylaxis","BK nephropathy","Community respiratory virus","UTI, pyelonephritis"]},
+  {a:12, b:24, n:"Late: over 12 months", c:"#FBFBFD", o:["Community-acquired pneumonia","Influenza, COVID-19","PTLD (EBV), skin cancer","Cryptococcus, mold, JC virus if IS high"]}
+];
+function X(m){ return 40 + 620 * m / TM; }
+function drawTL(){
+  var p = P(), now = p.now;
+  tl.innerHTML = "";
+  PER.forEach(function(q){
+    Sim.svg("rect", {x:X(q.a), y:12, width:X(q.b) - X(q.a), height:28, fill:q.c, stroke:"#E6E7F0"}, tl);
+  });
+  Sim.svg("text", {x:X(0) + 4, y:31, "font-family":MO, "font-size":10.5, fill:"#5E6075", text:"0-1"}, tl);
+  Sim.svg("text", {x:X(3.5), y:31, "text-anchor":"middle", "font-family":MO, "font-size":10.5, fill:"#5E6075", text:"1-6 mo"}, tl);
+  Sim.svg("text", {x:X(9), y:31, "text-anchor":"middle", "font-family":MO, "font-size":10.5, fill:"#5E6075", text:"6-12 mo"}, tl);
+  Sim.svg("text", {x:X(18), y:31, "text-anchor":"middle", "font-family":MO, "font-size":10.5, fill:"#5E6075", text:"over 12 mo"}, tl);
+  // prophylaxis bars
+  var R = LAST ? LAST.R : simulate(p);
+  if(R.stop > 0){ Sim.svg("rect", {x:X(0), y:46, width:X(R.stop) - X(0), height:10, rx:5, fill:"#E8F4F2", stroke:"#1F7A72"}, tl); Sim.svg("text", {x:X(R.stop) + 6, y:55, "font-family":FT, "font-size":10.5, fill:"#1F7A72", text:"CMV prophylaxis"}, tl); }
+  if(p.pjp > 0){ Sim.svg("rect", {x:X(0), y:60, width:X(p.pjp) - X(0), height:10, rx:5, fill:"#FFF6DD", stroke:"#A8842C"}, tl); Sim.svg("text", {x:X(p.pjp) + 6, y:69, "font-family":FT, "font-size":10.5, fill:"#A8842C", text:"PJP prophylaxis"}, tl); }
+  if(p.rej){ Sim.svg("line", {x1:X(REJ), y1:8, x2:X(REJ), y2:74, stroke:"#B4232A", "stroke-dasharray":"3 3"}, tl); Sim.svg("text", {x:X(REJ) + 4, y:84, "font-family":FT, "font-size":10.5, fill:"#B4232A", text:"Rejection treated"}, tl); }
+  Sim.svg("line", {x1:X(now), y1:6, x2:X(now), y2:94, stroke:"#0B0B1F", "stroke-width":2}, tl);
+  Sim.svg("text", {x:Math.min(650, Math.max(30, X(now))), y:104, "text-anchor":"middle", "font-family":MO, "font-size":11, fill:"#0B0B1F", text:"Month " + now}, tl);
+  var cur = PER.filter(function(q){ return now >= q.a && now < q.b; })[0] || PER[3];
+  Sim.svg("text", {x:40, y:128, "font-family":FT, "font-size":13, "font-weight":600, fill:"#0B0B1F", text:cur.n}, tl);
+  var list = cur.o.slice();
+  if(p.rej && now >= REJ && now < REJ + 6) list = ["Re-opened window after rejection therapy: CMV, PJP, BK"].concat(list.slice(0, 3));
+  if(p.tb && list.join().indexOf("TB") < 0 && now >= 1) list.push("TB (endemic setting)");
+  list.slice(0, 6).forEach(function(o, i){ var col = i % 2, row = Math.floor(i / 2), x = 40 + col * 310, y = 140 + row * 28;
+    Sim.svg("rect", {x:x, y:y, width:300, height:22, rx:11, fill:"#FFFFFF", stroke:"#D3D5E2"}, tl);
+    Sim.svg("text", {x:x + 12, y:y + 15, "font-family":FT, "font-size":12, fill:"#0B0B1F", text:o}, tl); });
+  var per = now < 1 ? "0–1 เดือน" : now < 6 ? "1–6 เดือน" : now < 12 ? "6–12 เดือน" : "> 12 เดือน";
+  Sim.ro("roPer", per);
+}
+function update(deb){
+  var p = P(), R = simulate(p);
+  chart.setSeries("cmv", R.cmv); chart.setSeries("pjp", R.pjp); chart.setSeries("bk", R.bk); chart.setSeries("bac", R.bac);
+  var ymax = Math.max(1.2, Math.ceil(Math.max.apply(null, R.cmv.concat(R.pjp, R.bk, R.bac).map(function(x){ return x[1]; })) * 2.5) / 2);
+  chart.update({y:{min:0, max:ymax, step:ymax > 2 ? 0.5 : 0.4, label:"Relative hazard"}});
+  var ev = [];
+  if(R.stop > 0) ev.push({t:R.stop, kind:"rx", text:"หยุด CMV prophylaxis ความเสี่ยงเลื่อนเป็น late-onset"});
+  if(p.pjp > 0) ev.push({t:p.pjp, kind:"rx", text:"หยุด TMP-SMX"});
+  if(p.rej) ev.push({t:REJ, kind:"warn", text:"รักษา rejection ด้วย ATG: เริ่มนาฬิกา opportunistic infection ใหม่"});
+  ev.push({t:R.peakT, kind:"phys", text:"CMV hazard สูงสุด"});
+  var n = [], bad = false;
+  if(p.sero === "dpos" && (p.cmv === "v3" || p.cmv === "none" || p.cmv === "pre")){ bad = true; n.push("D+/R− ควรได้ valganciclovir prophylaxis 6 เดือน (หรือ letermovir) ปรับตาม CrCl"); }
+  if(p.sero === "rpos" && p.cmv === "none"){ bad = true; n.push("R+ ควรได้ prophylaxis 3 เดือนหรือ preemptive monitoring"); }
+  if(p.sero === "dneg" && p.cmv !== "none") n.push("D−/R− ไม่ต้อง CMV prophylaxis ใช้ blood product ที่ leukoreduced หรือ CMV-negative และให้ acyclovir ป้องกัน HSV/VZV");
+  if(p.pjp === 0){ bad = true; n.push("ทุกรายควรได้ TMP-SMX อย่างน้อย 6–12 เดือน (ป้องกัน PJP, Toxoplasma, Nocardia, UTI บางส่วน)"); }
+  if(p.rej) n.push("หลังรักษา rejection ด้วย ATG ให้ CMV prophylaxis 1–3 เดือนและ PJP prophylaxis ใหม่ ตรวจ BK PCR ถี่ขึ้น");
+  if(p.cmv === "l6") n.push("Letermovir ไม่ครอบคลุม HSV/VZV ให้ acyclovir ร่วม และเจาะ tacrolimus trough หลังเริ่มยา");
+  if(R.stop > 0 && p.sero !== "dneg") n.push("หลังหยุด prophylaxis ตรวจ CMV PCR เมื่อมีไข้ leukopenia หรือ diarrhea บางศูนย์ทำ surveillance ต่อ 3 เดือน");
+  if(p.tb) n.push("คัดกรอง latent TB ก่อนปลูกถ่ายและให้ isoniazid ตามข้อบ่งชี้");
+  LAST = {p:p, R:R, act:"<b>Next step:</b> " + (n.length ? n.join(" ") : "Prophylaxis เหมาะสม ติดตาม BK และวัคซีนตามกำหนด"), bad:bad};
+  drawTL();
+  live.load({tMax:TM, unit:"เดือน", ms:7000, debounce:deb === true, num:function(x){ return x.toFixed(1); }, events:ev.sort(function(a, b){ return a.t - b.t; }), onFrame:onFrame,
+    cursorLabel:function(t){ return "Month " + t.toFixed(1); }});
+}
+function onFrame(t, done){
+  var M = LAST, R = M.R;
+  Sim.ro("roCmv", done ? Math.round(R.cmvDis * 100) + "%" : "…", done ? (R.cmvDis > 0.2 ? "flag" : R.cmvDis < 0.08 ? "ok" : null) : null);
+  Sim.ro("roCmvT", done ? R.peakT.toFixed(1) : "…");
+  Sim.ro("roPjp", done ? (R.pjpRisk * 100).toFixed(1) + "%" : "…", done ? (R.pjpRisk > 0.03 ? "flag" : "ok") : null);
+  Sim.ro("roLeu", R.leu, R.leu === "สูง" ? "flag" : null);
+  Sim.ro("roTB", M.p.tb ? (M.p.atg ? "สูง" : "ปานกลาง") : "ต่ำ", M.p.tb && M.p.atg ? "flag" : null);
+  var a = document.getElementById("act");
+  if(done){ a.innerHTML = M.act; a.className = "act" + (M.bad ? " bad" : ""); }
+  else { a.innerHTML = "<b>กำลังจำลอง</b> เดือนที่ " + t.toFixed(1); a.className = "act"; }
+}
+Sim.mount({code:"KT-07", title:"Post-Transplant Infection Timeline and CMV Strategy",
+  lead:"เลือก CMV serostatus, prophylaxis และ immunosuppression ดู hazard ของ CMV, PJP, BK และ bacterial infection 24 เดือนแบบ real time และเชื้อที่คาดได้ในแต่ละช่วงเวลา",
+  scenarios:S, order:ORDER, captureMs:1200,
+  onChange:function(k, s){ var q = s.p; sSero.value = q.sero; sCmv.value = q.cmv; sPjp.value = q.pjp; C.now.set(q.now); ["atg","rej","tb"].forEach(function(x){ F[x] = !!q[x]; TG[x].setState(F[x]); }); update(); },
+  refs:["Fishman JA. Infection in organ transplantation. Am J Transplant 2017, 17(4): 856-879",
+        "Kotton CN, Kumar D, Manuel O, et al. The Fourth International Consensus Guidelines on the Management of Cytomegalovirus in Solid Organ Transplantation. Transplantation 2025, 109(7): 1066-1110",
+        "Humar A, Lebranchu Y, Vincenti F, et al. The efficacy and safety of 200 days valganciclovir cytomegalovirus prophylaxis in high-risk kidney transplant recipients (IMPACT). Am J Transplant 2010, 10(5): 1228-1237",
+        "Limaye AP, Budde K, Humar A, et al. Letermovir vs valganciclovir for prophylaxis of cytomegalovirus in high-risk kidney transplant recipients: a randomized clinical trial. JAMA 2023, 330(1): 33-42",
+        "Fishman JA, Gans H, AST Infectious Diseases Community of Practice. Pneumocystis jiroveci in solid organ transplantation: guidelines from the American Society of Transplantation Infectious Diseases Community of Practice. Clin Transplant 2019, 33(9): e13587",
+        "Kidney Disease: Improving Global Outcomes (KDIGO) Transplant Work Group. KDIGO clinical practice guideline for the care of kidney transplant recipients. Am J Transplant 2009, 9(Suppl 3): S1-S155"],
+  note:"Model เพื่อการสอน: hazard แต่ละเชื้อเป็นรูประฆังตามช่วงเวลาที่พบบ่อย คูณ serostatus (D+/R− 1, R+ 0.32, D−/R− 0.025) และ ATG (x1.45) prophylaxis กด hazard ระหว่างใช้ยาแล้วเลื่อนเป็น late-onset หลังหยุด การรักษา rejection ด้วย ATG เริ่มนาฬิกาใหม่ % ใน 24 เดือนปรับให้ใกล้ข้อมูลที่รายงานโดยประมาณ ไม่ใช่ prediction model"
+});
+})();
+</script>
+</body>
+</html>

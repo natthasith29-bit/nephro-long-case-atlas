@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[PD-10] Exit-Site and Tunnel Infection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(120px,160px) 1fr 120px}
+.sel{display:grid;grid-template-columns:minmax(120px,160px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+#es{max-height:330px}
+.readout{grid-template-columns:repeat(3,1fr)}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,1fr)}}
+.rx{margin-top:12px;border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:13.5px}
+.rx div{display:grid;grid-template-columns:110px 1fr;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line)}
+.rx div:last-child{border-bottom:0}
+.rx b{font-weight:500;color:var(--muted)}
+.rx .warn{background:#FFF6F6}
+.rx .warn span{color:var(--red);font-weight:600}
+body.present .bench{grid-template-columns:1.2fr 1fr}
+body.present #es{max-height:240px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:16px 20px}
+body.present .ctls{gap:4px 16px;grid-template-columns:1fr 1fr}
+body.present .ctl{grid-template-columns:78px 1fr 92px;gap:6px;font-size:12px}
+body.present .ctl output{font-size:11.5px}
+body.present .sel{grid-template-columns:78px minmax(0,1fr);gap:6px;font-size:12px}
+body.present select{font-size:11.5px;padding:3px 6px}
+body.present .ro{padding:8px 12px}
+body.present .rx{font-size:12.5px;margin-top:8px}
+body.present .rx div{padding:4px 10px}
+body.present .rx div:nth-child(n+4){display:none}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Exit site และ tunnel (ภาพตัดขวาง)</h2>
+      <div class="svgwrap"><svg id="es" viewBox="0 0 600 320" role="img" aria-label="Cross-section of PD catheter exit site and tunnel"></svg></div>
+      <div class="rx" id="rx"></div>
+      <p class="hint no-present">Exit-site score: บวม, crust, แดง, เจ็บเมื่อกด, discharge ข้อละ 0–2 คะแนน ≥ 4 หรือมีหนองข้อเดียวถือว่าติดเชื้อ tunnel infection คือแดง บวม เจ็บตามแนว tunnel หรือ ultrasound เห็น fluid รอบ cuff</p>
+    </div>
+    <div class="card">
+      <h2>ตรวจร่างกายและผล culture</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roSc"><b>-</b><span>Exit-site score</span></div>
+        <div class="ro" id="roDx"><b>-</b><span>Diagnosis</span></div>
+        <div class="ro" id="roCath"><b>-</b><span>Catheter</span></div>
+      </div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script>
+(function(){
+"use strict";
+var ORG={
+  none:{name:"ยังไม่มีผล/ไม่ส่ง",rx:"Oral ครอบคลุม S. aureus เช่น cephalexin 500 mg วันละ 2–3 ครั้ง ถ้าเคยมี Pseudomonas ให้ครอบคลุมด้วย",dur:2},
+  sa:{name:"S. aureus (MSSA)",rx:"Cephalexin หรือ dicloxacillin oral ถ้าหายช้าเพิ่ม rifampicin 600 mg/วัน (ไม่ใช้เดี่ยว)",dur:2},
+  mrsa:{name:"MRSA",rx:"Clindamycin, doxycycline หรือ TMP-SMX oral ถ้ารุนแรงใช้ vancomycin",dur:2},
+  pa:{name:"Pseudomonas",rx:"Ciprofloxacin oral 250 mg วันละ 2 ครั้ง ถ้าหายช้าเพิ่มยา anti-pseudomonal ตัวที่สอง (เช่น ceftazidime IP)",dur:3},
+  cory:{name:"Corynebacterium",rx:"ตาม sensitivity (เช่น cephalexin หรือ vancomycin)",dur:2},
+  ns:{name:"Gram-negative อื่น",rx:"Ciprofloxacin หรือยาที่ไว",dur:2}
+};
+function P(o){ var d={sw:0,cr:0,rd:0,pn:0,dc:0,tun:0,us:0,org:"none",wk:0,resp:"good",peri:"no"}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  ok:{name:"Exit site ปกติ", p:P({}),
+    rows:[["ตรวจ","ผิวแห้ง เห็น granulation tissue ปกติ"],["ทำต่อ","topical antibiotic ทุกวัน (mupirocin หรือ gentamicin)"],["หลักการ","ทำความสะอาดและยึดสายไม่ให้ดึงรั้ง"]],
+    take:["Topical antibiotic ที่ exit site ทุกวันลด exit-site infection และ peritonitis","ประเมิน exit site ทุกครั้งที่มาตรวจด้วย score มาตรฐาน","ยึดสายให้ดีเพื่อลด trauma ที่ exit site"]},
+  equiv:{name:"Equivocal", p:P({cr:1,rd:1}),
+    rows:[["ตรวจ","crust เล็ก แดงรอบ exit site < 0.5 cm ไม่มีหนอง"],["Score","2 ยังไม่เข้าเกณฑ์ infection"],["ทำต่อ","ทำแผลถี่ขึ้น ใช้ topical antibiotic ติดตามใกล้ชิด"]],
+    take:["แดงเล็กน้อยโดยไม่มีหนองยังไม่ถือว่าติดเชื้อ","Score ต่ำกว่า 4 และไม่มีหนอง = equivocal","อย่าลืม swab culture ถ้าเปลี่ยนเป็นหนอง"]},
+  sa:{name:"S. aureus ESI", p:P({sw:1,cr:1,rd:2,pn:1,dc:2,org:"sa"}),
+    rows:[["ตรวจ","มีหนอง แดง > 0.5 cm"],["Culture","S. aureus"],["รักษา","oral anti-staphylococcal อย่างน้อย 2 สัปดาห์ จนหายดี"]],
+    take:["Purulent discharge อย่างเดียวก็เป็น exit-site infection แล้ว","S. aureus และ Pseudomonas เป็นเชื้อที่ลามไป tunnel และ peritonitis บ่อย","รักษาจนหายดีแล้วอย่างน้อย 2 สัปดาห์"]},
+  pa:{name:"Pseudomonas ESI", p:P({sw:1,cr:2,rd:2,pn:1,dc:2,org:"pa",wk:2,resp:"slow"}),
+    rows:[["Culture","Pseudomonas aeruginosa"],["รักษา","ciprofloxacin oral หายช้าจึงเพิ่มยาตัวที่สอง"],["ระยะเวลา","อย่างน้อย 3 สัปดาห์"]],
+    take:["Pseudomonas ESI รักษาอย่างน้อย 3 สัปดาห์","หายช้าให้เพิ่มยาตัวที่สองก่อนพิจารณาเปลี่ยนสาย","ระวัง ciprofloxacin ดูดซึมลดลงเมื่อกินพร้อม binder, Ca หรือ Fe"]},
+  tun:{name:"Tunnel infection", p:P({sw:2,rd:2,pn:2,dc:2,tun:1,us:1,org:"sa",wk:3,resp:"none"}),
+    rows:[["ตรวจ","แดงและกดเจ็บตามแนว tunnel ultrasound เห็น fluid รอบ superficial cuff"],["ผล","รักษา 3 สัปดาห์แล้วไม่หาย"],["รักษา","เปลี่ยนสาย (simultaneous removal and reinsertion ได้ถ้าไม่มี peritonitis) หรือ cuff shaving/unroofing"]],
+    take:["Tunnel infection มักมาพร้อม ESI ตรวจด้วย ultrasound ได้","ไม่ตอบสนองหลัง effective antibiotic 2 สัปดาห์ (Pseudomonas 3 สัปดาห์) = refractory ให้เปลี่ยนสาย","ถ้ายังไม่มี peritonitis ถอดและใส่ใหม่ในการผ่าตัดเดียวได้"]},
+  peri:{name:"ESI ลามเป็น peritonitis", p:P({sw:2,rd:2,pn:2,dc:2,tun:1,org:"pa",wk:1,resp:"slow",peri:"same"}),
+    rows:[["ตรวจ","ESI/tunnel infection Pseudomonas แล้วน้ำยาขุ่น culture เชื้อเดียวกัน"],["นัย","catheter-related peritonitis"],["รักษา","ถอดสาย ให้ยาต่อตาม peritonitis รอ ≥ 2 สัปดาห์ก่อนใส่สายใหม่"]],
+    take:["ESI/TI ที่ลามเป็น peritonitis เชื้อเดียวกันควรถอดสาย","กรณีนี้ไม่ควรถอดและใส่ใหม่พร้อมกัน","ป้องกันด้วยการรักษา ESI เร็วและครบ"]}
+};
+var ORDER=["ok","equiv","sa","pa","tun","peri"];
+
+var box=document.getElementById("ctls"), C={}, SEL={};
+var LBL=[["ไม่มี","รอบ exit < 0.5 cm","> 0.5 cm/tunnel"],["ไม่มี","< 0.5 cm","> 0.5 cm"],["ไม่มี","< 0.5 cm","> 0.5 cm"],["ไม่มี","เล็กน้อย","มาก"],["ไม่มี","serous","purulent"]];
+function sl(k,label,i){ C[k]=Sim.slider({id:"s"+k,label:label,min:0,max:2,step:1,value:0,fmt:function(v){ return v+" "+LBL[i][v]; },onInput:update}); box.appendChild(C[k].el); }
+sl("sw","บวม",0); sl("cr","Crust",1); sl("rd","แดง",2); sl("pn","เจ็บเมื่อกด",3); sl("dc","Discharge",4);
+function sel(k,label,opts){ var s=Sim.h("select",{id:"s"+k},opts.map(function(o){ return Sim.h("option",{value:o[0],text:o[1]}); })); s.addEventListener("change",update); box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"s"+k,text:label}),s])); SEL[k]=s; }
+sel("tun","ตามแนว tunnel",[["0","ปกติ"],["1","แดง บวม กดเจ็บ"]]);
+sel("us","Ultrasound tunnel",[["0","ไม่พบ fluid"],["1","Fluid รอบ superficial cuff"]]);
+sel("org","Culture",Object.keys(ORG).map(function(k){ return [k,ORG[k].name]; }));
+C.wk=Sim.slider({id:"swk",label:"ได้ยามาแล้ว",min:0,max:4,step:1,value:0,unit:"สัปดาห์",onInput:update}); box.appendChild(C.wk.el);
+sel("resp","การตอบสนอง",[["good","ดีขึ้น"],["slow","ดีขึ้นช้า"],["none","ไม่ดีขึ้น"]]);
+sel("peri","น้ำยา",[["no","ใส ไม่มี peritonitis"],["same","Peritonitis เชื้อเดียวกัน"]]);
+
+/* ---------- SVG cross-section ---------- */
+var svg=document.getElementById("es"), F="IBM Plex Sans Thai, sans-serif";
+function el(t,a){ return Sim.svg(t,a,svg); }
+function draw(p){
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  el("rect",{x:0,y:0,width:600,height:70,fill:"#FFFFFF"});
+  el("text",{x:14,y:24,"font-size":13,fill:"#9A9CB2","font-family":F,text:"outside"});
+  el("rect",{x:0,y:70,width:600,height:22,fill:"#F2D7C9"});            /* epidermis/dermis */
+  el("rect",{x:0,y:92,width:600,height:118,fill:"#FBEFD9"});           /* subcutaneous fat */
+  el("rect",{x:0,y:210,width:600,height:30,fill:"#E9C1C1"});           /* rectus muscle */
+  el("rect",{x:0,y:240,width:600,height:80,fill:"#EEF6FB"});           /* peritoneal cavity */
+  el("text",{x:14,y:86,"font-size":12,fill:"#8A5A44","font-family":F,text:"skin"});
+  el("text",{x:14,y:150,"font-size":12,fill:"#9A7A3C","font-family":F,text:"subcutaneous tunnel"});
+  el("text",{x:14,y:230,"font-size":12,fill:"#9A4B4B","font-family":F,text:"rectus"});
+  el("text",{x:14,y:300,"font-size":12,fill:"#3E7891","font-family":F,text:"peritoneal cavity"});
+  /* erythema */
+  var r=p.rd===0?0:p.rd===1?28:60;
+  if(r) el("ellipse",{cx:120,cy:72,rx:r+(p.tun?40:0),ry:9,fill:"#E86A6A",opacity:0.45});
+  if(p.sw) el("path",{d:"M"+(120-30-p.sw*14)+" 70 Q120 "+(52-p.sw*8)+" "+(120+30+p.sw*14)+" 70",fill:"#F2B8B8",opacity:0.8});
+  /* tunnel tracking */
+  if(p.tun) el("path",{d:"M120 80 Q260 120 360 196",fill:"none",stroke:"#E86A6A","stroke-width":26,opacity:0.32,"stroke-linecap":"round"});
+  if(p.us) el("ellipse",{cx:205,cy:118,rx:34,ry:18,fill:"#E9D27A",opacity:0.85,stroke:"#B8962E"});
+  /* catheter */
+  el("path",{d:"M60 20 Q100 30 120 70 Q240 110 360 200 L372 250 Q380 290 440 300",fill:"none",stroke:"#5B4BFF","stroke-width":9,"stroke-linecap":"round"});
+  el("rect",{x:188,y:106,width:30,height:14,rx:3,fill:"#A8842C",transform:"rotate(22 203 113)"});
+  el("rect",{x:350,y:200,width:30,height:14,rx:3,fill:"#A8842C",transform:"rotate(70 365 207)"});
+  el("text",{x:226,y:104,"font-size":12,fill:"#7A5E1C","font-family":F,text:"superficial cuff"});
+  el("text",{x:388,y:206,"font-size":12,fill:"#7A5E1C","font-family":F,text:"deep cuff"});
+  if(p.us) el("text",{x:150,y:150,"font-size":12,fill:"#7A5E1C","font-family":F,text:"fluid collection"});
+  /* crust and discharge */
+  if(p.cr) el("ellipse",{cx:132,cy:66,rx:6+p.cr*6,ry:4+p.cr*2,fill:"#A4793F"});
+  if(p.dc===1) el("path",{d:"M108 64 q-6 10 -2 18",stroke:"#9FD6EE","stroke-width":5,fill:"none","stroke-linecap":"round"});
+  if(p.dc===2){ el("ellipse",{cx:104,cy:64,rx:12,ry:8,fill:"#E8D36A"}); el("text",{x:60,y:50,"font-size":12,fill:"#8C7A1C","font-family":F,text:"pus"}); }
+  el("text",{x:132,y:40,"font-size":13,"font-weight":600,fill:"#0B0B1F","font-family":F,text:"exit site"});
+  if(p.peri==="same") el("text",{x:450,y:280,"font-size":13,"font-weight":600,fill:"#B4232A","font-family":F,text:"cloudy effluent"});
+}
+
+function params(){ var o={}; ["sw","cr","rd","pn","dc","wk"].forEach(function(k){ o[k]=C[k].get(); }); o.tun=+SEL.tun.value; o.us=+SEL.us.value; o.org=SEL.org.value; o.resp=SEL.resp.value; o.peri=SEL.peri.value; return o; }
+function update(){
+  var p=params(), o=ORG[p.org]; draw(p);
+  var sc=p.sw+p.cr+p.rd+p.pn+p.dc, esi=sc>=4||p.dc===2, ti=p.tun===1||p.us===1;
+  var dx=p.peri==="same"?"ESI/TI + peritonitis":ti?"Tunnel infection":esi?"Exit-site infection":sc>=1?"Equivocal":"ปกติ";
+  var refr=(esi||ti)&&p.wk>=3&&p.resp==="none";
+  var cath=p.peri==="same"?"ถอด":refr?"เปลี่ยนสาย":ti&&p.resp!=="good"?"ติดตาม/พิจารณา":"เก็บไว้";
+  Sim.ro("roSc",sc+"/10",esi?"flag":sc?false:"ok");
+  Sim.ro("roDx",dx,esi||ti?"flag":"ok");
+  Sim.ro("roCath",cath,cath==="เก็บไว้"?"ok":"flag");
+  var rows=[];
+  if(!esi&&!ti){ rows.push(["แนวทาง",sc?"ทำแผลถี่ขึ้น topical antibiotic ติดตาม swab ถ้ามี discharge":"Topical antibiotic ทุกวัน ยึดสายให้ดี"]); }
+  else {
+    rows.push(["Antibiotic",o.rx]);
+    rows.push(["ระยะเวลา",(ti?3:Math.max(o.dur,2))+" สัปดาห์ขึ้นไป จนหายดี"+(p.org==="pa"&&!ti?" (Pseudomonas 3 สัปดาห์)":"")]);
+    if(ti) rows.push(["Ultrasound","ใช้ติดตาม fluid รอบ cuff ถ้า collection ไม่หายหลังรักษา มักต้องเปลี่ยนสายหรือ cuff shaving"]);
+    if(p.resp==="slow"&&!refr) rows.push(["ดีขึ้นช้า",p.org==="pa"?"เพิ่มยา anti-pseudomonal ตัวที่สอง":p.org==="sa"?"เพิ่ม rifampicin":"ทบทวน sensitivity และ adherence"]);
+  }
+  if(refr) rows.push(["!","Refractory ESI/TI (ไม่ตอบสนองหลัง 3 สัปดาห์) เปลี่ยนสาย ถอดและใส่ใหม่พร้อมกันได้เพราะไม่มี peritonitis",true]);
+  if(p.peri==="same") rows.push(["!","Peritonitis เชื้อเดียวกับ ESI/TI ถอดสาย ให้ยาตาม peritonitis ใส่สายใหม่หลัง ≥ 2 สัปดาห์",true]);
+  var rx=document.getElementById("rx"); rx.innerHTML="";
+  rows.forEach(function(r){ var e=Sim.h("div",{class:r[2]?"warn":""}); e.appendChild(Sim.h("b",{text:r[0]==="!"?"ข้อควรทำ":r[0]})); e.appendChild(Sim.h("span",{text:r[1]})); rx.appendChild(e); });
+}
+Sim.mount({code:"PD-10", title:"Exit-Site and Tunnel Infection", lead:"ให้คะแนน exit site ตรวจ tunnel และใส่ผล culture แล้วดูว่าเป็น equivocal, exit-site หรือ tunnel infection รักษาอะไรกี่สัปดาห์ และเมื่อไรต้องเปลี่ยนสาย",
+  scenarios:S, order:ORDER, captureMs:1400,
+  onChange:function(k,s){ var p=s.p; ["sw","cr","rd","pn","dc","wk"].forEach(function(x){ C[x].set(p[x]); }); SEL.tun.value=String(p.tun); SEL.us.value=String(p.us); SEL.org.value=p.org; SEL.resp.value=p.resp; SEL.peri.value=p.peri; update(); },
+  refs:["Chow KM, Li PKT, Cho Y, et al. ISPD catheter-related infection recommendations: 2023 update. Perit Dial Int 2023, 43(3): 201-219",
+        "Li PKT, Chow KM, Cho Y, et al. ISPD peritonitis guideline recommendations: 2022 update on prevention and treatment. Perit Dial Int 2022, 42(2): 110-153",
+        "Schaefer F, Klaus G, Müller-Wiefel DE, Mehls O. Intermittent versus continuous intraperitoneal glycopeptide/ceftazidime treatment in children with peritoneal dialysis-associated peritonitis. J Am Soc Nephrol 1999, 10(1): 136-145"],
+  note:"ภาพตัดขวางเป็น schematic เพื่อการสอน exit-site score ดัดแปลงจาก Schaefer (5 หัวข้อ ข้อละ 0–2) ขนาดยาและการเลือกยาให้ตรวจกับ sensitivity และแนวทางของหน่วย"
+});
+})();
+</script>
+</body>
+</html>

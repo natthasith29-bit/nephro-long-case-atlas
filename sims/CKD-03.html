@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[CKD-03] DKD Drug Pillars</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(100px,130px) 1fr 100px}
+.sel{display:grid;grid-template-columns:minmax(100px,130px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.readout{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:10px}
+.pil{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:12px}
+.pil td{padding:7px 8px;border-top:1px solid var(--line);vertical-align:top}
+.pil td:first-child{font-weight:600;white-space:nowrap}
+.st{display:inline-block;font:500 11.5px var(--mono);border-radius:999px;padding:1px 8px;border:1px solid var(--line-strong);white-space:nowrap}
+.st.on{border-color:var(--teal);color:var(--teal)}
+.st.add{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.st.no{border-color:var(--red);color:var(--red)}
+.st.cau{border-color:var(--gold);color:var(--gold)}
+body.present .bench{grid-template-columns:1.2fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:14px 18px}
+body.present .ctls{gap:1px}
+body.present .ctl,body.present .sel{font-size:13px}
+body.present .tools{margin-top:6px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .ro{padding:6px 10px}
+body.present .ro b{font-size:18px}
+body.present .readout{margin-top:8px}
+body.present .pil{font-size:12px;margin-top:6px}
+body.present .pil td{padding:3px 6px}
+body.present .act{display:none}
+body.present .take li{font-size:14px}
+body.present .svgwrap svg{max-height:400px;width:auto;margin:0 auto}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>กลไกของแต่ละเสา</h2>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 640 420" role="img" aria-label="Mechanism map of DKD drug pillars"></svg></div>
+      <p class="hint no-present">กดยาทางขวาเพื่อดูตำแหน่งออกฤทธิ์ SGLT2i ทำให้ NaCl ถึง macula densa มากขึ้น TGF จึงหด afferent ส่วน RAASi ขยาย efferent ทั้งคู่ลด glomerular pressure ทางต่างกันจึงเสริมกัน ส่วน finerenone และ GLP-1RA ทำงานนอก hemodynamic</p>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วยและยาที่ได้อยู่</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roP"><b>-</b><span>PGC ตอนนี้ → หลังเพิ่ม</span></div>
+        <div class="ro" id="roA"><b>-</b><span>UACR หลังเพิ่มเสา</span></div>
+        <div class="ro" id="roK"><b>-</b><span>K หลังเพิ่มเสา</span></div>
+        <div class="ro" id="roD"><b>-</b><span>eGFR dip ที่คาด</span></div>
+      </div>
+      <table class="pil" id="pil"></table>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script>
+(function(){
+"use strict";
+var DRUG={raas:"RAASi",sglt:"SGLT2i",fin:"Finerenone",glp:"GLP-1RA"};
+function P(o){ var d={dm:"t2",egfr:48,acr:900,k:4.6,hf:"none",ascvd:false,bmi:27,on:["raas"]}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  base:{name:"T2D A3 ได้ RAASi อย่างเดียว", p:P({}),
+    rows:[["ผู้ป่วย","ชาย 61 ปี T2D eGFR 48 UACR 900 mg/g K 4.6 ได้ losartan 100 mg"],["ขาด","SGLT2i, finerenone, GLP-1RA"],["ลำดับ","เพิ่ม SGLT2i ก่อน แล้ว finerenone เมื่อ K ≤ 4.8 GLP-1RA เมื่อยังต้องคุมน้ำตาลหรือน้ำหนัก"]],
+    take:["DKD มีหลายเสาเพราะ residual risk หลัง RAASi ยังสูง ยาแต่ละกลุ่มลดความเสี่ยงต่อได้","SGLT2i เริ่มได้เมื่อ eGFR ≥ 20 และใช้ต่อได้จนเริ่ม dialysis","Finerenone เริ่มเมื่อ eGFR ≥ 25, UACR ≥ 30 และ K ≤ 4.8 ติดตาม K ที่ 4 สัปดาห์"]},
+  hf:{name:"HFrEF ร่วม", p:P({egfr:38,acr:250,hf:"hfref",k:4.8,on:["raas"]}),
+    rows:[["ผู้ป่วย","T2D eGFR 38 UACR 250 HFrEF EF 30%"],["Priority","SGLT2i ได้ประโยชน์ทั้งไตและหัวใจ เริ่มก่อน"],["MRA","HFrEF ใช้ spironolactone/eplerenone ตาม HF guideline ไม่ใช้ MRA สองตัวพร้อมกัน"]],
+    take:["เมื่อมี HF ให้ SGLT2i เป็นยาตัวแรกที่เพิ่ม เพราะลด HF hospitalization และ kidney outcome พร้อมกัน","HFrEF มีข้อบ่งชี้ steroidal MRA อยู่แล้ว เลือก MRA เพียงตัวเดียว","HFpEF/HFmrEF ใช้ finerenone ได้ประโยชน์ทางหัวใจ"]},
+  k53:{name:"K 5.3", p:P({k:5.3,on:["raas"]}),
+    rows:[["ผู้ป่วย","T2D eGFR 42 UACR 600 K 5.3 ได้ ACEi"],["Finerenone","ยังไม่เริ่มจนกว่า K ≤ 4.8"],["ทางออก","เพิ่ม SGLT2i (ลด hyperK), ลด K ในอาหาร, loop/thiazide ถ้ามีน้ำเกิน, K binder เพื่อคง RAASi"]],
+    take:["HyperK ไม่ควรเป็นเหตุให้หยุด RAASi ก่อนแก้ปัจจัยอื่น","SGLT2i ลดความเสี่ยง hyperK ร่วมกับ RAASi และ MRA","K binder ใช้เพื่อให้คงยาที่มีประโยชน์ไว้ได้"]},
+  g4:{name:"eGFR 22", p:P({egfr:22,acr:1500,k:4.7,on:["raas"]}),
+    rows:[["ผู้ป่วย","T2D eGFR 22 UACR 1,500"],["SGLT2i","เริ่มได้ (≥ 20)"],["Finerenone","ไม่เริ่ม (< 25) GLP-1RA ใช้ได้ (semaglutide ไม่ต้องปรับขนาด)"]],
+    take:["เกณฑ์เริ่ม SGLT2i ต่ำถึง eGFR 20 ผลลดน้ำตาลน้อยแต่ผลปกป้องไตยังอยู่","Metformin ลดขนาดเมื่อ eGFR 30–44 และหยุดเมื่อ < 30","GLP-1RA เป็นตัวคุมน้ำตาลหลักที่ใช้ได้ใน CKD ระยะท้าย"]},
+  nodm:{name:"CKD ไม่มีเบาหวาน", p:P({dm:"none",egfr:52,acr:800,k:4.5,on:["raas"]}),
+    rows:[["ผู้ป่วย","CKD จาก hypertension/GN ไม่มีเบาหวาน UACR 800"],["SGLT2i","มีข้อบ่งชี้ (UACR ≥ 200 หรือ eGFR 20–45 แม้ UACR ต่ำ)"],["Finerenone","หลักฐานใหม่ใน non-diabetic CKD ชะลอ eGFR slope ได้ พิจารณาเป็นรายๆ"]],
+    take:["SGLT2i ใช้ได้ใน CKD ที่ไม่มีเบาหวาน ประโยชน์ไม่ขึ้นกับระดับน้ำตาล","Finerenone ใน non-diabetic CKD เริ่มมีหลักฐานลด eGFR decline","GLP-1RA ใน non-diabetic CKD ใช้เพื่อน้ำหนักและ CV risk ไม่ใช่ข้อบ่งชี้ทางไตโดยตรง"]},
+  obese:{name:"Obese + ASCVD", p:P({egfr:58,acr:180,bmi:35,ascvd:true,on:["raas","sglt"]}),
+    rows:[["ผู้ป่วย","T2D BMI 35 เคย MI eGFR 58 UACR 180"],["Priority","GLP-1RA ลด MACE น้ำหนัก และ kidney outcome"],["ต่อไป","finerenone เมื่อ UACR ยัง ≥ 30"]],
+    take:["มี ASCVD หรือ obesity ให้ GLP-1RA เป็นลำดับสูง","GLP-1RA ลด albuminuria และชะลอ eGFR decline ใน DKD","ทุกเสาใช้ร่วมกันได้ ไม่ต้องรอให้ตัวก่อนล้มเหลว"]}
+};
+var ORDER=["base","hf","k53","g4","nodm","obese"];
+var box=document.getElementById("ctls"), C={}, ON={};
+function sel(id,label,opts){ var s=Sim.h("select",{id:id},opts.map(function(o){ return Sim.h("option",{value:o[0],text:o[1]}); })); s.addEventListener("change",function(){ update(); }); box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":id,text:label}),s])); return s; }
+var sDm=sel("dm","Diabetes",[["t2","Type 2"],["t1","Type 1"],["none","ไม่มี"]]);
+var sHf=sel("hf","Heart failure",[["none","ไม่มี"],["hfref","HFrEF"],["hfpef","HFpEF/HFmrEF"]]);
+function sl(k,o){ o.id="s"+k; o.onInput=function(){ update(); }; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("egfr",{label:"eGFR",min:10,max:100,step:1,value:48,unit:"mL/min"});
+sl("lacr",{label:"UACR",min:0.7,max:3.6,step:0.02,value:Math.log10(900),unit:"mg/g",fmt:function(v){ return Math.round(Math.pow(10,v)).toLocaleString("en-US"); }});
+sl("k",{label:"K",min:3.5,max:6.2,step:0.1,value:4.6,unit:"mmol/L",fmt:function(v){ return v.toFixed(1); }});
+sl("bmi",{label:"BMI",min:18,max:45,step:1,value:27,unit:"kg/m²"});
+var tb=document.getElementById("tools"), BT={}, ASC=false;
+var bAsc=Sim.toggle("ASCVD",function(on){ ASC=on; update(); },false); tb.appendChild(bAsc);
+Object.keys(DRUG).forEach(function(k){ BT[k]=Sim.toggle("ได้ "+DRUG[k],function(on){ ON[k]=on; update(); },false); tb.appendChild(BT[k]); });
+function v(k){ return C[k].get(); }
+var svg=document.getElementById("vis");
+function T(x,y,s,o){ o=o||{}; var a={x:x,y:y,"font-size":o.fs||12,fill:o.c||"#0B0B1F","text-anchor":o.a||"start",text:s}; if(o.w) a["font-weight"]=o.w; if(o.mono) a["font-family"]="Geist Mono, monospace"; return Sim.svg("text",a,svg); }
+function cross(x,y){ Sim.svg("circle",{cx:x,cy:y,r:10,fill:"#fff",stroke:"#B4232A","stroke-width":2},svg); Sim.svg("path",{d:"M"+(x-5)+" "+(y-5)+"L"+(x+5)+" "+(y+5)+"M"+(x+5)+" "+(y-5)+"L"+(x-5)+" "+(y+5),stroke:"#B4232A","stroke-width":2.2},svg); }
+function draw(M){
+  svg.innerHTML="";
+  var defs=Sim.svg("defs",{},svg), mk=Sim.svg("marker",{id:"ar",viewBox:"0 0 10 10",refX:8,refY:5,markerWidth:6,markerHeight:6,orient:"auto"},defs); Sim.svg("path",{d:"M0 0L10 5L0 10z",fill:"#5B4BFF"},mk);
+  var mk2=Sim.svg("marker",{id:"ar2",viewBox:"0 0 10 10",refX:8,refY:5,markerWidth:6,markerHeight:6,orient:"auto"},defs); Sim.svg("path",{d:"M0 0L10 5L0 10z",fill:"#B4232A"},mk2);
+  var gx=300,gy=112;
+  var aw=Math.max(8,18-(ON.sglt?5:0)), ew=10+(ON.raas?6:0);
+  // distal tubule returning to vascular pole (drawn first, behind)
+  Sim.svg("path",{d:"M"+(gx+310)+" "+(gy+120)+" C"+(gx+300)+" "+(gy+185)+" "+(gx-40)+" "+(gy+180)+" "+(gx-110)+" "+(gy+120)+" S"+(gx-100)+" "+(gy+20)+" "+(gx-82)+" "+(gy+4),stroke:"#E6E7F0","stroke-width":14,fill:"none","stroke-linecap":"round"},svg);
+  T(gx+60,gy+160,"Distal tubule (TAL)",{fs:11,c:"#5E6075"});
+  // tubule PT
+  Sim.svg("path",{d:"M"+(gx+66)+" "+(gy+30)+" C"+(gx+120)+" "+(gy+40)+" "+(gx+150)+" "+(gy+10)+" "+(gx+200)+" "+(gy+20)+" S"+(gx+300)+" "+(gy+60)+" "+(gx+310)+" "+(gy+120),stroke:"#D3D5E2","stroke-width":20,fill:"none","stroke-linecap":"round"},svg);
+  T(gx+150,gy-8,"Proximal tubule",{fs:12.5,w:600});
+  T(gx+150,gy+56,"SGLT2: Na+ and glucose",{fs:11,c:"#5E6075"});
+  // arterioles
+  Sim.svg("path",{d:"M40 "+(gy-20)+" C120 "+(gy-20)+" 170 "+(gy-10)+" "+(gx-62)+" "+(gy-6),stroke:"#E7B9BC","stroke-width":aw,fill:"none","stroke-linecap":"round"},svg);
+  Sim.svg("path",{d:"M"+(gx-60)+" "+(gy+14)+" C200 "+(gy+30)+" 150 "+(gy+50)+" 70 "+(gy+52),stroke:"#C9CAE6","stroke-width":ew,fill:"none","stroke-linecap":"round"},svg);
+  T(44,gy-36,"Afferent",{fs:12.5,w:600}); T(60,gy+80,"Efferent",{fs:12.5,w:600});
+  if(ON.sglt) T(44,gy-50,"constricted by TGF",{fs:11,c:"#5B4BFF"});
+  if(ON.raas) T(60,gy+96,"dilated by RAASi",{fs:11,c:"#1F7A72"});
+  // Bowman + tuft
+  Sim.svg("circle",{cx:gx,cy:gy,r:72,fill:"#F4F5F9",stroke:"#D3D5E2","stroke-width":2},svg);
+  Sim.svg("circle",{cx:gx,cy:gy,r:52,fill:"#F9EAEA",stroke:"#E7B9BC","stroke-width":1.5},svg);
+  var pc=M.pgc, hot=Sim.clamp((pc-50)/18,0,1);
+  Sim.svg("circle",{cx:gx,cy:gy,r:40,fill:"rgba(180,35,42,"+(0.15+0.55*hot).toFixed(2)+")"},svg);
+  T(gx,gy-4,"PGC",{a:"middle",fs:12,c:"#0B0B1F",w:600}); T(gx,gy+16,pc.toFixed(0)+" mmHg",{a:"middle",fs:13,mono:true});
+  if(ON.sglt) cross(gx+150,gy+20);
+  // macula densa at vascular pole
+  for(var i=0;i<4;i++) Sim.svg("circle",{cx:gx-84,cy:gy-4+i*5,r:3.2,fill:"#5B4BFF"},svg);
+  Sim.svg("line",{x1:gx-88,y1:gy+16,x2:gx-150,y2:gy+128,stroke:"#9A9CB2","stroke-width":1},svg);
+  T(gx-150,gy+142,"Macula densa",{fs:12,w:600,a:"middle"});
+  if(ON.sglt){ Sim.svg("path",{d:"M"+(gx+200)+" "+(gy+200)+" Q"+(gx+20)+" "+(gy+225)+" "+(gx-90)+" "+(gy+150),stroke:"#5B4BFF","stroke-width":2,fill:"none","stroke-dasharray":"5 4","marker-end":"url(#ar)"},svg);
+    T(gx+120,gy+222,"More NaCl reaches macula densa",{fs:11,c:"#5B4BFF"});
+    Sim.svg("path",{d:"M"+(gx-90)+" "+(gy-8)+" Q"+(gx-100)+" "+(gy-50)+" "+(gx-140)+" "+(gy-34),stroke:"#5B4BFF","stroke-width":2,fill:"none","marker-end":"url(#ar)"},svg);
+    T(gx-100,gy-58,"Adenosine",{fs:11,c:"#5B4BFF",a:"middle"}); }
+  // lower panels
+  function panel(x,y,w,h,title,lines,on,col){ Sim.svg("rect",{x:x,y:y,width:w,height:h,rx:12,fill:on?"#EFEDFF":"#FFFFFF",stroke:on?col:"#E6E7F0","stroke-width":on?1.8:1},svg);
+    T(x+12,y+22,title,{fs:12.5,w:600,c:on?col:"#0B0B1F"}); lines.forEach(function(l,i){ T(x+12,y+42+i*17,l,{fs:11,c:"#5E6075"}); }); }
+  panel(20,300,190,104,"Mineralocorticoid receptor",["Podocyte, mesangium, fibroblast","Inflammation and fibrosis","K retention in CCD"],ON.fin,"#5B4BFF");
+  if(ON.fin) cross(196,316);
+  panel(225,300,190,104,"GLP-1 receptor",["Weight and glucose","Atherosclerosis, inflammation","Natriuresis"],ON.glp,"#5B4BFF");
+  if(ON.glp) T(405,320,"✓",{fs:16,c:"#1F7A72",a:"end"});
+  panel(430,300,190,104,"Systemic effect",["BP, volume, cardiac load","K after additions: "+M.k1.toFixed(1)+" mmol/L","Pillars on: "+M.n+" of 4"],false,"#5B4BFF");
+}
+function evalP(){
+  var dm=sDm.value, hf=sHf.value, e=v("egfr"), acr=Math.pow(10,v("lacr")), k=v("k"), bmi=v("bmi");
+  var R={};
+  // RAASi
+  if(ON.raas) R.raas=["on","ใช้ขนาดสูงสุดที่ทนได้"];
+  else if(acr>=30||true) R.raas=k>5.5?["cau","K > 5.5 แก้ K หรือใช้ binder ก่อนเริ่ม"]:["add",acr>=30?"Albuminuria เริ่มและปรับถึงขนาดสูงสุด":"ใช้ถ้ามี hypertension"];
+  // SGLT2i
+  if(ON.sglt) R.sglt=["on",e<20?"ใช้ต่อได้จนเริ่ม dialysis":"ใช้ต่อ"];
+  else if(dm==="t1") R.sglt=["cau","Type 1: เสี่ยง DKA ไม่ใช้เป็นมาตรฐาน"];
+  else if(e<20) R.sglt=["no","eGFR < 20 ไม่เริ่มใหม่"];
+  else if(dm==="t2"||acr>=200||e<=45||hf!=="none") R.sglt=["add",hf!=="none"?"HF + CKD: ลำดับแรก":"เริ่มได้ eGFR ≥ 20"];
+  else R.sglt=["cau","eGFR > 45 และ UACR < 200 หลักฐานยังไม่ชัด"];
+  // finerenone
+  if(ON.fin) R.fin=["on",k>5.5?"K > 5.5 พักยา":"ติดตาม K"];
+  else if(hf==="hfref") R.fin=["cau","HFrEF ใช้ steroidal MRA ตาม HF ไม่ใช้สองตัว"];
+  else if(e<25) R.fin=["no","eGFR < 25 ไม่เริ่ม"];
+  else if(acr<30) R.fin=["no","UACR < 30 ยังไม่มีข้อบ่งชี้ทางไต"];
+  else if(k>4.8) R.fin=["cau","K "+k.toFixed(1)+" เกิน 4.8 แก้ K ก่อนเริ่ม"];
+  else if(dm==="t2") R.fin=["add","T2D + albuminuria บน RAASi"];
+  else if(dm==="none") R.fin=["cau","Non-diabetic CKD: หลักฐานใหม่ พิจารณาเป็นรายๆ"];
+  else R.fin=["cau","Type 1: ข้อมูลยังจำกัด"];
+  // GLP-1RA
+  if(ON.glp) R.glp=["on","ใช้ต่อ"];
+  else if(dm==="t2") R.glp=["add",ASC||bmi>=30?"ASCVD/obesity: ลำดับสูง":"คุมน้ำตาลและลดความเสี่ยงไต"];
+  else if(bmi>=30) R.glp=["cau","ไม่มีเบาหวาน: ใช้เพื่อน้ำหนักและ CV risk"];
+  else R.glp=["no","ไม่มีข้อบ่งชี้หลัก"];
+  return R;
+}
+function update(){
+  var e=v("egfr"), acr=Math.pow(10,v("lacr")), k=v("k"), R=evalP();
+  var ADD={}; Object.keys(DRUG).forEach(function(x){ ADD[x]=R[x][0]==="add"; });
+  function pg(on){ return 60+(sDm.value!=="none"?4:0)+Math.max(0,Math.log10(acr/30))*1.5-(on.sglt?4:0)-(on.raas?5:0)-(on.fin?1:0); }
+  var after={}; Object.keys(DRUG).forEach(function(x){ after[x]=ON[x]||ADD[x]; });
+  var pgc=pg(ON), pgc2=pg(after);
+  var fA=(ADD.raas?0.65:1)*(ADD.sglt?0.7:1)*(ADD.fin?0.7:1)*(ADD.glp?(sDm.value==="t2"?0.76:0.9):1);
+  var acrRx=acr*fA;
+  var k1=k+(ADD.raas?0.2:0)+(ADD.fin?0.2:0)-(ADD.sglt?0.07:0);
+  var dip=(ADD.raas?6:0)+(ADD.sglt?3:0)+(ADD.fin?2:0);
+  var n=Object.keys(DRUG).filter(function(x){ return ON[x]; }).length;
+  var M={pgc:pgc,k0:k,k1:k1,n:n};
+  draw(M);
+  Sim.ro("roP",pgc.toFixed(0)+(pgc2<pgc-0.5?"→"+pgc2.toFixed(0):""),pgc2>62?"flag":pgc2<57?"ok":null);
+  Sim.ro("roA",Math.round(acrRx).toLocaleString("en-US"),acrRx>300?"flag":acrRx<30?"ok":null);
+  Sim.ro("roK",k1.toFixed(1),k1>5.5?"flag":k1<=5?"ok":null);
+  Sim.ro("roD",dip?"≈ −"+dip+"%":"0",null);
+  var tbl=document.getElementById("pil"); tbl.innerHTML="";
+  var LBL={on:"ON",add:"ADD",no:"NOT ELIGIBLE",cau:"CAUTION"};
+  Object.keys(DRUG).forEach(function(x){ var r=R[x]; tbl.appendChild(Sim.h("tr",{},[Sim.h("td",{text:DRUG[x]}),Sim.h("td",{},[Sim.h("span",{class:"st "+r[0],text:LBL[r[0]]})]),Sim.h("td",{text:r[1]})])); });
+  var order=sHf.value!=="none"?["sglt","raas","fin","glp"]:(ASC||v("bmi")>=30)&&sDm.value==="t2"?["raas","sglt","glp","fin"]:["raas","sglt","fin","glp"];
+  var nx=order.filter(function(x){ return R[x][0]==="add"; });
+  var m,bad=false;
+  if(k1>5.5){ bad=true; m="<b>K "+k1.toFixed(1)+"</b> ลด K ในอาหาร, หยุด NSAID, เพิ่ม diuretic ถ้ามีน้ำเกิน, แก้ acidosis, เริ่ม K binder เพื่อคง RAASi ไม่ควรหยุดยาที่ปกป้องไตเป็นทางแรก"; }
+  else if(nx.length){ bad=true; m="<b>เพิ่ม "+DRUG[nx[0]]+"</b> "+R[nx[0]][1]+(nx.length>1?" จากนั้น "+nx.slice(1).map(function(x){ return DRUG[x]; }).join(" และ "):"")+" ตรวจ Cr และ K 2–4 สัปดาห์หลังเพิ่มแต่ละยา"; }
+  else if(acrRx>=30) m="<b>Residual albuminuria</b> ใช้ทุกเสาที่มีสิทธิ์แล้ว ทบทวน salt, BP เป้า SBP < 120 ถ้าทนได้, adherence และ glycemia";
+  else m="<b>ครอบคลุมแล้ว</b> ติดตาม eGFR, UACR, K ทุก 3–6 เดือน";
+  var a=document.getElementById("act"); a.innerHTML="<b>Next step:</b> "+m; a.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"CKD-03", title:"DKD Drug Pillars", lead:"ใส่ eGFR, albuminuria, K, HF, ASCVD และยาที่ได้อยู่ ดูว่าเสาไหนเริ่มได้ ไหนต้องรอ และกลไกของแต่ละยาบนไตเสริมกันอย่างไร",
+  scenarios:S, order:ORDER, captureMs:800,
+  onChange:function(kk,s){ var p=s.p; sDm.value=p.dm; sHf.value=p.hf; C.egfr.set(p.egfr); C.lacr.set(Math.log10(p.acr)); C.k.set(p.k); C.bmi.set(p.bmi); ASC=p.ascvd; bAsc.setState(ASC);
+    Object.keys(DRUG).forEach(function(x){ ON[x]=p.on.indexOf(x)>=0; BT[x].setState(ON[x]); }); update(); },
+  refs:["KDIGO 2022 Clinical Practice Guideline for Diabetes Management in CKD. Kidney Int 2022, 102(5S): S1-S127",
+        "KDIGO 2024 Clinical Practice Guideline for the Evaluation and Management of CKD. Kidney Int 2024, 105(4S): S117-S314",
+        "Perkovic V, Jardine MJ, Neal B, et al (CREDENCE). Canagliflozin and renal outcomes in type 2 diabetes and nephropathy. N Engl J Med 2019, 380(24): 2295-2306",
+        "Bakris GL, Agarwal R, Anker SD, et al (FIDELIO-DKD). Effect of finerenone on CKD outcomes in type 2 diabetes. N Engl J Med 2020, 383(23): 2219-2229",
+        "Perkovic V, Tuttle KR, Rossing P, et al (FLOW). Effects of semaglutide on chronic kidney disease in patients with type 2 diabetes. N Engl J Med 2024, 391(2): 109-121",
+        "Heerspink HJL, Perkins BA, Fitchett DH, et al. Sodium glucose cotransporter 2 inhibitors in the treatment of diabetes mellitus: cardiovascular and kidney effects, potential mechanisms, and clinical applications. Circulation 2016, 134(10): 752-772",
+        "Solomon SD, McMurray JJV, Vaduganathan M, et al (FINEARTS-HF). Finerenone in HF with mildly reduced or preserved EF. N Engl J Med 2024, 391(16): 1475-1485",
+        "Neuen BL, Oshima M, Agarwal R, et al. Sodium-glucose cotransporter 2 inhibitors and risk of hyperkalemia. Circulation 2022, 145(19): 1460-1470"],
+  note:"Model เพื่อการสอน: PGC ตั้งต้น 60 mmHg + 4 ใน diabetes + 1.5 x log10(UACR/30), SGLT2i −4, RAASi −5, finerenone −1 readout คือผลหลังเพิ่มยาที่ขึ้นสถานะ ADD: UACR ลดแบบคูณ (RAASi 0.65, SGLT2i 0.70, finerenone 0.70, GLP-1RA 0.76) K RAASi +0.2, finerenone +0.2, SGLT2i −0.07 กฎสิทธิ์ใช้เกณฑ์เริ่มยาตาม label และ guideline ไม่ใช่ prediction model"
+});
+})();
+</script>
+</body>
+</html>

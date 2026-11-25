@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[MX-11] Renal Clearance Basics: Filtration, Secretion and Reabsorption</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.2fr 1fr}}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:8px}
+.sub{font-size:12.5px;color:var(--muted);margin:12px 0 4px}
+.gap{height:8px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .steps{display:none}
+body.present .card{padding:12px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .ro{padding:5px 12px}
+body.present .ro b{font-size:16px}
+body.present .ctls{gap:0}
+body.present .ctl{font-size:12.5px}
+body.present .tog{padding:3px 8px;font-size:11.5px}
+body.present .tools{margin-top:3px;gap:4px}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+body.present .sub{margin:4px 0 1px}
+body.present .svgwrap svg{max-height:230px}
+body.present .gap{height:2px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>สารผ่าน nephron อย่างไร</h2>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 640 260" role="img" aria-label="Filtered, secreted, reabsorbed and excreted amounts of the selected substance"></svg></div>
+      <div class="gap"></div>
+      <div id="curve"></div>
+      <p class="hint no-present">ภาพบน: ความหนาของลูกศรตามปริมาณต่อนาที (filtered, secreted, reabsorbed, excreted) กราฟล่าง: titration curve คือปริมาณที่กรอง ขับ และดูดกลับหรือ secrete ตามความเข้มข้นในเลือด เห็น transport maximum (Tm) ของ glucose และ PAH</p>
+    </div>
+    <div class="card">
+      <h2>สารและสภาวะ</h2>
+      <div class="tools" id="subs" role="group" aria-label="Substance"></div>
+      <div class="ctls" id="ctls"></div>
+      <div class="sub">ยาที่บล็อก transporter</div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roCl"><b>-</b><span>Clearance (mL/min)</span></div>
+        <div class="ro" id="roRat"><b>-</b><span>Clearance/GFR</span></div>
+        <div class="ro" id="roFE"><b>-</b><span>Fractional excretion</span></div>
+        <div class="ro" id="roF"><b>-</b><span>Filtered load</span></div>
+        <div class="ro" id="roE"><b>-</b><span>Excretion</span></div>
+        <div class="ro" id="roX"><b>-</b><span>-</span></div>
+      </div>
+      <div class="act" id="act"></div>
+      <div id="steps" class="no-present"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script>
+(function(){
+"use strict";
+function SV(t,a,p){ var b={}; for(var k in a) if(a[k]!==null&&a[k]!==undefined) b[k]=a[k]; return Sim.svg(t,b,p); }
+/* plasma unit: mg/dL for all; amounts mg/min */
+var SB={
+  inulin:{n:"Inulin",p:[5,100,5],pd:20,u:"mg/dL"},
+  cr:{n:"Creatinine",p:[0.4,12,0.1],pd:1,u:"mg/dL"},
+  pah:{n:"PAH",p:[0.5,100,0.5],pd:2,u:"mg/dL"},
+  urea:{n:"Urea (BUN)",p:[5,150,1],pd:15,u:"mg/dL"},
+  glu:{n:"Glucose",p:[50,800,10],pd:100,u:"mg/dL"}
+};
+function P(o){ var d={s:"inulin",gfr:120,rpf:650,pl:20,v:1.5,rx:[]}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  inulin:{name:"Inulin วัด GFR", p:P({}),
+    rows:[["สาร","inulin กรองอย่างเดียว ไม่ secrete ไม่ดูดกลับ"],["ผล","clearance = GFR 120"],["หลักการ","excretion = filtered load"]],
+    take:["Clearance = U x V/P คือปริมาตร plasma ที่ถูกกำจัดสารนั้นจนหมดต่อนาที","สารที่กรองอย่างเดียวมี clearance เท่ากับ GFR (inulin, iohexol, iothalamate)","Clearance > GFR แปลว่ามี secretion และ < GFR แปลว่ามี reabsorption"]},
+  crCkd:{name:"Creatinine ใน CKD", p:P({s:"cr",gfr:20,pl:3.4}),
+    rows:[["GFR จริง","20 mL/min"],["CrCl","ราว 30 mL/min"],["เหตุ","secretion เป็นสัดส่วนมากขึ้นเมื่อ GFR ต่ำ"]],
+    take:["Creatinine ถูก secrete ที่ PT (OCT2, MATE) ทำให้ CrCl สูงกว่า GFR จริง","สัดส่วน secretion ยิ่งมากเมื่อ GFR ต่ำ CrCl จึงประเมิน GFR สูงเกินมากใน CKD","ค่าเฉลี่ยของ urea clearance กับ creatinine clearance ใกล้ GFR จริงใน CKD ระยะท้าย"]},
+  tmp:{name:"Trimethoprim", p:P({s:"cr",gfr:60,pl:1.25,rx:["tmp"]}),
+    rows:[["ยา","trimethoprim บล็อก creatinine secretion"],["ผล","Cr ขึ้นราว 15–30% GFR จริงไม่เปลี่ยน"],["แยก","cystatin C ปกติ BUN ไม่ขึ้นตาม"]],
+    take:["Trimethoprim, cimetidine, dolutegravir, cobicistat และ TKI หลายตัวบล็อก creatinine secretion","Cr ขึ้นเร็วแล้วคงที่ ไม่มี urine abnormality หายเมื่อหยุดยา","Trimethoprim ยังบล็อก ENaC ทำให้ K สูงได้จริง"]},
+  pah:{name:"PAH วัด RPF", p:P({s:"pah",pl:2}),
+    rows:[["สาร","PAH กรองและ secrete จนเกือบหมดในรอบเดียว (E ราว 0.9)"],["ผล","PAH clearance ราว 585 = effective RPF"],["คำนวณ","FF = GFR/RPF ราว 0.2"]],
+    take:["PAH ที่ความเข้มข้นต่ำถูกกำจัดเกือบหมดจาก plasma ที่ผ่านไต จึงวัด effective RPF","RBF = RPF/(1 − Hct)","Filtration fraction = GFR/RPF ปกติราว 0.2 เพิ่มเมื่อ efferent หด (ดู AKI-02)"]},
+  pahSat:{name:"PAH ความเข้มข้นสูง", p:P({s:"pah",pl:60}),
+    rows:[["PAH","60 mg/dL เกิน Tm ของ secretion"],["ผล","clearance ลดลงเข้าหา GFR"],["หลักการ","secretion อิ่มตัว"]],
+    take:["Secretion มี transport maximum เมื่อความเข้มข้นสูง clearance ลดลง","ต้องใช้ PAH ความเข้มข้นต่ำในการวัด RPF","Probenecid บล็อก OAT จึงลด PAH และ penicillin secretion"]},
+  glu:{name:"Glucose titration", p:P({s:"glu",pl:260}),
+    rows:[["Plasma glucose","260 mg/dL"],["Filtered load","312 mg/min ใกล้ Tm 375"],["ผล","เริ่มมี glucosuria จาก splay"]],
+    take:["Glucose กรองทั้งหมดแล้วดูดกลับที่ PT ด้วย SGLT2 (ราว 90%) และ SGLT1","Renal threshold ราว 180–200 mg/dL ต่ำกว่าจุดที่ถึง Tm เพราะ splay (nephron ไม่เท่ากัน)","Glycosuria ที่ blood glucose ปกติ ให้นึกถึง Fanconi, familial renal glycosuria หรือ SGLT2i"]},
+  sglt:{name:"SGLT2 inhibitor", p:P({s:"glu",pl:140,rx:["sglt"]}),
+    rows:[["ยา","SGLT2i"],["ผล","glucosuria หลายสิบกรัมต่อวันแม้ glucose ปกติ"],["ผลต่อไต","Na ถึง macula densa มากขึ้น afferent หด"]],
+    take:["SGLT2i ลด Tm ของ glucose ทำให้ขับ glucose ได้ที่ระดับ glucose ปกติ","เสี่ยง hypoglycemia ต่ำเพราะ SGLT1 ชดเชยเมื่อ glucose ต่ำ","Na และ glucose ที่ถึง macula densa มากขึ้นฟื้น TGF ลด hyperfiltration"]},
+  urea:{name:"Urea ปัสสาวะน้อย", p:P({s:"urea",gfr:90,pl:30,v:0.4}),
+    rows:[["Urine flow","0.4 mL/min (ขาดน้ำ)"],["ผล","urea ถูกดูดกลับมาก FEurea < 35%"],["คลินิก","BUN/Cr สูงขึ้นใน prerenal"]],
+    take:["Urea ถูกดูดกลับตามน้ำ ยิ่ง urine flow ต่ำยิ่งดูดกลับมาก","นี่คือเหตุที่ BUN/Cr > 20 ใน prerenal และ FEurea < 35% ใช้ได้แม้ได้ diuretic","Urea clearance ต่ำกว่า GFR เสมอ"]}
+};
+var ORDER=["inulin","crCkd","tmp","pah","pahSat","glu","sglt","urea"];
+var CUR="inulin", SBB={};
+Object.keys(SB).forEach(function(k){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:SB[k].n}); b.addEventListener("click",function(){ CUR=k; setRange(true); update(); }); document.getElementById("subs").appendChild(b); SBB[k]=b; });
+var box=document.getElementById("ctls"), C={};
+function sl(k,o){ o.id="s"+k; o.onInput=function(){ update(); }; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("gfr",{label:"GFR (mL/min)",min:5,max:180,step:1,value:120,unit:""});
+sl("rpf",{label:"Renal plasma flow (mL/min)",min:150,max:900,step:10,value:650,unit:""});
+sl("pl",{label:"Plasma conc (mg/dL)",min:5,max:100,step:1,value:20,unit:""});
+sl("v",{label:"Urine flow (mL/min)",min:0.2,max:10,step:0.1,value:1.5,unit:"",fmt:function(v){ return v.toFixed(1); }});
+function setRange(def){ var r=SB[CUR].p; C.pl.input.min=r[0]; C.pl.input.max=r[1]; C.pl.input.step=r[2]; if(def) C.pl.set(SB[CUR].pd); }
+var T={}, tb=document.getElementById("tools");
+[["tmp","Trimethoprim/cimetidine (Cr secretion)"],["prob","Probenecid (OAT)"],["sglt","SGLT2 inhibitor"]].forEach(function(q){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:q[1]}); b.addEventListener("click",function(){ b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); tb.appendChild(b); T[q[0]]=b; });
+function on(k){ return T[k].getAttribute("aria-pressed")==="true"; }
+function handle(s,o,pl){ /* returns mg/min: filt, sec, reab, exc */
+  var P=pl/100, F=o.gfr*P, sec=0, reab=0;
+  if(s==="cr"){ var cls=15*(0.6+0.4*o.gfr/120)*(o.tmp?0.15:1); sec=cls*P; }
+  else if(s==="pah"){ var Tm=80*(o.prob?0.2:1), cap=Math.max(0,0.9*o.rpf-o.gfr)*P; sec=cap*Tm/Math.pow(Math.pow(cap,4)+Math.pow(Tm,4),0.25); }
+  else if(s==="urea"){ var fe=0.35+0.3*(1-Math.exp(-o.v/1.5)); reab=F*(1-fe); }
+  else if(s==="glu"){ var Tg=375*(o.gfr/120)*(o.sglt?0.45:1); reab=F*Tg/Math.pow(Math.pow(F,6)+Math.pow(Tg,6),1/6); }
+  return {F:F,sec:sec,reab:reab,E:F+sec-reab};
+}
+var A=Plot.colors;
+var curve=Plot.chart(document.getElementById("curve"),{height:Sim.present?190:220,aria:"Titration curve of filtered, transported and excreted load",
+  x:{min:0,max:100,label:"Plasma concentration (mg/dL)"},y:{min:0,max:100,label:"mg/min"},
+  series:[{id:"F",name:"Filtered",color:A.muted,data:[],width:2,dash:[6,4]},{id:"T",name:"Reabsorbed or secreted",color:A.teal,data:[],width:2.2},{id:"E",name:"Excreted",color:A.accent,data:[],width:2.6}],legend:true});
+var svg=document.getElementById("vis"), INK="#0B0B1F", MUT="#5E6075", ACC="#5B4BFF", TEAL="#1F7A72", GOLD="#A8842C", FT="IBM Plex Sans Thai, sans-serif";
+function tx(x,y,s,o){ o=o||{}; return SV("text",{x:x,y:y,"text-anchor":o.a||"middle","font-family":o.mono?"Geist Mono, monospace":FT,"font-size":o.fs||12,"font-weight":o.fw||400,fill:o.fill||INK,text:s},svg); }
+function arrow(x1,y1,x2,y2,w,c){ if(w<0.6) return; SV("line",{x1:x1,y1:y1,x2:x2,y2:y2,stroke:c,"stroke-width":w,"stroke-linecap":"round"},svg); var a=Math.atan2(y2-y1,x2-x1), h=Math.max(7,w*1.2); SV("path",{d:"M"+(x2+Math.cos(a)*h)+" "+(y2+Math.sin(a)*h)+" L"+(x2+Math.cos(a+2.4)*h)+" "+(y2+Math.sin(a+2.4)*h)+" L"+(x2+Math.cos(a-2.4)*h)+" "+(y2+Math.sin(a-2.4)*h)+" Z",fill:c},svg); }
+function fmt(v){ return v>=100?v.toFixed(0):v>=10?v.toFixed(1):v.toFixed(2); }
+function draw(h){
+  svg.innerHTML="";
+  var mx=Math.max(h.F,h.F+h.sec,0.0001), W=function(v){ return Math.max(1.5,v/mx*22); };
+  /* glomerulus */
+  SV("circle",{cx:70,cy:120,r:38,fill:"#F4F5F9",stroke:"#D3D5E2","stroke-width":1.5},svg);
+  for(var i=0;i<6;i++){ var a=i*Math.PI/3; SV("circle",{cx:70+Math.cos(a)*14,cy:120+Math.sin(a)*14,r:8,fill:"none",stroke:"#B4232A","stroke-width":1.4},svg); }
+  tx(70,70,"Glomerulus",{fs:11.5,fill:MUT});
+  /* tubule */
+  SV("path",{d:"M108 120 L590 120",stroke:"#E6E7F0","stroke-width":44,"stroke-linecap":"round"},svg);
+  tx(240,90,"Proximal tubule",{fs:11.5,fill:MUT}); tx(470,90,"Distal nephron",{fs:11.5,fill:MUT});
+  /* filtered */
+  var w1=W(h.F)/2, w2=W(h.F+h.sec)/2, w3=W(h.E)/2;
+  SV("path",{d:"M108 "+(120-w1)+" L250 "+(120-w1)+" L250 "+(120-w2)+" L380 "+(120-w2)+" L380 "+(120-w3)+" L560 "+(120-w3)+" L560 "+(120-w3-6)+" L588 120 L560 "+(120+w3+6)+" L560 "+(120+w3)+" L380 "+(120+w3)+" L380 "+(120+w2)+" L250 "+(120+w2)+" L250 "+(120+w1)+" L108 "+(120+w1)+" Z",fill:"rgba(91,75,255,0.85)"},svg);
+  tx(165,160,"Filtered",{fs:11.5,fw:600}); tx(165,176,fmt(h.F)+" mg/min",{fs:11,mono:true,fill:MUT});
+  /* secreted from below */
+  if(h.sec>0.0001){ arrow(250,226,250,120+w2+10,Math.max(2,W(h.sec)),GOLD); tx(250,248,"Secreted "+fmt(h.sec),{fs:11.5,fw:600,fill:GOLD}); }
+  /* reabsorbed up */
+  if(h.reab>0.0001){ arrow(380,120-w2,380,38,Math.max(2,W(h.reab)),TEAL); tx(380,24,"Reabsorbed "+fmt(h.reab),{fs:11.5,fw:600,fill:TEAL}); }
+  /* flow inside tubule */
+  tx(600,160,"Excreted",{a:"end",fs:11.5,fw:600,fill:ACC}); tx(600,176,fmt(h.E)+" mg/min",{a:"end",fs:11,mono:true,fill:ACC});
+  SV("rect",{x:20,y:200,width:190,height:44,rx:10,fill:"#fff",stroke:"#D3D5E2"},svg);
+  tx(30,218,"Peritubular capillary",{a:"start",fs:11,fill:MUT}); tx(30,236,"Clearance = U x V / P",{a:"start",fs:11,mono:true});
+}
+function update(){
+  Object.keys(SBB).forEach(function(k){ SBB[k].setAttribute("aria-pressed",k===CUR?"true":"false"); });
+  var o={gfr:C.gfr.get(),rpf:C.rpf.get(),v:C.v.get(),tmp:on("tmp"),prob:on("prob"),sglt:on("sglt")}, pl=C.pl.get();
+  var h=handle(CUR,o,pl); draw(h);
+  var r=SB[CUR].p, xmax=r[1], Fd=[],Td=[],Ed=[], ymax=0;
+  for(var i=0;i<=100;i++){ var x=r[0]*0+xmax*i/100, q=handle(CUR,o,x); Fd.push([x,q.F]); Td.push([x,CUR==="pah"||CUR==="cr"?q.sec:q.reab]); Ed.push([x,q.E]); ymax=Math.max(ymax,q.E,q.F); }
+  curve.update({x:{min:0,max:xmax,label:"Plasma "+SB[CUR].n.replace(" (BUN)","")+" (mg/dL)"},y:{min:0,max:Math.ceil(ymax*1.1/10)*10||10,label:"mg/min"},vlines:[{x:pl,label:"P "+pl}],
+    hlines:CUR==="glu"?[{y:375*(o.gfr/120)*(o.sglt?0.45:1),label:"Tm glucose",color:A.teal,dash:[4,4]}]:CUR==="pah"?[{y:80*(o.prob?0.2:1),label:"Tm PAH secretion",color:A.teal,dash:[4,4]}]:[]});
+  curve.setSeries("F",Fd); curve.setSeries("T",Td); curve.setSeries("E",Ed);
+  var cl=h.E/(pl/100), U=h.E/o.v*100; /* mg/dL */
+  Sim.ro("roCl",cl.toFixed(cl<10?1:0),null);
+  var rat=cl/o.gfr; Sim.ro("roRat",rat.toFixed(2),rat>1.05?"flag":rat<0.95?"ok":null);
+  Sim.ro("roFE",(h.E/h.F*100).toFixed(h.E/h.F<0.1?1:0)+"%",null);
+  Sim.ro("roF",fmt(h.F)+" mg/min",null); Sim.ro("roE",fmt(h.E)+" mg/min",null);
+  var xl=document.getElementById("roX").querySelector("span");
+  if(CUR==="pah"){ xl.textContent="FF = GFR/C(PAH)"; Sim.ro("roX",(o.gfr/cl).toFixed(2),o.gfr/cl>0.25?"flag":null); }
+  else if(CUR==="glu"){ xl.textContent="Glucose ในปัสสาวะ (g/วัน)"; Sim.ro("roX",(h.E*1.44).toFixed(0),h.E*1.44>1?"flag":"ok"); }
+  else { xl.textContent="Urine conc (mg/dL)"; Sim.ro("roX",U.toFixed(U<10?1:0),null); }
+  document.getElementById("steps").innerHTML='<ol class="steps"><li><b>Filtered load = GFR x P</b> = '+o.gfr+' x '+(pl/100).toFixed(4)+' mg/mL = '+fmt(h.F)+' mg/min</li><li><b>Excretion = filtered + secreted − reabsorbed</b> = '+fmt(h.F)+' + '+fmt(h.sec)+' − '+fmt(h.reab)+' = '+fmt(h.E)+' mg/min</li><li><b>U = excretion/V</b> = '+fmt(h.E)+'/'+o.v.toFixed(1)+' mL/min = '+U.toFixed(1)+' mg/dL</li><li><b>Clearance = U x V/P</b> = '+U.toFixed(1)+' x '+o.v.toFixed(1)+'/'+pl+' = '+cl.toFixed(1)+' mL/min</li></ol>';
+  var m, bad=false;
+  if(CUR==="cr"&&o.tmp){ m="<b>Cr ขึ้นจากการบล็อก secretion</b> ตรวจ cystatin C หรือ BUN ถ้า GFR จริงไม่ลดไม่ต้องหยุดยา (แต่ตรวจ K)"; }
+  else if(CUR==="cr"&&rat>1.3){ m="<b>CrCl สูงกว่า GFR "+((rat-1)*100).toFixed(0)+"%</b> ใน CKD ใช้ cystatin C หรือค่าเฉลี่ย urea และ creatinine clearance ประเมิน GFR"; bad=true; }
+  else if(CUR==="pah"&&pl>20){ m="<b>Secretion อิ่มตัว</b> PAH clearance ไม่เท่ากับ RPF แล้ว ใช้ความเข้มข้นต่ำในการวัด"; bad=true; }
+  else if(CUR==="pah") m="<b>Effective RPF ราว "+cl.toFixed(0)+" mL/min</b> RBF = RPF/(1 − Hct) และ FF = "+(o.gfr/cl).toFixed(2);
+  else if(CUR==="glu"&&h.E>0.7) m="<b>Glycosuria</b> "+(o.sglt?"จาก SGLT2i เป็นผลของยา (ไม่ต้องตรวจเพิ่ม)":pl<180?"ที่ glucose ปกติ ตรวจ P, urate, HCO3 หา Fanconi หรือ familial renal glycosuria":"จาก filtered load เกิน threshold คุมระดับ glucose");
+  else if(CUR==="urea"&&o.v<0.8){ m="<b>Urine flow ต่ำ urea ถูกดูดกลับมาก</b> BUN/Cr สูงขึ้น FEurea ต่ำชี้ prerenal (ดู AKI-03)"; bad=true; }
+  else m="<b>Clearance "+cl.toFixed(0)+" mL/min</b> เทียบกับ GFR "+o.gfr+" ("+(rat>1.05?"มี secretion":rat<0.95?"มี reabsorption":"กรองอย่างเดียว")+")";
+  var a=document.getElementById("act"); a.innerHTML="<b>Next step:</b> "+m; a.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"MX-11", title:"Renal Clearance Basics: Filtration, Secretion and Reabsorption", lead:"เลือกสาร (inulin, creatinine, PAH, urea, glucose) ปรับ GFR, RPF, ความเข้มข้นในเลือด และ urine flow ดูว่าสารถูกกรอง secrete หรือดูดกลับเท่าไร clearance เทียบ GFR และ titration curve พร้อม transport maximum",
+  scenarios:S, order:ORDER, captureMs:600,
+  onChange:function(k,s){ CUR=s.p.s; setRange(false); ["gfr","rpf","pl","v"].forEach(function(x){ C[x].set(s.p[x]); }); Object.keys(T).forEach(function(x){ T[x].setAttribute("aria-pressed",s.p.rx.indexOf(x)>=0?"true":"false"); }); update(); },
+  refs:["Smith HW. The kidney: structure and function in health and disease. New York: Oxford University Press 1951",
+        "Levey AS, Inker LA. Assessment of glomerular filtration rate in health and disease: a state of the art review. Clin Pharmacol Ther 2017, 102(3): 405-419",
+        "Shemesh O, Golbetz H, Kriss JP, Myers BD. Limitations of creatinine as a filtration marker in glomerulopathic patients. Kidney Int 1985, 28(5): 830-838",
+        "Delanaye P, Mariat C, Cavalier E, et al. Trimethoprim, creatinine and creatinine-based equations. Nephron Clin Pract 2011, 119(3): c187-c194",
+        "DeFronzo RA, Hompesch M, Kasichayanula S, et al. Characterization of renal glucose reabsorption in response to dapagliflozin in healthy subjects and subjects with type 2 diabetes. Diabetes Care 2013, 36(10): 3169-3176",
+        "Carvounis CP, Nisar S, Guro-Razuman S. Significance of the fractional excretion of urea in the differential diagnosis of acute renal failure. Kidney Int 2002, 62(6): 2223-2229"],
+  note:"Model เพื่อการสอน: creatinine secretion clearance 15 x (0.6 + 0.4 x GFR/120) mL/min (บล็อกเหลือ 15%), PAH extraction 0.9 ของ RPF กับ Tm secretion 80 mg/min (probenecid เหลือ 20%), glucose Tm 375 mg/min x GFR/120 พร้อม splay (SGLT2i เหลือ 45%), FE urea 0.35–0.65 ตาม urine flow"
+});
+})();
+</script>
+</body>
+</html>

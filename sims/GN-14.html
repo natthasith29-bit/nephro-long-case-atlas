@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[GN-14] Immunosuppressant Mechanism Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.25fr 1fr}}
+.drugs{display:flex;flex-wrap:wrap;gap:6px}
+.drugs .tog{padding:5px 10px;font-size:12.5px}
+.grp{font:600 12px var(--mono);letter-spacing:.06em;color:var(--muted);margin:10px 0 4px}
+table.cmp{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:10px}
+table.cmp td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+table.cmp td:first-child{color:var(--muted);width:30%}
+.flt{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.flt .tog{padding:4px 9px;font-size:12px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .grp,body.present .flt{display:none}
+body.present .card{padding:14px 18px}
+body.present #map{max-height:400px;width:auto!important;margin:0 auto}
+body.present .drugs{display:none}
+body.present table.cmp td{padding:3px 8px;font-size:12.5px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>เป้าของยาบนการตอบสนองทางภูมิคุ้มกัน</h2>
+      <div class="svgwrap"><svg id="map" viewBox="0 0 640 400" role="img" aria-label="Immune activation pathway with drug targets"></svg></div>
+      <div class="flt" id="flt"></div>
+      <p class="hint no-present">ภาพแสดง signal 1 (TCR + MHC), signal 2 (CD28–CD80/86), signal 3 (IL-2 → mTOR → cell cycle), B cell, plasma cell, antibody และ complement จุดม่วงคือตำแหน่งที่ยาที่เลือกออกฤทธิ์ ใช้ปุ่ม filter เพื่อดูยาที่มีพิษกลุ่มเดียวกัน</p>
+    </div>
+    <div class="card">
+      <h2>เลือกยา</h2>
+      <div id="dl"></div>
+      <table class="cmp" id="tab"></table>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script>
+(function(){
+"use strict";
+/* node ids on the map: apc, tcr, cd28, cn, il2r, mtor, cycle, tcell, bcell, cd20, baff, plasma, ab, fc, comp, c5, c5ar, fb, il2 (basiliximab), lymph (ATG), gr (glucocorticoid NF-kB) */
+var DR = {
+  pred:{g:"Glucocorticoid", n:"Prednisolone / methylprednisolone", t:["gr"], m:"จับ glucocorticoid receptor ยับยั้ง NF-κB และ AP-1 ลด cytokine (IL-1, IL-2, TNF) และ lymphocyte", use:"MCD, FSGS, LN, AAV, anti-GBM, IgAN, rejection", tox:"Infection, diabetes, osteoporosis, avascular necrosis, cataract, mood, adrenal suppression", mon:"Glucose, BP, bone (calcium + vitamin D, bisphosphonate), PJP prophylaxis เมื่อขนาดสูง", preg:"ใช้ได้ (prednisolone ผ่านรกน้อย)", tags:["infection","metabolic"]},
+  tac:{g:"Calcineurin inhibitor", n:"Tacrolimus", t:["cn"], m:"จับ FKBP12 ยับยั้ง calcineurin ทำให้ NFAT ไม่เข้า nucleus ลด IL-2 transcription และ stabilize podocyte (synaptopodin)", use:"KT maintenance, MN, FSGS, MCD, LN", tox:"Nephrotoxicity (afferent vasoconstriction, chronic arteriolopathy), TMA, hyperK, hypoMg, NODAT, tremor, PRES", mon:"Trough level, Cr, K, Mg, glucose ระวัง CYP3A4 (azole, macrolide, diltiazem เพิ่มระดับ rifampicin, phenytoin ลดระดับ)", preg:"ใช้ได้", tags:["nephrotoxic","metabolic","interaction"]},
+  csa:{g:"Calcineurin inhibitor", n:"Cyclosporine", t:["cn"], m:"จับ cyclophilin ยับยั้ง calcineurin", use:"MN, FSGS, MCD, KT (รุ่นเก่า)", tox:"Nephrotoxicity, HT, gingival hyperplasia, hirsutism, hyperuricemia, hyperlipidemia", mon:"Trough หรือ C2 level, Cr, BP, ระวัง CYP3A4", preg:"ใช้ได้", tags:["nephrotoxic","metabolic","interaction"]},
+  voc:{g:"Calcineurin inhibitor", n:"Voclosporin", t:["cn"], m:"CNI รุ่นใหม่ จับ cyclophilin ไม่ต้องวัดระดับยา", use:"Lupus nephritis ร่วม MMF + GC", tox:"eGFR ลด (hemodynamic), HT, infection", mon:"eGFR ทุก 2 สัปดาห์ช่วงแรก ปรับยาตาม eGFR, ห้ามใช้ร่วม strong CYP3A4 inhibitor", preg:"ไม่แนะนำ", tags:["nephrotoxic","interaction"]},
+  mmf:{g:"Antimetabolite", n:"Mycophenolate (MMF, MPS)", t:["cycle"], m:"ยับยั้ง IMPDH ลดการสร้าง guanosine ใน lymphocyte ที่อาศัย de novo purine synthesis", use:"LN induction และ maintenance, KT maintenance, AAV (non-severe), C3G", tox:"GI (ท้องเสีย), leukopenia, infection (CMV), teratogenic", mon:"CBC, MPA level ถ้าไม่ตอบสนอง, การคุมกำเนิด (หยุดอย่างน้อย 6 สัปดาห์ก่อนตั้งครรภ์ โดยเปลี่ยนเป็น azathioprine ล่วงหน้าราว 3-6 เดือน)", preg:"ห้าม (teratogenic) เปลี่ยนเป็น azathioprine", tags:["myelo","teratogenic","infection"]},
+  aza:{g:"Antimetabolite", n:"Azathioprine", t:["cycle"], m:"เปลี่ยนเป็น 6-mercaptopurine แทรก DNA ยับยั้ง purine synthesis", use:"AAV maintenance, LN maintenance ช่วงตั้งครรภ์, KT (รุ่นเก่า)", tox:"Leukopenia, hepatotoxicity, pancreatitis, skin cancer", mon:"TPMT/NUDT15 ก่อนเริ่ม, CBC, LFT ห้ามใช้ร่วม allopurinol/febuxostat (xanthine oxidase)", preg:"ใช้ได้", tags:["myelo","interaction"]},
+  cyc:{g:"Alkylating agent", n:"Cyclophosphamide", t:["tcell","bcell"], m:"Alkylate DNA ทำลาย lymphocyte ที่แบ่งตัว ลดทั้ง T และ B cell", use:"AAV, anti-GBM, LN (Euro-Lupus หรือ NIH), MN (modified Ponticelli)", tox:"Leukopenia, infection, hemorrhagic cystitis (acrolein), infertility, bladder cancer และ malignancy สะสม", mon:"CBC (nadir 10–14 วัน), ปรับขนาดตามอายุและ eGFR, MESNA, เก็บไข่หรืออสุจิ, ขนาดสะสมสูงสุด", preg:"ห้าม", tags:["myelo","teratogenic","infection","malignancy"]},
+  rtx:{g:"B-cell depletion", n:"Rituximab", t:["cd20"], m:"Anti-CD20 chimeric ทำลาย B cell ด้วย ADCC, CDC และ apoptosis ไม่ทำลาย plasma cell", use:"MN, AAV induction และ maintenance, MCD/FSGS frequent relapse, LN (refractory), desensitization", tox:"Infusion reaction, hypogammaglobulinemia, HBV reactivation, PML, infection, late-onset neutropenia", mon:"HBsAg + anti-HBc ก่อนให้, IgG, CD19 count, vaccine ก่อนให้, PJP prophylaxis ใน AAV", preg:"หลีกเลี่ยง", tags:["infection","hbv"]},
+  obi:{g:"B-cell depletion", n:"Obinutuzumab", t:["cd20"], m:"Anti-CD20 type II humanized ADCC แรงกว่า ทำลาย B cell ในเนื้อเยื่อได้ลึกกว่า rituximab", use:"Lupus nephritis, MN ที่ดื้อ rituximab", tox:"Infection (รวม COVID), infusion reaction, neutropenia, HBV reactivation", mon:"เหมือน rituximab", preg:"หลีกเลี่ยง", tags:["infection","hbv"]},
+  bel:{g:"B-cell modulator", n:"Belimumab", t:["baff"], m:"Anti-BAFF (BLyS) ลดการอยู่รอดของ B cell", use:"Lupus nephritis (add-on)", tox:"Infection, depression, infusion reaction", mon:"อาการทางอารมณ์, infection", preg:"ข้อมูลจำกัด", tags:["infection"]},
+  bas:{g:"Induction (IL-2R)", n:"Basiliximab", t:["il2r"], m:"Anti-CD25 (IL-2 receptor α) ยับยั้ง signal 3 ใน T cell ที่ถูกกระตุ้น ไม่ทำลาย lymphocyte", use:"KT induction ใน immunologic risk ต่ำถึงปานกลาง", tox:"น้อย (hypersensitivity พบน้อย)", mon:"-", preg:"-", tags:[]},
+  atg:{g:"Induction (depleting)", n:"Anti-thymocyte globulin", t:["lymph"], m:"Polyclonal antibody ทำลาย T cell (และ lymphocyte อื่น) อย่างกว้างขวาง", use:"KT induction high risk, acute TCMR Banff II ขึ้นไป, steroid-resistant rejection", tox:"Cytokine release, leukopenia, thrombocytopenia, serum sickness, CMV, PTLD", mon:"CBC (ปรับขนาดตาม WBC และ platelet), CD3 count, CMV prophylaxis", preg:"-", tags:["myelo","infection","malignancy"]},
+  bela:{g:"Costimulation blocker", n:"Belatacept", t:["cd28"], m:"CTLA-4-Ig จับ CD80/86 บน APC ยับยั้ง signal 2", use:"KT maintenance แทน CNI (ไม่มี nephrotoxicity)", tox:"PTLD (ห้ามใน EBV seronegative), rejection สูงกว่าช่วงแรก", mon:"EBV serostatus ก่อนเริ่ม", preg:"ข้อมูลจำกัด", tags:["malignancy"]},
+  mtori:{g:"mTOR inhibitor", n:"Sirolimus / everolimus", t:["mtor"], m:"จับ FKBP12 ยับยั้ง mTOR หยุด cell cycle G1 → S หลัง IL-2 signaling", use:"KT (ลด CNI, skin cancer, Kaposi), TSC angiomyolipoma", tox:"Proteinuria, hyperlipidemia, wound healing ช้า, mouth ulcer, pneumonitis, lymphocele, anemia", mon:"Trough, lipid, proteinuria, CYP3A4 interaction", preg:"ห้าม", tags:["metabolic","interaction","teratogenic"]},
+  ecu:{g:"Complement C5 inhibitor", n:"Eculizumab / ravulizumab", t:["c5"], m:"Anti-C5 ยับยั้งการสร้าง C5a และ C5b-9 (MAC)", use:"aHUS, complement-mediated TMA, PNH", tox:"Neisseria meningitidis infection (เสี่ยงสูงมาก)", mon:"Meningococcal vaccine (ACWY + B) ก่อนเริ่มหรือให้ antibiotic prophylaxis", preg:"ใช้ได้ใน aHUS ระหว่างตั้งครรภ์", tags:["infection"]},
+  ava:{g:"C5a receptor antagonist", n:"Avacopan", t:["c5ar"], m:"Oral C5aR1 antagonist ลด neutrophil priming ใน AAV", use:"AAV ร่วม rituximab หรือ CYC เพื่อลด glucocorticoid", tox:"Hepatotoxicity, infection", mon:"LFT, CYP3A4 interaction", preg:"ไม่แนะนำ", tags:["interaction"]},
+  ipt:{g:"Factor B inhibitor", n:"Iptacopan", t:["fb"], m:"Oral factor B inhibitor ยับยั้ง alternative pathway (C3 convertase C3bBb)", use:"C3G, IgAN, PNH", tox:"Encapsulated bacteria infection, hyperlipidemia", mon:"Vaccine meningococcus, pneumococcus, H. influenzae", preg:"ข้อมูลจำกัด", tags:["infection"]},
+  bort:{g:"Proteasome inhibitor", n:"Bortezomib", t:["plasma"], m:"ยับยั้ง proteasome ทำให้ plasma cell ตาย ลด antibody และ light chain", use:"Myeloma cast nephropathy, MGRS, desensitization และ ABMR (off-label)", tox:"Peripheral neuropathy, thrombocytopenia, HZV reactivation, GI", mon:"Neuropathy, platelet, acyclovir prophylaxis", preg:"ห้าม", tags:["myelo"]},
+  ivig:{g:"Immunomodulator", n:"IVIG", t:["fc"], m:"Block FcRn และ Fcγ receptor, neutralize antibody, ยับยั้ง complement deposition", use:"ABMR, desensitization, hypogammaglobulinemia, BK viremia (บางศูนย์)", tox:"Osmotic nephrosis (sucrose), thrombosis, aseptic meningitis, hemolysis", mon:"Cr (ใช้สูตรที่ไม่มี sucrose), ให้ช้า", preg:"ใช้ได้", tags:["nephrotoxic"]}
+};
+var GROUPS = [["Glucocorticoid",["pred"]],["CNI",["tac","csa","voc"]],["Antimetabolite",["mmf","aza"]],["Alkylating",["cyc"]],["B cell / plasma cell",["rtx","obi","bel","bort","ivig"]],["Induction / costimulation / mTOR",["bas","atg","bela","mtori"]],["Complement",["ecu","ava","ipt"]]];
+var NODES = {
+  apc:[70,97,"APC (dendritic cell)"], tcr:[220,70,"Signal 1: TCR + MHC"], cd28:[220,125,"Signal 2: CD28-CD80/86"],
+  cn:[370,70,"Calcineurin → NFAT"], gr:[370,125,"NF-κB / AP-1"], il2:[510,70,"IL-2 transcription"], il2r:[510,125,"IL-2 receptor (CD25)"],
+  mtor:[580,180,"Signal 3: mTOR"], cycle:[440,180,"Cell cycle, purine"], tcell:[290,180,"Effector T cell"], lymph:[120,180,"Lymphocytes (all)"],
+  bcell:[60,255,"B cell"], cd20:[60,308,"CD20"], baff:[175,255,"BAFF / APRIL"], plasma:[290,255,"Plasma cell"], ab:[415,255,"Antibody (DSA, autoAb)"],
+  fc:[400,310,"Fc receptor / FcRn"], comp:[568,255,"Complement activation"], fb:[560,310,"Factor B (alternative)"], c5:[565,362,"C5 → C5b-9"], c5ar:[400,362,"C5a → C5aR (neutrophil)"]
+};
+var EDGES = [["apc","tcr"],["apc","cd28"],["tcr","cn"],["cd28","gr"],["cn","il2"],["gr","il2"],["il2","il2r"],["il2r","mtor"],["mtor","cycle"],["cycle","tcell"],["tcell","bcell"],["bcell","baff"],["baff","plasma"],["plasma","ab"],["ab","fc"],["ab","comp"],["comp","fb"],["fb","c5"],["c5","c5ar"],["bcell","cd20"]];
+var map = document.getElementById("map"), FT = "IBM Plex Sans Thai, sans-serif";
+var cur = "tac", filt = null;
+function drawMap(){
+  map.innerHTML = "";
+  var d = DR[cur], hot = d.t, mark = {};
+  if(filt) Object.keys(DR).forEach(function(k){ if(DR[k].tags.indexOf(filt) >= 0) DR[k].t.forEach(function(t){ mark[t] = (mark[t] || []).concat([DR[k].n.split(" ")[0]]); }); });
+  Sim.svg("text", {x:14, y:20, "font-family":"Geist Mono, monospace", "font-size":11, fill:"#9A9CB2", text:"T CELL ACTIVATION"}, map);
+  Sim.svg("text", {x:14, y:226, "font-family":"Geist Mono, monospace", "font-size":11, fill:"#9A9CB2", text:"B CELL, ANTIBODY, COMPLEMENT"}, map);
+  EDGES.forEach(function(e){ var a = NODES[e[0]], b = NODES[e[1]]; Sim.svg("line", {x1:a[0], y1:a[1], x2:b[0], y2:b[1], stroke:"#D3D5E2", "stroke-width":1.6}, map); });
+  Object.keys(NODES).forEach(function(k){
+    var n = NODES[k], on = hot.indexOf(k) >= 0, w = Math.max(96, n[2].length * 6.2 + 14);
+    if(k === "lymph" && on){ Sim.svg("rect", {x:8, y:42, width:624, height:162, rx:16, fill:"rgba(91,75,255,.06)", stroke:"#5B4BFF", "stroke-dasharray":"6 4"}, map); }
+    if(k === "gr" && on){ Sim.svg("rect", {x:20, y:40, width:610, height:340, rx:16, fill:"rgba(91,75,255,.04)", stroke:"#A69DFF", "stroke-dasharray":"4 4"}, map); }
+    Sim.svg("rect", {x:n[0] - w / 2, y:n[1] - 14, width:w, height:28, rx:9, fill:on ? "#5B4BFF" : mark[k] ? "#FFF1E3" : "#FFFFFF", stroke:on ? "#5B4BFF" : mark[k] ? "#D9731A" : "#D3D5E2", "stroke-width":1.3}, map);
+    Sim.svg("text", {x:n[0], y:n[1] + 4, "text-anchor":"middle", "font-family":FT, "font-size":11, fill:on ? "#FFFFFF" : "#0B0B1F", text:n[2]}, map);
+  });
+  hot.forEach(function(k){ var n = NODES[k]; Sim.svg("text", {x:n[0], y:n[1] - 20, "text-anchor":"middle", "font-family":FT, "font-size":11.5, "font-weight":600, fill:"#5B4BFF", text:d.n.split(" (")[0].split(" / ")[0]}, map); });
+  Sim.svg("text", {x:626, y:392, "text-anchor":"end", "font-family":FT, "font-size":10.5, fill:"#9A9CB2", text:filt ? "Orange = other drugs with this toxicity" : "Purple = target of the selected drug"}, map);
+}
+var dl = document.getElementById("dl"), BT = {};
+GROUPS.forEach(function(g){ dl.appendChild(Sim.h("div", {class:"grp", text:g[0]})); var w = Sim.h("div", {class:"drugs"}); g[1].forEach(function(k){ var b = Sim.h("button", {class:"tog", type:"button", text:DR[k].n.split(" (")[0], "aria-pressed":"false"}); b.addEventListener("click", function(){ cur = k; render(); }); BT[k] = b; w.appendChild(b); }); dl.appendChild(w); });
+var FL = [["nephrotoxic","Nephrotoxic"],["myelo","Myelosuppression"],["infection","Infection"],["hbv","HBV reactivation"],["teratogenic","Teratogenic"],["metabolic","Metabolic"],["interaction","CYP3A4/drug interaction"],["malignancy","Malignancy/PTLD"]], FB = {};
+FL.forEach(function(f){ FB[f[0]] = Sim.toggle(f[1], function(on){ filt = on ? f[0] : null; Object.keys(FB).forEach(function(k){ if(k !== f[0]) FB[k].setState(false); }); drawMap(); }, false); document.getElementById("flt").appendChild(FB[f[0]]); });
+function render(){
+  Object.keys(BT).forEach(function(k){ BT[k].setAttribute("aria-pressed", k === cur ? "true" : "false"); });
+  drawMap();
+  var d = DR[cur], tab = document.getElementById("tab"); tab.innerHTML = "";
+  [["ยา", d.n + " (" + d.g + ")"],["กลไก", d.m],["ใช้ในโรคไต", d.use],["พิษสำคัญ", d.tox],["ติดตามและป้องกัน", d.mon],["ตั้งครรภ์", d.preg]].forEach(function(r){ tab.appendChild(Sim.h("tr", {}, [Sim.h("td", {text:r[0]}), Sim.h("td", {text:r[1]})])); });
+}
+var S = {
+  cni:{name:"Calcineurin inhibitor", k:"tac", rows:[["Target","Calcineurin → NFAT → IL-2"],["Key toxicity","Afferent vasoconstriction, TMA, hyperK, NODAT"],["Monitor","Trough level และ CYP3A4 interaction"]], take:["CNI ยับยั้ง signal 1 ที่ calcineurin","CNI ลด proteinuria ส่วนหนึ่งผ่าน podocyte โดยตรง","Drug interaction ผ่าน CYP3A4 สำคัญที่สุดในทางปฏิบัติ"]},
+  mmf:{name:"Antimetabolite", k:"mmf", rows:[["Target","IMPDH (de novo purine)"],["Key toxicity","GI, leukopenia, teratogenic"],["Pregnancy","เปลี่ยนเป็น azathioprine"]], take:["Lymphocyte อาศัย de novo purine จึงไวต่อ MMF","MMF ห้ามใช้ในการตั้งครรภ์","Azathioprine ห้ามใช้ร่วม allopurinol"]},
+  b:{name:"B-cell depletion", k:"rtx", rows:[["Target","CD20 บน B cell (ไม่อยู่บน plasma cell)"],["Key toxicity","HBV reactivation, hypogammaglobulinemia"],["Before","HBsAg, anti-HBc, vaccine"]], take:["Anti-CD20 ไม่ทำลาย plasma cell antibody เดิมจึงลดช้า","ตรวจ HBV ก่อนให้ทุกราย","Obinutuzumab ทำลาย B cell ในเนื้อเยื่อได้ลึกกว่า"]},
+  cyc:{name:"Alkylating agent", k:"cyc", rows:[["Target","DNA ของ lymphocyte ที่แบ่งตัว"],["Key toxicity","Infertility, cystitis, malignancy"],["Dose","ปรับตามอายุและ eGFR"]], take:["CYC ใช้ใน GN รุนแรงที่ต้องการผลเร็ว","พิษสะสมตามขนาดรวม","ป้องกัน infertility ในผู้ป่วยอายุน้อย"]},
+  comp:{name:"Complement", k:"ecu", rows:[["Target","C5, factor B, C5aR"],["Key toxicity","Encapsulated bacteria, meningococcus"],["Before","Vaccine ครบก่อนเริ่ม"]], take:["C5 inhibitor ยับยั้ง MAC และ C5a","Factor B inhibitor ยับยั้ง alternative pathway ต้นทาง","ทุกตัวต้อง vaccine ป้องกันแบคทีเรียมีแคปซูล"]},
+  kt:{name:"KT induction / maintenance", k:"bela", rows:[["Signal 2","Belatacept block CD80/86"],["Signal 3","Basiliximab (IL-2R), mTOR inhibitor"],["Depleting","ATG"]], take:["Induction เลือกตาม immunologic risk","Belatacept หลีกเลี่ยง CNI nephrotoxicity แต่ห้ามใน EBV seronegative","mTOR inhibitor ทำให้ proteinuria และแผลหายช้า"]}
+};
+Sim.mount({code:"GN-14", title:"Immunosuppressant Mechanism Map",
+  lead:"เลือกยากดภูมิคุ้มกันที่ใช้ในโรคไต ดูตำแหน่งที่ยาออกฤทธิ์บนการกระตุ้น T cell, B cell, antibody และ complement พร้อมพิษสำคัญ สิ่งที่ต้องติดตาม และข้อควรระวังในการตั้งครรภ์",
+  scenarios:S, order:["cni","mmf","b","cyc","comp","kt"], captureMs:600,
+  onChange:function(k, s){ cur = s.k; render(); },
+  refs:["Halloran PF. Immunosuppressive drugs for kidney transplantation. N Engl J Med 2004, 351(26): 2715-2729",
+        "KDIGO 2021 Clinical Practice Guideline for the Management of Glomerular Diseases. Kidney Int 2021, 100(4S): S1-S276",
+        "KDIGO Clinical Practice Guideline for the Care of Kidney Transplant Recipients. Am J Transplant 2009, 9(Suppl 3): S1-S155"],
+  note:"ข้อมูลยาเป็นสรุปเพื่อการสอน ตรวจขนาดยาและข้อบ่งใช้ตามเอกสารกำกับยาและ guideline ปัจจุบันก่อนใช้จริง"
+});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[GN-11] MPGN Pattern Navigator: C3G, IC-MPGN and MGRS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.25fr 1fr}}
+.trio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
+.trio figure{margin:0}.trio figcaption{font:600 11px var(--mono);letter-spacing:.06em;color:var(--muted);margin:0 0 4px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;font-size:13.5px}
+@media (max-width:520px){.grid{grid-template-columns:1fr}}
+.grid label{display:grid;grid-template-columns:minmax(84px,1fr) minmax(0,1.3fr);gap:8px;align-items:center}
+.grid label span{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.dx{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--ink);color:#fff;font-size:14px}
+.dx .t{font:600 17px var(--display)}.dx .s{color:#C9CAE6;margin-top:4px}
+.wk{margin-top:10px;padding:10px 14px;border-radius:12px;border:1px solid var(--line);font-size:13.5px}
+.wk b,.act b{font-weight:600}
+.act{margin-top:10px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .act,body.present .wk{display:none}
+body.present .card{padding:14px 18px}
+body.present #flow{max-height:250px;width:auto!important;margin:0 auto}
+body.present .trio svg{max-height:150px}
+body.present .dx .s{display:none}
+body.present .grid{gap:4px 12px;font-size:12.5px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Algorithm ของ MPGN pattern</h2>
+      <div class="svgwrap"><svg id="flow" viewBox="0 0 640 330" role="img" aria-label="MPGN pattern diagnostic algorithm"></svg></div>
+      <div class="trio">
+        <figure><figcaption>LM</figcaption><div class="svgwrap"><svg id="lm"></svg></div></figure>
+        <figure><figcaption>IF C3</figcaption><div class="svgwrap"><svg id="ifc3"></svg></div></figure>
+        <figure><figcaption>IF IgG</figcaption><div class="svgwrap"><svg id="ifig"></svg></div></figure>
+      </div>
+      <p class="hint no-present">ใช้ IF แยกก่อน: C3 dominant (มากกว่า Ig อย่างน้อย 2 ระดับ) คือ C3 glomerulopathy ถ้า Ig เด่นให้ดู light chain ว่าเป็น polyclonal หรือ monotypic ส่วน IF ลบแต่มี double contour ให้คิด chronic TMA</p>
+    </div>
+    <div class="card">
+      <h2>ผล biopsy และ lab</h2>
+      <div class="grid" id="grid"></div>
+      <div class="dx" id="dx"></div>
+      <div class="wk" id="wk"></div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/patho.js"></script>
+<script>
+(function(){
+"use strict";
+var FIELDS = [
+  ["ig","IF Ig (IgG/IgM)",[["0","ลบ"],["1","1+"],["2","2+"],["3","3+"]]],
+  ["c3","IF C3",[["0","ลบ"],["1","1+"],["2","2+"],["3","3+"]]],
+  ["lc","Light chain",[["poly","κ และ λ (polyclonal)"],["k","κ อย่างเดียว"],["l","λ อย่างเดียว"]]],
+  ["em","EM deposit",[["sub","Subendothelial + mesangial"],["dense","Intramembranous ทึบเป็นแถบ"],["hump","Subepithelial humps เด่น"],["none","ไม่มี deposit (lucent)"]]],
+  ["inf","ติดเชื้อนำมา",[["0","ไม่มี"],["1","มี (2–6 สัปดาห์ก่อน)"]]],
+  ["sc3","Serum C3",[["low","ต่ำ"],["n","ปกติ"]]],
+  ["sc4","Serum C4",[["low","ต่ำ"],["n","ปกติ"]]],
+  ["cryo","Cryo / HCV",[["0","ลบ"],["1","บวก"]]],
+  ["mp","M-protein (IFE, FLC)",[["0","ไม่พบ"],["1","พบ"],["na","ยังไม่ส่ง"]]],
+  ["age","อายุ",[["y","< 50 ปี"],["o","≥ 50 ปี"]]]
+];
+var box = document.getElementById("grid"), SEL = {};
+FIELDS.forEach(function(f){ var s = Sim.h("select", {}); f[2].forEach(function(o){ s.appendChild(Sim.h("option", {value:o[0], text:o[1]})); }); s.addEventListener("change", update); SEL[f[0]] = s; box.appendChild(Sim.h("label", {}, [Sim.h("span", {text:f[1]}), s])); });
+function V(){ var v = {}; Object.keys(SEL).forEach(function(k){ v[k] = SEL[k].value; }); v.ig = +v.ig; v.c3 = +v.c3; return v; }
+function classify(v){
+  if(v.ig === 0 && v.c3 === 0) return {k:"tma", path:["neg"], t:"IF ลบ: MPGN-like จาก chronic TMA", s:"Double contour จาก endothelial injury ไม่มี immune deposit EM เห็น subendothelial lucency"};
+  if(v.c3 >= v.ig + 2){
+    if(v.inf === "1" && v.em === "hump") return {k:"pign", path:["c3dom","pign"], t:"C3 dominant: แยก post-infectious GN ก่อน", s:"Humps + ติดเชื้อนำ เข้ากับ PIGN ติดตาม C3 ให้กลับปกติใน 8–12 สัปดาห์ ถ้าไม่กลับให้คิด C3G"};
+    if(v.em === "dense") return {k:"ddd", path:["c3dom","c3g","ddd"], t:"Dense deposit disease", s:"C3 glomerulopathy ชนิด intramembranous dense deposit"};
+    return {k:"c3gn", path:["c3dom","c3g","c3gn"], t:"C3 glomerulonephritis", s:"C3 dominant deposit ใน mesangium และ subendothelial ไม่หนาเป็นแถบ" + (v.mp === "1" ? " ร่วม monoclonal protein = C3G with monoclonal gammopathy (MGRS)" : "")};
+  }
+  if(v.ig > 0 && v.lc !== "poly") return {k:"pgnmid", path:["igdom","mono"], t:"Monotypic Ig deposit: PGNMID / MGRS", s:"Ig และ light chain ชนิดเดียว ต้องหา clone แม้ M-protein ในเลือดตรวจไม่พบ"};
+  if(v.ig > 0) return {k:"icmpgn", path:["igdom","poly"], t:"Immune complex MPGN", s:"Polyclonal Ig + C3 หาสาเหตุ: infection (HCV, HBV, endocarditis), autoimmune (SLE, Sjögren), cryoglobulin"};
+  return {k:"c3gn", path:["c3dom","c3g","c3gn"], t:"C3 dominant", s:"C3 มากกว่า Ig"};
+}
+var INFO = {
+  tma:{wk:"ADAMTS13, haptoglobin, schistocyte, complement (aHUS), ยา (CNI, anti-VEGF), malignant HT, APS antibody", tx:"รักษาสาเหตุของ TMA ไม่ใช่ immunosuppression แบบ GN ดู GN-05", lm:{lobular:true, doubleContour:true, thrombi:0.1, hyper:0.3}, loop:{tma:0.8, doubleContour:true}},
+  pign:{wk:"ASO, anti-DNase B, culture, C3 ซ้ำที่ 8–12 สัปดาห์, ถ้า C3 ไม่กลับ: complement work-up", tx:"Supportive care รักษาการติดเชื้อ ถ้า C3 ต่ำนานหรือ proteinuria ไม่ลดให้รักษาแบบ C3G", lm:{endocap:1, neutrophils:0.7, hyper:0.6}, loop:{deposits:[{site:"hump", n:2}, {site:"mesangial", n:3}]}},
+  ddd:{wk:"C3, C4, sC5b-9, C3NeF, factor H และ B, anti-FH Ab, genetic (CFH, CFHR, C3), ตรวจตา (drusen), ไขมัน (partial lipodystrophy), M-protein ถ้าอายุ ≥ 50", tx:"RAASi + SGLT2i, proteinuria > 1 g หรือ eGFR ลด: MMF + GC ดื้อยาพิจารณา complement inhibitor (iptacopan หรือ pegcetacoplan) recurrence หลัง KT สูง", lm:{lobular:true, thick:0.6, hyper:0.6, mesExpand:0.5}, loop:{ribbon:true, deposits:[{site:"mesangial", n:4}]}},
+  c3gn:{wk:"C3, C4, sC5b-9, C3NeF/C5NeF, factor H, I, B, anti-FH Ab, CFHR genetic, SPEP + IFE + serum FLC (จำเป็นถ้าอายุ ≥ 50) ทำ IF บน paraffin หลัง pronase เพื่อหา masked monoclonal deposit", tx:"RAASi + SGLT2i, ปานกลางถึงรุนแรง MMF + GC พิจารณา iptacopan หรือ pegcetacoplan ถ้ามี monoclonal gammopathy ให้ clone-directed therapy", lm:{lobular:true, hyper:0.8, mesExpand:0.6, doubleContour:true}, loop:{deposits:[{site:"mesangial", n:7}, {site:"subendo", n:4}], doubleContour:true, mesCells:3}},
+  pgnmid:{wk:"SPEP, serum IFE, serum FLC, urine IFE, bone marrow biopsy + flow, IgG subclass staining บน biopsy, ตรวจ CLL/lymphoma", tx:"ส่ง hematology เพื่อ clone-directed therapy (bortezomib หรือ daratumumab-based, rituximab ถ้า B-cell clone) แม้ไม่ครบเกณฑ์ myeloma", lm:{lobular:true, hyper:0.8, endocap:0.4, doubleContour:true}, loop:{deposits:[{site:"subendo", n:4}, {site:"mesangial", n:6}], doubleContour:true, mesCells:3}},
+  icmpgn:{wk:"HCV RNA, HBsAg, HIV, blood culture + echo, cryoglobulin (เก็บที่ 37 °C), RF, ANA/dsDNA, C4, SPEP + FLC", tx:"รักษาสาเหตุ (DAA, antiviral, antibiotic, lupus regimen) idiopathic IC-MPGN ที่ proteinuria มาก: MMF + GC หรือ pegcetacoplan", lm:{lobular:true, hyper:1, doubleContour:true, endocap:0.5}, loop:{deposits:[{site:"subendo", n:5, size:1.2}, {site:"mesangial", n:6}], doubleContour:true, mesCells:3}}
+};
+var S = {
+  c3gn:{name:"C3GN ผู้ใหญ่", v:{ig:"0", c3:"3", lc:"poly", em:"sub", inf:"0", sc3:"low", sc4:"n", cryo:"0", mp:"na", age:"y"}, rows:[["Clinical","ชาย 30 ปี hematuria proteinuria 2 g C3 ต่ำ C4 ปกติ"],["Biopsy","MPGN pattern IF C3 3+ Ig ลบ"],["Key","C3 dominant ≥ 2 ระดับ"]], take:["C3 dominant IF = alternative pathway dysregulation","ต้องส่ง complement work-up ครบชุด","อายุ ≥ 50 ปีหา monoclonal gammopathy เสมอ"]},
+  ddd:{name:"Dense deposit disease", v:{ig:"0", c3:"3", lc:"poly", em:"dense", inf:"0", sc3:"low", sc4:"n", cryo:"0", mp:"0", age:"y"}, rows:[["Clinical","วัยรุ่นหญิง nephritic C3 ต่ำมาก"],["EM","Intramembranous dense deposit เป็นแถบ"],["Lab","C3NeF บวก"]], take:["DDD วินิจฉัยด้วย EM","C3NeF ทำให้ C3 convertase อยู่นาน","Recurrence หลังปลูกถ่ายไตสูง"]},
+  pign:{name:"C3 dominant + humps", v:{ig:"1", c3:"3", lc:"poly", em:"hump", inf:"1", sc3:"low", sc4:"n", cryo:"0", mp:"na", age:"y"}, rows:[["Clinical","ชาย 19 ปี nephritic 3 สัปดาห์หลังคออักเสบ"],["Biopsy","C3 dominant + subepithelial humps"],["Plan","ติดตาม C3 ที่ 8–12 สัปดาห์"]], take:["PIGN ก็เป็น C3 dominant ได้","แยกจาก C3G ด้วยการติดตาม C3 และ clinical","C3 ที่ต่ำนานหรือ proteinuria ไม่ลดชี้ C3G"]},
+  ic:{name:"IC-MPGN HCV", v:{ig:"3", c3:"3", lc:"poly", em:"sub", inf:"0", sc3:"low", sc4:"low", cryo:"1", mp:"0", age:"o"}, rows:[["Clinical","ชาย 55 ปี purpura proteinuria 4 g C4 ต่ำมาก"],["Biopsy","IgM, IgG, C3 granular polyclonal"],["Lab","Cryoglobulin + anti-HCV บวก"]], take:["Polyclonal Ig + C3 = immune complex MPGN","C4 ต่ำชี้ classical pathway (cryo, lupus)","รักษาสาเหตุก่อน"]},
+  pgnmid:{name:"PGNMID (IgG3κ)", v:{ig:"3", c3:"2", lc:"k", em:"sub", inf:"0", sc3:"n", sc4:"n", cryo:"0", mp:"0", age:"o"}, rows:[["Clinical","หญิง 62 ปี proteinuria 3 g hematuria"],["Biopsy","IgG3 κ อย่างเดียว"],["Lab","SPEP/IFE ลบ (พบบ่อย)"]], take:["Light chain ชนิดเดียวคือ monotypic deposit","M-protein ในเลือดตรวจไม่พบในผู้ป่วยส่วนใหญ่","Clone-directed therapy ช่วยไต"]},
+  mgrs:{name:"C3G + M-protein ≥ 50 ปี", v:{ig:"0", c3:"3", lc:"poly", em:"sub", inf:"0", sc3:"n", sc4:"n", cryo:"0", mp:"1", age:"o"}, rows:[["Clinical","ชาย 64 ปี proteinuria 2.5 g eGFR 45"],["Biopsy","C3 dominant"],["Lab","IgG κ M-protein"]], take:["C3G ในผู้สูงอายุเกี่ยวกับ monoclonal gammopathy บ่อย","Monoclonal Ig ทำงานเหมือน C3NeF หรือ anti-FH","ทำ pronase IF เพื่อหา masked deposit"]},
+  tma:{name:"IF ลบ double contour", v:{ig:"0", c3:"0", lc:"poly", em:"none", inf:"0", sc3:"n", sc4:"n", cryo:"0", mp:"0", age:"o"}, rows:[["Clinical","หญิง 50 ปี ได้ bevacizumab HT proteinuria"],["Biopsy","Double contour แต่ IF ลบ EM ไม่มี deposit"],["Key","MPGN-like จาก chronic TMA"]], take:["Double contour ไม่เท่ากับ immune complex เสมอ","IF ลบ + subendothelial lucency ชี้ chronic TMA","หาสาเหตุ TMA แทนการให้ immunosuppression"]}
+};
+var flow = document.getElementById("flow"), lm = Patho.glom("lm", {}), ifc3 = Patho.ifStain("ifc3", {}), ifig = Patho.ifStain("ifig", {});
+function drawFlow(path, k){
+  flow.innerHTML = "";
+  var FT = "IBM Plex Sans Thai, sans-serif", on = function(id){ return path.indexOf(id) >= 0; };
+  function node(x, y, w, t, id, leaf){ var hot = id === "root" || on(id) || (leaf && id === k);
+    Sim.svg("rect", {x:x - w / 2, y:y - 16, width:w, height:32, rx:9, fill:hot ? (leaf ? "#0B0B1F" : "#EFEDFF") : "#fff", stroke:hot ? "#5B4BFF" : "#D3D5E2", "stroke-width":hot ? 1.6 : 1}, flow);
+    Sim.svg("text", {x:x, y:y + 4, "text-anchor":"middle", "font-family":FT, "font-size":11.5, fill:hot && leaf ? "#fff" : "#0B0B1F", text:t}, flow); }
+  function e(x1, y1, x2, y2, id){ Sim.svg("line", {x1:x1, y1:y1, x2:x2, y2:y2, stroke:on(id) || id === k ? "#5B4BFF" : "#D3D5E2", "stroke-width":on(id) || id === k ? 2.2 : 1.2}, flow); }
+  e(320, 38, 80, 86, "neg"); e(320, 38, 320, 86, "igdom"); e(320, 38, 540, 86, "c3dom");
+  e(80, 118, 80, 156, "neg"); e(320, 118, 210, 156, "poly"); e(320, 118, 370, 156, "mono"); e(540, 118, 495, 236, "pign"); e(540, 118, 590, 156, "c3g");
+  e(590, 188, 545, 284, "c3gn"); e(590, 188, 615, 284, "ddd"); e(210, 188, 210, 236, "poly"); e(370, 188, 370, 236, "mono");
+  node(320, 22, 220, "MPGN pattern on LM", "root");
+  node(80, 102, 130, "IF negative", "neg"); node(320, 102, 150, "Ig dominant", "igdom"); node(540, 102, 170, "C3 dominant (≥ 2 orders)", "c3dom");
+  node(80, 172, 120, "Chronic TMA", "tma", true);
+  node(210, 172, 120, "Polyclonal", "poly"); node(370, 172, 120, "Monotypic", "mono"); node(590, 172, 80, "C3G", "c3g");
+  node(210, 252, 150, "IC-MPGN: find cause", "icmpgn", true); node(370, 252, 130, "PGNMID / MGRS", "pgnmid", true);
+  node(495, 252, 100, "Rule out PIGN", "pign", true); node(545, 300, 80, "C3GN", "c3gn", true); node(615, 300, 50, "DDD", "ddd", true);
+  Sim.svg("text", {x:16, y:322, "font-family":FT, "font-size":10.5, fill:"#9A9CB2", text:"Age 50+ with C3G: always screen for monoclonal gammopathy (MGRS)."}, flow);
+}
+function grade(n){ return n; }
+function update(){
+  var v = V(), c = classify(v), I = INFO[c.k];
+  drawFlow(c.path, c.k);
+  var lmo = {hyper:0, endocap:0, neutrophils:0, mesExpand:0, thick:0, doubleContour:false, lobular:false, thrombi:0}; Object.keys(I.lm).forEach(function(n){ lmo[n] = I.lm[n]; }); lmo.stain = "PAS"; lm.update(lmo);
+  var pat = c.k === "pign" ? "coarse-cap" : c.k === "ddd" ? "smudgy" : "mes-cap";
+  ifc3.update({pattern:v.c3 ? pat : "negative", intensity:v.c3, label:"C3"});
+  ifig.update({pattern:v.ig ? pat : "negative", intensity:v.ig, label:v.lc === "poly" ? "IgG" : "IgG " + (v.lc === "k" ? "κ only" : "λ only")});
+  var dx = document.getElementById("dx"); dx.innerHTML = "";
+  dx.appendChild(Sim.h("div", {class:"t", text:c.t})); dx.appendChild(Sim.h("div", {class:"s", text:c.s}));
+  var w = [];
+  if((c.k === "c3gn" || c.k === "ddd") && v.age === "o" && v.mp !== "1") w.push(v.mp === "na" ? "อายุ ≥ 50 ปี ต้องส่ง SPEP, IFE และ serum FLC" : "M-protein ลบ แต่ยังควรทำ pronase IF หา masked monoclonal deposit");
+  if(c.k === "icmpgn" && v.sc4 === "low" && v.cryo === "0") w.push("C4 ต่ำแต่ cryo ลบ: ตรวจ cryo ซ้ำด้วยการเก็บที่ 37 °C และดู lupus");
+  if(c.k === "pign" && v.sc3 === "low") w.push("นัดตรวจ C3 ซ้ำที่ 8–12 สัปดาห์");
+  w.forEach(function(x){ dx.appendChild(Sim.h("div", {class:"s", style:"color:#FFDE59", text:"• " + x})); });
+  document.getElementById("wk").innerHTML = "<b>Work-up:</b> " + I.wk;
+  document.getElementById("act").innerHTML = "<b>Next step:</b> " + I.tx;
+}
+Sim.mount({code:"GN-11", title:"MPGN Pattern Navigator: C3G, IC-MPGN and MGRS",
+  lead:"ใส่ผล IF, light chain, EM และ lab ของผู้ป่วยที่ LM เป็น MPGN pattern ดูเส้นทางใน algorithm ว่าเป็น C3 glomerulopathy, immune complex MPGN, PGNMID หรือ chronic TMA และต้องส่ง work-up อะไรต่อ",
+  scenarios:S, order:["c3gn","ddd","pign","ic","pgnmid","mgrs","tma"], captureMs:900,
+  onChange:function(k, s){ Object.keys(s.v).forEach(function(n){ SEL[n].value = s.v[n]; }); update(); },
+  refs:["Sethi S, Fervenza FC. Membranoproliferative glomerulonephritis: a new look at an old entity. N Engl J Med 2012, 366(12): 1119-1131",
+        "Smith RJH, Appel GB, Blom AM, et al. C3 glomerulopathy: understanding a rare complement-driven renal disease. Nat Rev Nephrol 2019, 15(3): 129-143",
+        "Goodship THJ, Cook HT, Fakhouri F, et al. Atypical hemolytic uremic syndrome and C3 glomerulopathy: conclusions from a KDIGO Controversies Conference. Kidney Int 2017, 91(3): 539-551",
+        "Ravindran A, Fervenza FC, Smith RJH, et al. C3 glomerulopathy associated with monoclonal Ig is a distinct subtype. Kidney Int 2018, 94(1): 178-186",
+        "Nasr SH, Satoskar A, Markowitz GS, et al. Proliferative glomerulonephritis with monoclonal IgG deposits. J Am Soc Nephrol 2009, 20(9): 2055-2064",
+        "Larsen CP, Messias NC, Walker PD, et al. Membranoproliferative glomerulonephritis with masked monotypic immunoglobulin deposits. Kidney Int 2015, 88(4): 867-873",
+        "Leung N, Bridoux F, Batuman V, et al. The evaluation of monoclonal gammopathy of renal significance: a consensus report of the IKMG. Nat Rev Nephrol 2019, 15(1): 45-59",
+        "KDIGO 2021 Clinical Practice Guideline for the Management of Glomerular Diseases. Kidney Int 2021, 100(4S): S1-S276"],
+  note:"เกณฑ์ C3 dominant คือความเข้ม C3 มากกว่า Ig ชนิดอื่นอย่างน้อย 2 ระดับในสเกล 0–3+ ภาพเป็น schematic"
+});
+})();
+</script>
+</body>
+</html>

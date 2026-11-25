@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[AKI-05] Cirrhosis AKI, HRS and Intra-abdominal Pressure</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.3fr 1fr}}
+.sel{display:grid;grid-template-columns:minmax(80px,170px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:12px}
+.sub{font-size:12.5px;color:var(--muted);margin:14px 0 4px}
+.two{display:grid;grid-template-columns:0.9fr 1.1fr;gap:12px;align-items:center}
+@media (max-width:700px){.two{grid-template-columns:1fr}}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:14px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .ro{padding:6px 12px}
+body.present .ro b{font-size:19px}
+body.present .ctls{gap:2px}
+body.present .ctl{font-size:13px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .tools{margin-top:4px;gap:5px}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+body.present .sub{margin:6px 0 2px}
+body.present .svgwrap svg{max-height:250px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Splanchnic circulation, ascites และไต</h2>
+      <div class="two">
+        <div class="svgwrap"><svg id="vis" viewBox="0 0 300 302" role="img" aria-label="Splanchnic vasodilation, ascites and kidney perfusion"></svg></div>
+        <div id="chart"></div>
+      </div>
+      <div id="live"></div>
+      <p class="hint no-present">Portal hypertension ทำให้หลอดเลือด splanchnic ขยาย effective arterial volume ลด RAAS, SNS และ ADH ทำให้หลอดเลือดไตหด (HRS) ascites ที่ตึงเพิ่ม IAP ลด renal perfusion pressure (MAP − IAP) และ filtration gradient (MAP − 2 x IAP)</p>
+    </div>
+    <div class="card">
+      <h2>สาเหตุและการรักษา</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="sub">การรักษา (กดเปิด/ปิด)</div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roRPP"><b>-</b><span>RPP = MAP − IAP</span></div>
+        <div class="ro" id="roFG"><b>-</b><span>FG = MAP − 2 x IAP</span></div>
+        <div class="ro" id="roMAP"><b>-</b><span>MAP วันที่ 5</span></div>
+        <div class="ro" id="roPk"><b>-</b><span>Cr สูงสุด</span></div>
+        <div class="ro" id="roD14"><b>-</b><span>Cr วันที่ 14</span></div>
+        <div class="ro" id="roResp"><b>-</b><span>Response</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/live.js"></script>
+<script>
+(function(){
+"use strict";
+var PH={pre:"Prerenal (diuretic, GI bleed, diarrhea)",hrs:"HRS-AKI",atn:"ATN (shock, sepsis, nephrotoxin)",acs:"IAH/abdominal compartment"};
+var RX={stop:{name:"หยุด diuretic/NSAID/β-blocker"},alb:{name:"Albumin 1 g/kg"},terli:{name:"Terlipressin"},ne:{name:"Norepinephrine"},para:{name:"Paracentesis + albumin"}};
+function P(o){ var d={ph:"hrs",cr0:1.0,map:72,iap:10,day:0,rx:["stop","alb"]}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  pre:{name:"Prerenal จาก diuretic", p:P({ph:"pre",map:76,iap:8,rx:["stop","alb"]}),
+    rows:[["ผู้ป่วย","cirrhosis ascites ได้ furosemide + spironolactone ขนาดสูง Cr 1.0 → 1.9"],["รักษา","หยุด diuretic ให้ albumin 1 g/kg"],["ผล","Cr กลับใกล้ baseline ภายใน 48–72 ชม. = ไม่ใช่ HRS"]],
+    take:["ขั้นแรกทุกเคส: หยุด diuretic, NSAID, nephrotoxin และพิจารณาลด/หยุด β-blocker ถ้า hypotension","Volume resuscitation ตามการประเมิน (albumin ราว 1 g/kg ใน 24 ชม. แรกเมื่อเหมาะสม) แล้วดูการตอบสนอง","Baseline Cr ใช้ค่าต่ำสุดที่ stable ใน 3 เดือน เพราะ Cr ใน cirrhosis ต่ำจากกล้ามเนื้อน้อย"]},
+  hrsNo:{name:"HRS-AKI: albumin อย่างเดียว", p:P({ph:"hrs",rx:["stop","alb"]}),
+    rows:[["ผู้ป่วย","cirrhosis ascites MAP 72 UNa < 10 sediment bland"],["รักษา","หยุด diuretic + albumin"],["ผล","Cr ไม่ลด เข้าเกณฑ์ HRS-AKI (ไม่ตอบสนองต่อ volume และไม่มีสาเหตุอื่นชัด)"]],
+    take:["HRS-AKI = AKI ใน cirrhosis + ascites ที่ไม่ตอบสนองต่อ volume resuscitation และไม่มีสาเหตุอื่นที่อธิบายได้ดีกว่า","ไม่ต้องรอนานหรือให้ albumin เกินขนาดก่อนวินิจฉัย การเริ่ม vasoconstrictor ช้าลดโอกาสตอบสนอง","FENa ต่ำมากและ sediment bland สนับสนุน แต่ไม่ใช่เกณฑ์บังคับ"]},
+  hrsT:{name:"HRS-AKI + terlipressin", p:P({ph:"hrs",rx:["stop","alb","terli"]}),
+    rows:[["รักษา","terlipressin 1 mg ทุก 4–6 ชม. (หรือ infusion 2 mg/วัน) + albumin 20–40 g/วัน"],["ประเมิน","วันที่ 3–4 Cr ลด < 25% ให้เพิ่มขนาด"],["ผล","MAP เพิ่มราว 10 mmHg Cr ลดกลับใกล้ baseline (full response)"]],
+    take:["Terlipressin + albumin เป็นการรักษาหลักของ HRS-AKI MAP ที่เพิ่มขึ้นสัมพันธ์กับการตอบสนอง","Full response = Cr กลับมาไม่เกิน 0.3 mg/dL จาก baseline partial = stage ลดแต่ยังเกิน 0.3","ระวัง respiratory failure (fluid overload) และ ischemia ตรวจ SpO2 และ volume ทุกวัน หลีกเลี่ยงใน ACLF grade 3 ที่ SpO2 < 90%"]},
+  hrsLate:{name:"HRS เริ่มยาช้า Cr สูง", p:P({ph:"hrs",cr0:1.2,day:4,map:68,rx:["stop","alb","terli"]}),
+    rows:[["ผู้ป่วย","เริ่ม terlipressin วันที่ 4 ตอน Cr เกิน 4"],["ผล","ตอบสนองบางส่วนหรือไม่ตอบสนอง"],["ต่อ","ประเมิน liver transplant และ KRT เป็น bridge"]],
+    take:["Cr สูงตอนเริ่มยาและ ACLF grade สูงทำนายการไม่ตอบสนอง เริ่ม vasoconstrictor ให้เร็ว","Non-responder ควรประเมิน liver transplant (หรือ simultaneous liver-kidney ตามเกณฑ์)","KRT ใน HRS ใช้เป็น bridge ต่อ transplant หรือมีสาเหตุที่แก้ได้"]},
+  atn:{name:"ATN หลัง SBP shock", p:P({ph:"atn",map:70,rx:["stop","alb"]}),
+    rows:[["ผู้ป่วย","SBP + septic shock 2 วัน muddy brown casts urine NGAL สูง"],["รักษา","albumin, รักษา infection, หยุด nephrotoxin"],["ผล","ไม่ตอบสนอง แต่ไม่ใช่ HRS ไม่ควรให้ terlipressin"]],
+    take:["แยก ATN จาก HRS ด้วย sediment, biomarker (urine NGAL สูง) และประวัติ shock หรือ nephrotoxin","SBP เพิ่มความเสี่ยง AKI ป้องกันด้วย albumin 1.5 g/kg วันที่ 1 และ 1 g/kg วันที่ 3 ร่วมกับยาฆ่าเชื้อ","ATN ใน cirrhosis พยากรณ์แย่กว่า HRS และต้อง KRT บ่อยกว่า"]},
+  acs:{name:"Tense ascites, IAP 22", p:P({ph:"acs",map:74,iap:22,rx:["stop","para"]}),
+    rows:[["ผู้ป่วย","ท้องตึงมาก bladder pressure 22 mmHg oliguria"],["คำนวณ","RPP 52 FG 30 mmHg"],["รักษา","large-volume paracentesis + albumin 6–8 g ต่อ ascites 1 ลิตร"]],
+    take:["IAH: IAP ≥ 12 mmHg  abdominal compartment syndrome: IAP > 20 ร่วมกับ organ dysfunction ใหม่","FG = MAP − 2 x IAP ไตไวต่อ IAP มากเพราะแรงดันเพิ่มทั้ง renal vein และ Bowman space","Paracentesis ลด IAP แก้ oliguria ได้เร็ว ให้ albumin ทดแทนเพื่อป้องกัน post-paracentesis circulatory dysfunction"]}
+};
+var ORDER=["pre","hrsNo","hrsT","hrsLate","atn","acs"];
+var box=document.getElementById("ctls"), C={};
+var ps=Sim.h("select",{id:"ph"},Object.keys(PH).map(function(k){ return Sim.h("option",{value:k,text:PH[k]}); })); ps.addEventListener("change",function(){ update(); });
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"ph",text:"สาเหตุจริง"}),ps]));
+function sl(k,o){ o.id="s"+k; o.onInput=function(){ update(true); }; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("cr0",{label:"Baseline Cr",min:0.5,max:2,step:0.1,value:1,unit:" mg/dL",fmt:function(v){ return v.toFixed(1); }});
+sl("map",{label:"MAP",min:55,max:95,step:1,value:72,unit:" mmHg"});
+sl("iap",{label:"IAP (bladder)",min:4,max:30,step:1,value:10,unit:" mmHg"});
+sl("day",{label:"เริ่ม vasoconstrictor วันที่",min:1,max:7,step:1,value:2,unit:""});
+var T={}, tb=document.getElementById("tools");
+Object.keys(RX).forEach(function(k){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:RX[k].name}); b.addEventListener("click",function(){ b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); tb.appendChild(b); T[k]=b; });
+function on(k){ return T[k].getAttribute("aria-pressed")==="true"; }
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?250:280,aria:"Creatinine and MAP over fourteen days",
+  x:{min:0,max:14,step:2,label:"Days"},y:{min:0,max:6,label:"Creatinine (mg/dL)"},y2:{min:50,max:100,step:10,label:"MAP (mmHg)"},
+  series:[{id:"cr",name:"Cr",color:A.accent,data:[],width:2.8},{id:"map",name:"MAP",color:A.red,data:[],width:1.5,axis:"y2",dash:[4,3]}],legend:true});
+var live=Live.player(chart,{mount:"live"}), LAST=null;
+function model(){
+  var ph=ps.value, cr0=C.cr0.get(), map0=C.map.get(), iap0=C.iap.get(), dv=C.day.get();
+  var stop=on("stop"), alb=on("alb"), terli=on("terli"), ne=on("ne"), para=on("para");
+  var W=65, G=15*W, V=0.6*W*10+40; /* dL incl ascites part */
+  var g0=G/(cr0*14.4);
+  var par={pre:{pr:0.55,h:0.12,atn:0,trig:0.3},hrs:{pr:0.1,h:0.82,atn:0,trig:0.15},atn:{pr:0.12,h:0.15,atn:0.75,trig:0.1},acs:{pr:0.1,h:0.25,atn:0,trig:0.1}}[ph];
+  var Cr=[], MAP=[], cr=cr0*1.0, ev=[], crStart=null, peak=0, mapAt5=0, startVc=null, escal=false;
+  var dt=0.05, N=Math.round(14/dt), crm=cr*V, iap=iap0;
+  /* injury develops over the 2.5 days before presentation (day 0) */
+  (function(){ var fg=map0-2*iap0, fgN=Math.max(1,map0-16), iapF=Math.max(0.05,Math.min(1,(fg-15)/(fgN-15)));
+    var gp=Math.max(2,g0*(1-par.pr)*(1-par.h*Math.max(0.3,Math.min(1.2,(85-map0)/15)))*(1-par.atn)*iapF);
+    for(var q=0;q<2.5/dt;q++) crm+=(G-gp*14.4*(crm/V))*dt; })();
+  for(var n=0;n<=N;n++){
+    var t=n*dt;
+    /* prerenal component */
+    var pr=par.pr*(stop?Math.max(0.35,1-0.35*Math.min(1,t/2)):1); if(alb) pr*=Math.max(0.05,1-Math.min(1,t/1.5)); if(!stop&&!alb) pr*=1.05;
+    /* vasoconstrictor */
+    var vc=(terli||ne)&&t>=dv, mapRise=0, hrsF=par.h;
+    if(vc){ if(startVc===null){ startVc=t; crStart=crm/V; }
+      var resp=Math.max(0.05,Math.min(1,1.3-0.3*(crStart-1.5)))*(ph==="hrs"?1:0.3);
+      var k=Math.min(1,(t-dv)/3)*(ne&&!terli?0.8:1);
+      mapRise=(ne&&!terli?9:11)*Math.min(1,(t-dv)/0.5);
+      if(!escal&&t>=dv+3&&terli){ escal=true; }
+      hrsF=par.h*(1-0.85*resp*k);
+    }
+    var mp=map0+(alb?(ph==="hrs"?1:2.5)*Math.min(1,t/1.5):0)+mapRise;
+    if(para&&t>=0.5) iap=Math.max(7,iap0-(iap0-7)*Math.min(1,(t-0.5)/0.3));
+    var fg=mp-2*iap, fgN=Math.max(1,map0-16);
+    var iapF=Math.max(0.05,Math.min(1,(fg-15)/(fgN-15)));
+    var atnF=par.atn?(1-par.atn*(t<7?1:Math.max(0.35,1-0.09*(t-7)))):1;
+    /* hemodynamic HRS also eased by MAP itself */
+    var gfr=g0*(1-pr)*(1-hrsF*Math.max(0.3,Math.min(1.2,(85-mp)/15)))*atnF*iapF;
+    gfr=Math.max(2,gfr);
+    if(n%Math.round(0.25/dt)===0){ var c=crm/V; Cr.push([+t.toFixed(2),c]); MAP.push([+t.toFixed(2),mp]); if(c>peak) peak=c; if(Math.abs(t-5)<1e-6) mapAt5=mp; }
+    crm+=(G-gfr*14.4*(crm/V))*dt;
+  }
+  /* pre-injury: Cr at day 0 already risen as first measurement */
+  return {ph:ph,Cr:Cr,MAP:MAP,peak:peak,cr0:cr0,d14:Cr[Cr.length-1][1],mapAt5:mapAt5,map0:map0,iap0:iap0,iapEnd:iap,dv:dv,crStart:crStart,vc:(terli||ne),terli:terli,ne:ne,alb:alb,stop:stop,para:para};
+}
+function respOf(M){ var d=M.d14-M.cr0; if(d<=0.3) return ["full","ok"]; if(M.d14<M.peak*0.75) return ["partial",null]; return ["none","flag"]; }
+var svg=document.getElementById("vis");
+function tx(x,y,s,o){ o=o||{}; return Sim.svg("text",{x:x,y:y,"text-anchor":o.a||"middle","font-family":o.mono?"Geist Mono, monospace":"IBM Plex Sans Thai, sans-serif","font-size":o.fs||11,"font-weight":o.fw||400,fill:o.fill||"#0B0B1F",text:s},svg); }
+function draw(M,tday){
+  svg.innerHTML="";
+  var i=Math.max(0,Math.min(M.MAP.length-1,Math.round(tday*4))), mp=M.MAP[i][1];
+  var iap=(M.para&&tday>=0.5)?Math.max(7,M.iap0-(M.iap0-7)*Math.min(1,(tday-0.5)/0.3)):M.iap0;
+  var asc=Math.max(0,Math.min(1,(iap-6)/20));
+  /* abdomen */
+  Sim.svg("ellipse",{cx:150,cy:180,rx:120+asc*14,ry:100+asc*12,fill:"rgba(25,200,230,"+(0.08+0.25*asc)+")",stroke:"#9A9CB2","stroke-width":1.5},svg);
+  
+  /* aorta */
+  Sim.svg("rect",{x:142,y:20,width:16,height:225,rx:8,fill:"#B4232A"},svg);
+  tx(150,14,"MAP "+mp.toFixed(0),{mono:true,fs:12,fw:600});
+  /* splanchnic vessels dilated */
+  var sw=M.ph==="hrs"||M.ph==="pre"?9:6; if(M.vc&&tday>=M.dv&&M.terli) sw=Math.max(4,sw-4);
+  ["M158 140 C190 140, 205 165, 215 200","M158 150 C185 165, 190 200, 175 230","M142 145 C110 160, 105 195, 120 225"].forEach(function(d){ Sim.svg("path",{d:d,stroke:"#D95A5F","stroke-width":sw,fill:"none","stroke-linecap":"round"},svg); });
+  tx(236,206,"Splanchnic",{fs:10.5,fill:"#5E6075"}); tx(236,219,sw>=8?"vasodilated":"constricted",{fs:10.5,fill:sw>=8?"#B4232A":"#1F7A72",fw:600});
+  /* kidneys */
+  var rpp=mp-iap, fg=mp-2*iap, perf=Math.max(0,Math.min(1,(fg-15)/45));
+  var hrsC=M.ph==="hrs"&&!(M.vc&&tday>=M.dv+1);
+  [[78,110],[222,110]].forEach(function(k){
+    Sim.svg("ellipse",{cx:k[0],cy:k[1],rx:22,ry:34,fill:"rgb("+Math.round(240-80*perf)+","+Math.round(200-120*perf)+","+Math.round(200-110*perf)+")",stroke:"#6E3B3B","stroke-width":1.5},svg);
+    Sim.svg("line",{x1:k[0]<150?100:200,y1:k[1],x2:k[0]<150?142:158,y2:k[1],stroke:"#B4232A","stroke-width":hrsC?2:4},svg);
+  });
+  tx(78,160,"Kidney",{fs:10.5,fill:"#5E6075"}); tx(222,160,hrsC?"Renal vasoconstriction":"Perfusion",{fs:10,fill:hrsC?"#B4232A":"#5E6075"});
+  tx(150,262,"Ascites  IAP "+iap.toFixed(0)+" mmHg",{fs:11.5,fw:600,fill:"#1F7A72"}); tx(150,294,"RPP "+rpp.toFixed(0)+"   FG "+fg.toFixed(0)+" mmHg",{mono:true,fs:11.5,fw:600,fill:fg<35?"#B4232A":"#0B0B1F"});
+  /* treatment badges */
+  var y=36; [["stop","Stop diuretics"],["alb","Albumin"],["terli","Terlipressin"],["ne","Norepinephrine"],["para","Paracentesis"]].forEach(function(b){ if(on(b[0])){ tx(8,y,b[1],{a:"start",fs:10.5,fill:"#5B4BFF",fw:600}); y+=14; } });
+}
+function events(M){
+  var E=[], b=M.cr0;
+  E.push({t:0,kind:"phys",text:"วันที่ 0: Cr "+M.Cr[0][1].toFixed(1)+" (baseline "+b.toFixed(1)+") MAP "+M.map0+" IAP "+M.iap0+" "+PH[M.ph]});
+  if(M.stop) E.push({t:0.02,kind:"rx",text:"หยุด diuretic, NSAID และ nephrotoxin"});
+  if(M.alb) E.push({t:0.05,kind:"rx",text:"Albumin 1 g/kg (สูงสุด 100 g) ใน 24 ชม. แรก ตามการประเมิน volume"});
+  if(M.para) E.push({t:0.5,kind:"rx",text:"Large-volume paracentesis + albumin 8 g ต่อ ascites 1 L IAP ลดเหลือราว 7"});
+  var c2=Live.valueAt(M.Cr,2); E.push({t:2,kind:c2<M.Cr[0][1]*0.8?"ok":"warn",text:"วันที่ 2: Cr "+c2.toFixed(1)+(c2<M.Cr[0][1]*0.8?" ลดลง ตอบสนองต่อ volume":" ไม่ลด ไม่ตอบสนองต่อ volume")});
+  if(M.vc) E.push({t:M.dv,kind:"rx",text:(M.terli?"Terlipressin 1 mg ทุก 4–6 ชม. + albumin 20–40 g/วัน":"Norepinephrine 0.5–3 mg/h (ICU) + albumin")+" เริ่มตอน Cr "+(M.crStart||0).toFixed(1)});
+  if(M.vc&&M.terli) E.push({t:M.dv+3,kind:"phys",text:"วันที่ "+(M.dv+3)+": ประเมิน ถ้า Cr ลด < 25% เพิ่ม terlipressin เป็น 2 mg ทุก 4–6 ชม. (สูงสุด 12 mg/วัน)"});
+  if(M.vc&&M.ph!=="hrs") E.push({t:M.dv+0.5,kind:"warn",text:"Vasoconstrictor ไม่ตรงสาเหตุ เพิ่มความเสี่ยงโดยไม่ช่วยไต"});
+  var r=respOf(M); E.push({t:14,kind:r[1]==="ok"?"ok":"warn",text:"วันที่ 14: Cr "+M.d14.toFixed(1)+" response: "+r[0]});
+  return E.sort(function(a,b){ return a.t-b.t; });
+}
+function onFrame(t,done){
+  var M=LAST; draw(M,t);
+  var i=Math.min(M.MAP.length-1,Math.round(t*4)), mp=M.MAP[i][1];
+  var iap=(M.para&&t>=0.5)?Math.max(7,M.iap0-(M.iap0-7)*Math.min(1,(t-0.5)/0.3)):M.iap0;
+  Sim.ro("roRPP",(mp-iap).toFixed(0),mp-iap<60?"flag":"ok"); Sim.ro("roFG",(mp-2*iap).toFixed(0),mp-2*iap<40?"flag":"ok");
+  Sim.ro("roMAP",t>=5?M.mapAt5.toFixed(0):"…"); Sim.ro("roPk",done?M.peak.toFixed(1):"…",done?"flag":null);
+  if(done){ var r=respOf(M); Sim.ro("roD14",M.d14.toFixed(1),r[1]); Sim.ro("roResp",r[0],r[1]); } else { Sim.ro("roD14","…"); Sim.ro("roResp","…"); }
+  var a=document.getElementById("act");
+  if(done){ a.innerHTML=M.act; a.className=M.actCls; } else { a.innerHTML="<b>กำลังจำลอง</b> วันที่ "+t.toFixed(1)+" Cr "+Live.valueAt(M.Cr,t).toFixed(2)+" MAP "+mp.toFixed(0); a.className="act"; }
+}
+function update(deb){
+  var M=model();
+  chart.update({y:{min:0,max:Math.max(4,Math.ceil(M.peak*1.15)),label:"Creatinine (mg/dL)"},hlines:[{y:M.cr0+0.3,label:"Baseline + 0.3",color:A.teal,dash:[3,3]}],vlines:[]});
+  chart.setSeries("cr",M.Cr); chart.setSeries("map",M.MAP);
+  var r=respOf(M), m, bad=r[0]!=="full";
+  if(M.ph==="acs"&&!M.para) m="<b>IAP "+M.iap0+" mmHg</b> FG "+(M.map0-2*M.iap0)+" mmHg ทำ large-volume paracentesis + albumin 6–8 g/L วัด bladder pressure ซ้ำ";
+  else if(!M.stop) m="<b>ยังไม่ได้หยุด diuretic/nephrotoxin</b> เป็นขั้นแรกของ AKI ใน cirrhosis ทุกราย";
+  else if(M.ph==="pre"&&r[0]==="full"){ bad=false; m="<b>Volume responsive</b> ไม่ใช่ HRS หาสาเหตุ (GI bleed, diuretic เกิน, infection) กลับมาใช้ diuretic ขนาดต่ำเมื่อ Cr stable"; }
+  else if(M.ph==="atn"&&M.vc) m="<b>ATN ไม่ใช่ HRS</b> หยุด vasoconstrictor รักษา infection/shock ประคับประคองและให้ KRT ตามข้อบ่งชี้";
+  else if(M.ph==="atn") m="<b>ATN</b> sediment และ NGAL บอก tubular injury ไม่ให้ terlipressin รักษาต้นเหตุ ปรับยา และวางแผน KRT ตามข้อบ่งชี้";
+  else if(M.ph==="hrs"&&!M.vc) m="<b>เข้าเกณฑ์ HRS-AKI</b> เริ่ม terlipressin + albumin 20–40 g/วัน ทันที (หรือ norepinephrine ใน ICU) ตรวจ SpO2 และ volume ก่อนเริ่ม";
+  else if(M.ph==="hrs"&&r[0]==="full"){ bad=false; m="<b>Full response</b> ให้ terlipressin จน Cr กลับไม่เกิน 0.3 จาก baseline (สูงสุด 14 วัน) ติดตาม recurrence และส่งประเมิน liver transplant"; }
+  else if(M.ph==="hrs") m="<b>"+(r[0]==="partial"?"Partial":"No")+" response</b> Cr ตอนเริ่มยา "+(M.crStart||0).toFixed(1)+" ส่งประเมิน liver transplant (พิจารณา SLK ถ้า KRT นานหรือ CKD) ใช้ KRT เป็น bridge";
+  else if(M.ph==="acs"){ bad=r[0]!=="full"; m="<b>IAP ลดแล้ว</b> FG กลับมา urine output ควรดีขึ้นภายในชั่วโมง ติดตาม IAP และให้ albumin ทดแทนตามปริมาณที่เจาะ"; }
+  else m="<b>ติดตาม</b> Cr, UO, MAP ทุกวัน ทบทวนสาเหตุถ้า Cr ไม่ลด";
+  M.act="<b>Next step:</b> "+m; M.actCls="act"+(bad?" bad":"");
+  LAST=M; draw(M,0);
+  live.load({tMax:14,unit:"วัน",ms:8000,debounce:deb===true,num:function(x){ return x.toFixed(1); },events:events(M),onFrame:onFrame,
+    cursorLabel:function(t){ return "Cr "+Live.valueAt(M.Cr,t).toFixed(1); }});
+}
+Sim.mount({code:"AKI-05", title:"Cirrhosis AKI, HRS and Intra-abdominal Pressure", lead:"เลือกสาเหตุจริงของ AKI ใน cirrhosis ตั้ง MAP และ IAP แล้วลองการรักษาตามลำดับ ดูว่าเคสไหนตอบสนองต่อ albumin, vasoconstrictor หรือ paracentesis และเกณฑ์ HRS-AKI ทำงานอย่างไร",
+  scenarios:S, order:ORDER, captureMs:1000,
+  onChange:function(k,s){ ps.value=s.p.ph; C.cr0.set(s.p.cr0); C.map.set(s.p.map); C.iap.set(s.p.iap); C.day.set(s.p.day||2); Object.keys(T).forEach(function(x){ T[x].setAttribute("aria-pressed",s.p.rx.indexOf(x)>=0?"true":"false"); }); update(); },
+  refs:["Nadim MK, Kellum JA, Forni L, et al (ADQI-ICA). Acute kidney injury in patients with cirrhosis: ADQI and ICA joint multidisciplinary consensus meeting. J Hepatol 2024, 81(1): 163-183",
+        "Angeli P, Ginès P, Wong F, et al (ICA). Diagnosis and management of acute kidney injury in patients with cirrhosis: revised consensus recommendations. J Hepatol 2015, 62(4): 968-974",
+        "Wong F, Pappas SC, Curry MP, et al (CONFIRM). Terlipressin plus albumin for the treatment of type 1 hepatorenal syndrome. N Engl J Med 2021, 384(9): 818-828",
+        "Arora V, Maiwall R, Rajan V, et al. Terlipressin is superior to noradrenaline in the management of acute kidney injury in acute on chronic liver failure. Hepatology 2020, 71(2): 600-610",
+        "Sort P, Navasa M, Arroyo V, et al. Effect of intravenous albumin on renal impairment and mortality in patients with cirrhosis and spontaneous bacterial peritonitis. N Engl J Med 1999, 341(6): 403-409",
+        "Kirkpatrick AW, Roberts DJ, De Waele J, et al (WSACS). Intra-abdominal hypertension and the abdominal compartment syndrome: updated consensus definitions. Intensive Care Med 2013, 39(7): 1190-1206",
+        "European Association for the Study of the Liver. EASL Clinical Practice Guidelines for the management of patients with decompensated cirrhosis. J Hepatol 2018, 69(2): 406-460"],
+  note:"Model เพื่อการสอน: GFR = baseline x (1 − prerenal) x (1 − renal vasoconstriction ที่ขึ้นกับ MAP) x ATN factor x IAP factor (จาก FG) ค่าแต่ละองค์ประกอบตั้งตามสาเหตุที่เลือก albumin และหยุด diuretic ลด prerenal ภายใน 1.5–2 วัน vasoconstrictor เพิ่ม MAP ราว 10 mmHg และลด vasoconstriction เฉพาะ HRS โอกาสตอบสนองลดลงตาม Cr ตอนเริ่มยา Cr generation 15 mg/kg/วัน (muscle mass ต่ำใน cirrhosis)"
+});
+})();
+</script>
+</body>
+</html>

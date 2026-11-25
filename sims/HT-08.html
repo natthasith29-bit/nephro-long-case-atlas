@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[HT-08] Hypertensive Emergency and Hypertension in Pregnancy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.25fr 1fr}}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:10px}
+.sub{font-size:12.5px;color:var(--muted);margin:12px 0 4px}
+.row2{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px;font-size:13.5px}
+.row2 label{min-width:64px}
+.row2 select{flex:1;min-width:200px}
+.modes{display:flex;gap:6px;margin-bottom:10px}
+.warn{margin-top:10px;font-size:13px;color:var(--red);font-weight:500}
+.hide{display:none!important}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:14px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .ro{padding:6px 12px}
+body.present .ro b{font-size:17px}
+body.present .ctls{gap:2px}
+body.present .ctl{font-size:12.5px}
+body.present .tog{padding:3px 8px;font-size:11.5px}
+body.present .tools{margin-top:4px;gap:5px}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+body.present .sub{margin:4px 0 2px}
+body.present .row2{margin-top:4px}
+body.present .modes{display:none}
+body.present #liveE{display:none}
+body.present .warn{margin-top:4px;font-size:12px}
+body.present #ctlP{grid-template-columns:1fr 1fr;gap:2px 16px}
+body.present #ctlP .ctl{grid-template-columns:minmax(70px,104px) 1fr 74px;gap:6px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <div class="modes" id="modes"></div>
+      <h2 id="lt">BP ใน 12 ชั่วโมงแรก</h2>
+      <div id="chartE"></div>
+      <div id="liveE"></div>
+      <div id="chartP" class="hide"></div>
+      <p class="hint no-present" id="hint"></p>
+    </div>
+    <div class="card">
+      <h2 id="rt">ภาวะ ยา และเป้าการลด BP</h2>
+      <div id="paneE">
+        <div class="row2"><label for="cond">Organ</label><select id="cond"></select></div>
+        <div class="row2"><label for="drug">ยา</label><select id="drug"></select></div>
+        <div class="ctls" id="ctlE" style="margin-top:10px"></div>
+        <div class="warn" id="warn"></div>
+      </div>
+      <div id="paneP" class="hide">
+        <div class="ctls" id="ctlP"></div>
+        <div class="sub">อาการและประวัติ (กดเปิด/ปิด)</div>
+        <div class="tools" id="toolsP"></div>
+      </div>
+      <div class="readout">
+        <div class="ro" id="r1"><b>-</b><span id="l1"></span></div>
+        <div class="ro" id="r2"><b>-</b><span id="l2"></span></div>
+        <div class="ro" id="r3"><b>-</b><span id="l3"></span></div>
+        <div class="ro" id="r4"><b>-</b><span id="l4"></span></div>
+        <div class="ro" id="r5"><b>-</b><span id="l5"></span></div>
+        <div class="ro" id="r6"><b>-</b><span id="l6"></span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/live.js"></script>
+<script>
+(function(){
+"use strict";
+/* ---------- hypertensive emergency library ---------- */
+function lin(a,b,f){ return a+(b-a)*Math.max(0,Math.min(1,f)); }
+var CO={
+  urg:{n:"Severe HT ไม่มี acute organ damage",band:function(S,t){ return [Math.max(S*0.75,130),t<6?S:lin(S,Math.min(S,175),(t-6)/6)]; },good:["oral"],
+    txt:"ไม่ใช่ emergency ใช้ยากินและลดลงช้าๆ ใน 24–48 ชม. ถึง < 160/100 แล้วนัดติดตาม"},
+  malig:{n:"Malignant HT (retinopathy, TMA, AKI)",band:function(S,t){ return [S*(1-0.3*Math.min(1,t/3)),S*(1-0.18*Math.min(1,t/3))]; },good:["labet","nicar","clev","urap"],
+    txt:"ลด MAP 20–25% ในหลายชั่วโมง ใช้ labetalol หรือ nicardipine ระวัง volume depletion จาก pressure natriuresis"},
+  enc:{n:"Hypertensive encephalopathy",band:function(S,t){ return [S*(1-0.3*Math.min(1,t)),S*(1-0.18*Math.min(1,t))]; },good:["labet","nicar","clev"],
+    txt:"ลด MAP 20–25% ภายใน 1 ชม. แรก แล้วค่อยๆ ลดต่อ"},
+  diss:{n:"Acute aortic dissection",band:function(S,t){ return [100,t<1/3?lin(S,120,t*3):120]; },good:["esmo","labet"],
+    txt:"SBP < 120 และ HR < 60 ภายใน 20 นาที ให้ β-blocker ก่อนเสมอ แล้วเพิ่ม vasodilator ถ้ายังไม่ถึงเป้า"},
+  apo:{n:"Acute pulmonary edema",band:function(S,t){ return [110,t<1?lin(S,140,t):140]; },good:["ntg","snp","clev"],
+    txt:"SBP < 140 ทันที ใช้ nitroglycerin หรือ nitroprusside ร่วมกับ loop diuretic เลี่ยง β-blocker"},
+  acs:{n:"Acute coronary syndrome",band:function(S,t){ return [110,t<1?lin(S,140,t):140]; },good:["ntg","labet","esmo"],
+    txt:"SBP < 140 ทันที ใช้ nitroglycerin และ β-blocker เลี่ยง hydralazine (reflex tachycardia)"},
+  ais:{n:"Acute ischemic stroke, thrombolysis",band:function(S,t){ return [140,t<0.25?lin(S,180,t*4):180]; },good:["labet","nicar","clev"],
+    txt:"< 185/110 ก่อนให้ thrombolysis แล้วคง < 180/105 ใน 24 ชม. ไม่ลดต่ำเกินเพื่อรักษา penumbra"},
+  ich:{n:"Intracerebral hemorrhage",band:function(S,t){ return [130,t<1?lin(S,150,t):150]; },good:["labet","nicar","clev"],
+    txt:"SBP 150–220: ลดเป็นราว 140 (ช่วง 130–150) ใน 1 ชม. หลีกเลี่ยง SBP < 130 และการลดเร็วเกินแบบแกว่ง"},
+  eclam:{n:"Severe preeclampsia or eclampsia",band:function(S,t){ return [135,t<1?lin(S,155,t):155]; },good:["labet","hydra","nifo"],
+    txt:"SBP < 160 และ DBP < 110 ภายใน 30–60 นาที เป้า 140–150/90–100 ให้ MgSO4 ป้องกันชัก"},
+  pheo:{n:"Catecholamine crisis (pheochromocytoma)",band:function(S,t){ return [S*(1-0.3*Math.min(1,t)),S*(1-0.18*Math.min(1,t))]; },good:["phen","urap","nicar"],
+    txt:"ให้ α-blocker (phentolamine) หรือ urapidil, nicardipine ห้าม β-blocker เดี่ยวก่อน α"}
+};
+var CK=["urg","malig","enc","diss","apo","acs","ais","ich","eclam","pheo"];
+var DG={
+  labet:{n:"Labetalol IV",tau:0.12,max:0.32,tit:true},
+  nicar:{n:"Nicardipine infusion",tau:0.25,max:0.38,tit:true},
+  clev:{n:"Clevidipine infusion",tau:0.05,max:0.4,tit:true},
+  esmo:{n:"Esmolol infusion",tau:0.04,max:0.14,tit:true},
+  ntg:{n:"Nitroglycerin infusion (high dose)",tau:0.05,max:0.35,tit:true},
+  snp:{n:"Nitroprusside infusion",tau:0.02,max:0.45,tit:true},
+  phen:{n:"Phentolamine IV",tau:0.05,max:0.35,tit:true},
+  urap:{n:"Urapidil IV",tau:0.1,max:0.3,tit:true},
+  hydra:{n:"Hydralazine IV bolus",tau:0.35,max:0.24,tit:false},
+  nifo:{n:"Nifedipine oral IR (pregnancy)",tau:0.4,max:0.2,tit:false},
+  oral:{n:"Oral agent (amlodipine, captopril)",tau:2.2,max:0.16,tit:false},
+  esmoNic:{n:"Esmolol + nicardipine",tau:0.05,max:0.42,tit:true}
+};
+var DK=Object.keys(DG);
+function warnings(c,d){
+  var w=[];
+  var bb=d==="labet"||d==="esmo";
+  if(c==="diss"&&(d==="nicar"||d==="snp"||d==="clev"||d==="ntg")) w.push("Vasodilator เดี่ยวใน dissection ทำให้ reflex tachycardia เพิ่ม shear stress ให้ β-blocker ก่อน");
+  if(c==="diss"&&d==="hydra") w.push("Hydralazine ห้ามใน dissection");
+  if(c==="apo"&&bb) w.push("β-blocker ใน acute pulmonary edema ทำให้ cardiac output ลด");
+  if(c==="pheo"&&bb) w.push("β-blocker เดี่ยวก่อน α-blocker ใน pheochromocytoma ทำให้ BP พุ่ง (unopposed α)");
+  if(c==="eclam"&&d==="snp") w.push("Nitroprusside เลี่ยงในครรภ์ (cyanide ต่อทารก) ใช้เมื่อยาอื่นไม่ได้ผลเท่านั้น");
+  if(c==="acs"&&d==="hydra") w.push("Hydralazine ทำให้ reflex tachycardia เพิ่ม O2 demand");
+  if((c==="ich"||c==="ais"||c==="enc")&&(d==="snp"||d==="ntg")) w.push("Nitrate เพิ่ม intracranial pressure เลือก labetalol, nicardipine หรือ clevidipine");
+  if(c==="urg"&&DG[d].tit) w.push("ไม่มี acute organ damage ไม่ต้องใช้ยาฉีด การลดเร็วเสี่ยง ischemia");
+  if(c!=="urg"&&c!=="eclam"&&(d==="oral"||d==="nifo")) w.push("Emergency ต้องใช้ยาฉีดที่ titrate ได้");
+  if(c!=="pheo"&&d==="phen") w.push("Phentolamine ใช้เฉพาะภาวะ catecholamine excess");
+  return w;
+}
+function simE(S,c,d,r1,r6){
+  var D=function(t){ return t<=1?lin(S,S*(1-r1),t):t<=6?lin(S*(1-r1),S*(1-r6),(t-1)/5):S*(1-r6); };
+  var g=DG[d], sb=S, out=[], lo=[], hi=[], inT=0, n=0, below=0, above=0, minS=S;
+  var floor=S*(1-g.max);
+  for(var t=0;t<=12.0001;t+=1/60){
+    if(g.tit){ var tgt=Math.max(floor,D(t)); sb+=(tgt-sb)*(1-Math.exp(-(1/60)/g.tau)); }
+    else { var ext=c==="urg"||d==="oral"?1:1.15; sb=S*(1-g.max*ext*(1-Math.exp(-t/g.tau))); }
+    if(c==="pheo"&&(d==="labet"||d==="esmo")&&t>0.1) sb=Math.min(S+30,sb+0.6);
+    var b=CO[c].band(S,t);
+    if(Math.round(t*60)%3===0){ out.push([t,sb]); lo.push([t,b[0]]); hi.push([t,b[1]]); }
+    if(t>(c==="diss"?0.34:c==="ais"?0.26:0.17)){ n++; if(sb<b[0]-2) below++; else if(sb>b[1]+2) above++; else inT++; }
+    minS=Math.min(minS,sb);
+  }
+  return {S:out,lo:lo,hi:hi,inT:inT/n*100,below:below/n*100,above:above/n*100,minS:minS};
+}
+/* ---------- pregnancy ---------- */
+function ratioNorm(ga){ return Math.exp(Math.log(3)+(ga-20)/20*Math.log(20/3)); }
+var SY={chr:{n:"HT ก่อน 20 สัปดาห์"},head:{n:"ปวดหัวรุนแรง หรือตามัว"},ruq:{n:"ปวดลิ้นปี่หรือใต้ชายโครงขวา"},pe:{n:"Pulmonary edema"},fgr:{n:"Fetal growth restriction"},hem:{n:"Hemolysis (LDH > 600)"}};
+/* ---------- scenarios ---------- */
+function E(o){ var d={mode:"E",c:"enc",d:"nicar",S:230,r1:22,r6:28}; for(var k in o) d[k]=o[k]; return d; }
+function PR(o){ var d={mode:"P",ga:33,sbp:150,dbp:96,upcr:0.1,plt:220,cr:0.6,ast:25,ratio:20,sy:[]}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  enc:{name:"Encephalopathy + nicardipine", p:E({}),
+    rows:[["ภาวะ","BP 230/130 สับสน ชัก papilledema"],["ยา","nicardipine infusion titrate"],["เป้า","MAP ลด 20–25% ใน 1 ชม."]],
+    take:["Hypertensive emergency คือ BP สูงมากร่วมกับ acute organ damage ระดับ BP อย่างเดียวไม่ใช่ตัวตัดสิน","เป้าและความเร็วในการลดขึ้นกับ organ ที่เสียหาย ไม่ใช่ตัวเลขเดียวกันทุกโรค","ใช้ยาฉีดที่ titrate ได้ใน ICU หรือ step-down unit"]},
+  malig:{name:"Malignant HT + TMA", p:E({c:"malig",d:"labet",S:240,r1:10,r6:24}),
+    rows:[["ภาวะ","BP 240/140 retinal hemorrhage, AKI, schistocyte"],["ยา","labetalol"],["เป้า","MAP ลด 20–25% ในหลายชั่วโมง"]],
+    take:["Malignant HT ทำให้เกิด TMA และ AKI ได้ ดีขึ้นเมื่อคุม BP","ลดช้าๆ ในหลายชั่วโมงเพราะ autoregulation curve ขยับไปทางขวา","ถ้า TMA ไม่ดีขึ้นหลังคุม BP ให้หาสาเหตุอื่น (aHUS, SRC, TTP) ดู GN-05"]},
+  diss:{name:"Aortic dissection + esmolol", p:E({c:"diss",d:"esmoNic",S:200,r1:42,r6:42}),
+    rows:[["ภาวะ","เจ็บหน้าอกทะลุหลัง BP แขนสองข้างต่างกัน"],["ยา","esmolol แล้วเพิ่ม nicardipine"],["เป้า","SBP < 120, HR < 60 ใน 20 นาที"]],
+    take:["Dissection เป็นข้อยกเว้นที่ต้องลด BP เร็วและต่ำที่สุด","β-blocker ก่อน vasodilator เพื่อลด dP/dt และ reflex tachycardia","ปรึกษาศัลยแพทย์ทันทีสำหรับ type A"]},
+  dissN:{name:"Dissection ให้ nicardipine เดี่ยว", p:E({c:"diss",d:"nicar",S:200,r1:40,r6:40}),
+    rows:[["ยา","nicardipine เดี่ยว"],["ปัญหา","reflex tachycardia เพิ่ม shear stress"],["แก้","ให้ esmolol หรือ labetalol ก่อน"]],
+    take:["ใน dissection ห้ามใช้ vasodilator เดี่ยวโดยไม่มี β-blocker","Nicardipine titrate ช้ากว่า esmolol ถึงเป้า 20 นาทีได้ยาก","ลำดับยาสำคัญเท่ากับตัวเลขเป้า"]},
+  apo:{name:"Acute pulmonary edema", p:E({c:"apo",d:"ntg",S:210,r1:33,r6:35}),
+    rows:[["ภาวะ","SBP 210 หอบ crackles ทั้งปอด"],["ยา","nitroglycerin ขนาดสูง + loop diuretic"],["เป้า","SBP < 140 ทันที"]],
+    take:["Hypertensive APO ตอบสนองดีต่อ nitrate ขนาดสูงที่ลด preload และ afterload","เลี่ยง β-blocker ในระยะเฉียบพลัน","หา renovascular ถ้า flash pulmonary edema ซ้ำ"]},
+  ais:{name:"Stroke ก่อน thrombolysis", p:E({c:"ais",d:"labet",S:205,r1:15,r6:18}),
+    rows:[["ภาวะ","acute ischemic stroke กำลังจะให้ thrombolysis BP 205/112"],["ยา","labetalol"],["เป้า","< 185/110 ก่อนให้ยา แล้ว < 180/105"]],
+    take:["Stroke ที่จะให้ thrombolysis ต้องลด BP ให้ < 185/110 ก่อน","ถ้าไม่ให้ thrombolysis และ BP < 220/120 ไม่ต้องรีบลด","ลดต่ำเกินทำให้ penumbra ขาดเลือด"]},
+  urg:{name:"Severe HT ไม่มี organ damage", p:E({c:"urg",d:"nicar",S:200,r1:30,r6:35}),
+    rows:[["ภาวะ","BP 200/120 ไม่มีอาการ ไม่มี organ damage"],["ยา","nicardipine ฉีด (ไม่จำเป็น)"],["ผล","ลดเร็วเกิน เสี่ยง ischemia"]],
+    take:["Severe asymptomatic HT ไม่ใช่ emergency ไม่ต้องใช้ยาฉีด","เริ่มหรือปรับยากินแล้วนัดภายในไม่กี่วัน","อย่าใช้ nifedipine อมใต้ลิ้น"]},
+  eclam:{name:"Severe preeclampsia BP", p:E({c:"eclam",d:"labet",S:172,r1:13,r6:15}),
+    rows:[["ภาวะ","ครรภ์ 34 สัปดาห์ BP 172/112 ปวดหัว"],["ยา","labetalol IV + MgSO4"],["เป้า","< 160/110 ภายใน 30–60 นาที"]],
+    take:["BP ≥ 160/110 ในครรภ์ต้องลดภายใน 30–60 นาทีเพื่อลด stroke ของแม่","ยาที่ใช้: labetalol IV, hydralazine IV, nifedipine กินชนิดออกฤทธิ์เร็ว","ห้าม ACEi, ARB และ nitroprusside"]},
+  pesev:{name:"Preeclampsia severe features", p:PR({ga:33,sbp:166,dbp:108,upcr:1.2,plt:140,cr:0.9,ast:40,ratio:210,sy:["head"]}),
+    rows:[["ข้อมูล","GA 33 สัปดาห์ BP 166/108 UPCR 1.2 ปวดหัว"],["ผล","preeclampsia with severe features"],["ต่อ","ลด BP, MgSO4, steroid, delivery ที่ 34 สัปดาห์"]],
+    take:["Preeclampsia คือ HT หลัง 20 สัปดาห์ร่วมกับ proteinuria หรือ organ dysfunction ไม่จำเป็นต้องมี proteinuria","Severe features: BP ≥ 160/110, platelet < 100, AST สูง 2 เท่า, Cr > 1.1, pulmonary edema, อาการทางสมองหรือตา","Severe preeclampsia คลอดเมื่อ ≥ 34 สัปดาห์ หรือเร็วกว่านั้นถ้าแม่ไม่ stable"]},
+  hellp:{name:"HELLP", p:PR({ga:31,sbp:152,dbp:98,upcr:0.6,plt:72,cr:1.0,ast:180,ratio:320,sy:["ruq","hem"]}),
+    rows:[["ข้อมูล","ปวดใต้ชายโครงขวา platelet 72 AST 180 LDH สูง"],["ผล","HELLP syndrome"],["ต่อ","stabilize แล้วคลอด MgSO4"]],
+    take:["HELLP: hemolysis, AST สูง, platelet ต่ำ อาจมี BP ไม่สูงมาก","รักษาด้วยการคลอดหลัง stabilize ให้ MgSO4","แยกจาก TTP และ aHUS หลังคลอด (ADAMTS13, complement) ถ้าไม่ดีขึ้นใน 48–72 ชม."]},
+  rule:{name:"sFlt-1/PlGF rule-out", p:PR({ga:30,sbp:144,dbp:92,upcr:0.15,ratio:18,sy:[]}),
+    rows:[["ข้อมูล","HT ใหม่ที่ 30 สัปดาห์ ไม่มี proteinuria"],["sFlt-1/PlGF","18"],["ผล","gestational HT โอกาสเป็น PE ใน 1 สัปดาห์ต่ำ"]],
+    take:["sFlt-1/PlGF ≤ 38 rule out preeclampsia ใน 1 สัปดาห์ได้ดี (NPV สูง)","ค่าสูง (≥ 85 ก่อน 34 สัปดาห์ หรือ ≥ 110 หลัง 34 สัปดาห์) สนับสนุน PE และ angiogenic imbalance","ใช้ประกอบการตัดสินใจ admit และติดตาม ไม่ใช่เกณฑ์คลอดเดี่ยวๆ"]}
+};
+var ORDER=["enc","malig","diss","dissN","apo","ais","urg","eclam","pesev","hellp","rule"];
+/* ---------- UI ---------- */
+var mode="E";
+var mE=Sim.h("button",{class:"tog",type:"button","aria-pressed":"true",text:"Hypertensive emergency"}), mP=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:"Hypertension in pregnancy"});
+mE.addEventListener("click",function(){ setMode("E"); update(); }); mP.addEventListener("click",function(){ setMode("P"); update(); });
+document.getElementById("modes").appendChild(mE); document.getElementById("modes").appendChild(mP);
+var cSel=document.getElementById("cond"), dSel=document.getElementById("drug");
+CK.forEach(function(k){ var o=document.createElement("option"); o.value=k; o.textContent=CO[k].n; cSel.appendChild(o); });
+DK.forEach(function(k){ var o=document.createElement("option"); o.value=k; o.textContent=DG[k].n; dSel.appendChild(o); });
+cSel.addEventListener("change",function(){ update(); }); dSel.addEventListener("change",function(){ update(); });
+var CE={}, CP={};
+function sl(box,C,k,o,deb){ o.id="s"+k; o.onInput=function(){ update(deb); }; C[k]=Sim.slider(o); document.getElementById(box).appendChild(C[k].el); }
+sl("ctlE",CE,"S",{label:"SBP เริ่มต้น",min:160,max:260,step:1,value:230,unit:" mmHg"},true);
+sl("ctlE",CE,"r1",{label:"ลด SBP ใน 1 ชม.",min:0,max:50,step:1,value:22,unit:" %"},true);
+sl("ctlE",CE,"r6",{label:"ลด SBP ใน 6 ชม.",min:0,max:50,step:1,value:28,unit:" %"},true);
+sl("ctlP",CP,"ga",{label:"Gestational age",min:14,max:40,step:1,value:33,unit:" wk"});
+sl("ctlP",CP,"sbp",{label:"SBP",min:110,max:200,step:1,value:150,unit:""});
+sl("ctlP",CP,"dbp",{label:"DBP",min:60,max:130,step:1,value:96,unit:""});
+sl("ctlP",CP,"upcr",{label:"UPCR",min:0,max:5,step:0.05,value:0.1,unit:"",fmt:function(v){ return v.toFixed(2); }});
+sl("ctlP",CP,"plt",{label:"Platelet",min:20,max:400,step:1,value:220,unit:" x10³"});
+sl("ctlP",CP,"cr",{label:"Creatinine",min:0.3,max:3,step:0.05,value:0.6,unit:"",fmt:function(v){ return v.toFixed(2); }});
+sl("ctlP",CP,"ast",{label:"AST",min:10,max:400,step:1,value:25,unit:" U/L"});
+sl("ctlP",CP,"ratio",{label:"sFlt-1/PlGF",min:1,max:600,step:1,value:20,unit:""});
+var TP={}, tbp=document.getElementById("toolsP");
+Object.keys(SY).forEach(function(k){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:SY[k].n}); b.addEventListener("click",function(){ b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); tbp.appendChild(b); TP[k]=b; });
+function onP(k){ return TP[k].getAttribute("aria-pressed")==="true"; }
+var A=Plot.colors;
+var chartE=Plot.chart(document.getElementById("chartE"),{height:Sim.present?330:320,aria:"Systolic blood pressure over twelve hours against the condition-specific target band",
+  x:{min:0,max:12,step:2,label:"Hours"},y:{min:80,max:260,step:20,label:"SBP (mmHg)"},
+  series:[{id:"hi",name:"Target band",color:A.teal,data:[],width:1.4,dash:[5,4],fill:false},{id:"lo",name:"",color:A.teal,data:[],width:1.4,dash:[5,4]},{id:"s",name:"SBP",color:A.accent,data:[],width:2.8}],legend:true});
+var live=Live.player(chartE,{mount:"liveE"}), LAST=null;
+var chartP=Plot.chart(document.getElementById("chartP"),{height:Sim.present?330:320,aria:"sFlt-1 to PlGF ratio by gestational age with decision thresholds",
+  x:{min:14,max:40,step:2,label:"Gestational age (weeks)"},y:{min:1,max:1000,log:true,label:"sFlt-1/PlGF ratio (log)"},
+  series:[{id:"n50",name:"Normal median",color:A.muted,data:[],width:1.6,dash:[5,4]},{id:"n95",name:"Normal 95th",color:A.muted,data:[],width:1.2,dash:[2,4]}],legend:true});
+(function(){ var a=[],b=[]; for(var g=14;g<=40;g+=0.5){ var v=g<20?3:ratioNorm(g); a.push([g,v]); b.push([g,v*4.5]); } chartP.setSeries("n50",a); chartP.setSeries("n95",b); })();
+function setMode(m){ mode=m; mE.setAttribute("aria-pressed",m==="E"?"true":"false"); mP.setAttribute("aria-pressed",m==="P"?"true":"false");
+  ["chartE","liveE","paneE"].forEach(function(id){ document.getElementById(id).classList.toggle("hide",m!=="E"); });
+  ["chartP","paneP"].forEach(function(id){ document.getElementById(id).classList.toggle("hide",m!=="P"); });
+  document.getElementById("lt").textContent=m==="E"?"BP ใน 12 ชั่วโมงแรก":"sFlt-1/PlGF ตามอายุครรภ์";
+  document.getElementById("rt").textContent=m==="E"?"ภาวะ ยา และเป้าการลด BP":"ข้อมูลมารดา";
+  document.getElementById("hint").textContent=m==="E"?"เส้นประเขียวคือขอบบนและล่างของเป้าสำหรับ organ ที่เลือก เส้นม่วงคือ SBP จริงจากยาที่เลือก ยาที่ titrate ได้จะตามเป้าที่ตั้งด้วยความเร็วของยานั้น ส่วนยา bolus และยากินลดแบบคงที่ คาดเดาได้ยากกว่า":"เส้นประคือค่ามัธยฐานและ percentile ที่ 95 ของหญิงตั้งครรภ์ปกติ เส้นแนวนอนคือเกณฑ์ 38 (rule out), 85 ก่อน 34 สัปดาห์ และ 110 หลัง 34 สัปดาห์ (rule in) จุดคือค่าของผู้ป่วย";
+  if(m==="P") chartP.update({}); else chartE.update({});
+}
+function label(ids){ ids.forEach(function(t,i){ document.getElementById("l"+(i+1)).textContent=t; }); }
+/* ---------- update ---------- */
+function update(deb){
+  if(mode==="E") updE(deb); else updP();
+}
+function updE(deb){
+  label(["SBP ที่ 1 ชม.","ลดลงใน 1 ชม.","เวลาอยู่ในเป้า","ต่ำกว่าเป้า","สูงกว่าเป้า","SBP ต่ำสุด"]);
+  var c=cSel.value, d=dSel.value, S0=CE.S.get(), r1=CE.r1.get()/100, r6=CE.r6.get()/100;
+  var R=simE(S0,c,d,r1,r6), w=warnings(c,d);
+  chartE.setSeries("s",R.S); chartE.setSeries("hi",R.hi); chartE.setSeries("lo",R.lo);
+  chartE.update({y:{min:Math.min(80,Math.floor(R.minS/20)*20-20),max:Math.max(220,Math.ceil(S0/20)*20+20),step:20,label:"SBP (mmHg)"}});
+  document.getElementById("warn").innerHTML=w.length?"⚠ "+w.join("<br>⚠ "):"";
+  var s1=Live.valueAt(R.S,1), ev=[{t:0,kind:"rx",text:"เริ่ม "+DG[d].n+" ที่ SBP "+S0}];
+  if(w.length) ev.push({t:0.05,kind:"warn",text:w[0]});
+  var tIn=null; for(var i=0;i<R.S.length;i++){ var b=CO[c].band(S0,R.S[i][0]); if(R.S[i][1]<=b[1]+2&&R.S[i][1]>=b[0]-2&&R.S[i][0]>0.05){ tIn=R.S[i][0]; break; } }
+  if(tIn!==null) ev.push({t:tIn,kind:"ok",text:"เข้าเป้าที่ "+(tIn<1?Math.round(tIn*60)+" นาที":tIn.toFixed(1)+" ชม.")});
+  ev.push({t:1,kind:(s1/S0<0.7&&c!=="diss")?"warn":"phys",text:"1 ชม.: SBP "+s1.toFixed(0)+" (ลด "+((1-s1/S0)*100).toFixed(0)+"%)"});
+  var tLow=null; for(var j=0;j<R.S.length;j++){ var bb=CO[c].band(S0,R.S[j][0]); if(R.S[j][1]<bb[0]-2&&R.S[j][0]>0.2){ tLow=R.S[j][0]; break; } }
+  if(tLow!==null) ev.push({t:tLow,kind:"warn",text:"ต่ำกว่าเป้า เสี่ยง ischemia ของสมอง หัวใจ ไต"});
+  var good=CO[c].good.indexOf(d)>=0||(c==="diss"&&d==="esmoNic"), m, bad=true;
+  if(w.length) m="<b>เปลี่ยนยา</b> "+w[0]+" "+CO[c].txt;
+  else if(R.below>15) m="<b>ลดเร็วหรือต่ำเกิน</b> ช่วงที่ SBP ต่ำกว่าเป้า "+R.below.toFixed(0)+"% ของเวลา ลดอัตรายาและตั้งเป้าตาม organ: "+CO[c].txt;
+  else if(R.above>25) m="<b>ลดช้าเกิน</b> SBP สูงกว่าเป้า "+R.above.toFixed(0)+"% ของเวลา "+(DG[d].tit?"เพิ่มอัตรายาหรือเพิ่มยาตัวที่สอง":"เปลี่ยนเป็นยาฉีดที่ titrate ได้")+" "+CO[c].txt;
+  else { bad=!good; m="<b>"+(good?"เหมาะสม":"พอใช้")+"</b> "+CO[c].txt+(c==="eclam"?" ให้ MgSO4 และวางแผนคลอด":"")+(c==="malig"?" ตรวจ fundus, LDH, haptoglobin, smear ติดตาม Cr":""); }
+  LAST={R:R,S0:S0,c:c,act:"<b>Next step:</b> "+m,actCls:"act"+(bad?" bad":"")};
+  live.load({tMax:12,unit:"ชม.",ms:7000,debounce:deb===true,num:function(x){ return x<1?Math.round(x*60)+"m":x.toFixed(1); },events:ev.sort(function(a,b){ return a.t-b.t; }),onFrame:onFrameE,
+    cursorLabel:function(t){ return "SBP "+Live.valueAt(R.S,t).toFixed(0); }});
+}
+function onFrameE(t,done){
+  var L=LAST, R=L.R, s1=Live.valueAt(R.S,1);
+  Sim.ro("r1",t>=1?s1.toFixed(0):Live.valueAt(R.S,t).toFixed(0),null);
+  Sim.ro("r2",t>=1?((1-s1/L.S0)*100).toFixed(0)+"%":"…",t>=1?(((1-s1/L.S0)>0.3&&L.c!=="diss")?"flag":null):null);
+  Sim.ro("r3",done?R.inT.toFixed(0)+"%":"…",done?(R.inT>=70?"ok":"flag"):null);
+  Sim.ro("r4",done?R.below.toFixed(0)+"%":"…",done?(R.below>15?"flag":"ok"):null);
+  Sim.ro("r5",done?R.above.toFixed(0)+"%":"…",done?(R.above>25?"flag":"ok"):null);
+  Sim.ro("r6",done?R.minS.toFixed(0):"…",done?(R.minS<CO[L.c].band(L.S0,12)[0]-5?"flag":null):null);
+  var a=document.getElementById("act");
+  if(done){ a.innerHTML=L.act; a.className=L.actCls; } else { a.innerHTML="<b>กำลังจำลอง</b> "+(t<1?Math.round(t*60)+" นาที":t.toFixed(1)+" ชม.")+" SBP "+Live.valueAt(R.S,t).toFixed(0); a.className="act"; }
+}
+function updP(){
+  label(["Classification","Severe features","sFlt-1/PlGF","Proteinuria","Organ dysfunction","Delivery timing"]);
+  var ga=CP.ga.get(), sbp=CP.sbp.get(), dbp=CP.dbp.get(), up=CP.upcr.get(), plt=CP.plt.get(), cr=CP.cr.get(), ast=CP.ast.get(), ra=CP.ratio.get();
+  var chr=onP("chr"), ht=sbp>=140||dbp>=90, sevBP=sbp>=160||dbp>=110, prot=up>=0.3;
+  var organ=[]; if(plt<100) organ.push("platelet < 100"); if(cr>1.1) organ.push("Cr > 1.1"); if(ast>70) organ.push("AST > 2x"); if(onP("pe")) organ.push("pulmonary edema"); if(onP("head")) organ.push("cerebral or visual"); if(onP("ruq")) organ.push("RUQ pain");
+  var utero=onP("fgr")||(ra>=85&&ga<34)||(ra>=110&&ga>=34);
+  var sev=sevBP||organ.length>0, hellp=onP("hem")&&ast>70&&plt<100;
+  var pe=ht&&ga>=20&&(prot||organ.length>0||(utero&&!chr&&onP("fgr")));
+  var cls;
+  if(!ht&&!pe) cls=ga<20?"Normotensive":"Normotensive";
+  if(hellp) cls="HELLP syndrome";
+  else if(pe) cls=(chr?"Superimposed PE":"Preeclampsia")+(sev?" (severe)":"");
+  else if(ht&&(chr||ga<20)) cls="Chronic HT";
+  else if(ht) cls="Gestational HT";
+  else cls="Normotensive";
+  var ratTxt=ra<=38?"Rule out":(ga<34?(ra>=85?"Rule in":"Elevated"):(ra>=110?"Rule in":"Elevated"));
+  var deliv=hellp?"After stabilization":pe&&sev?(ga>=34?"Now (≥ 34 wk)":"Steroid, aim 34 wk"):pe?"37 wk":cls==="Gestational HT"?"37 wk":cls==="Chronic HT"?"38–39 wk":"Term";
+  Sim.ro("r1",cls,cls==="Normotensive"?"ok":"flag");
+  Sim.ro("r2",sev?"Yes":"No",sev?"flag":"ok");
+  Sim.ro("r3",ra.toFixed(0)+" "+ratTxt,ratTxt==="Rule out"?"ok":"flag");
+  Sim.ro("r4",prot?"Yes":"No",prot?"flag":"ok");
+  Sim.ro("r5",organ.length?organ.length+" ข้อ":"None",organ.length?"flag":"ok");
+  Sim.ro("r6",deliv,null);
+  chartP.update({hlines:[{y:38,label:"Rule out 38",color:A.teal,dash:[5,4]},ga<34?{y:85,label:"Rule in 85 (< 34 wk)",color:A.red,dash:[4,4]}:{y:110,label:"Rule in 110 (≥ 34 wk)",color:A.red,dash:[4,4]}],
+    marks:[{x:ga,y:Math.max(1.2,ra),label:"Patient "+ra.toFixed(0),color:ratTxt==="Rule out"?A.teal:A.red}],vlines:[{x:20,label:"20 wk"},{x:34,label:"34 wk"}]});
+  var m, bad=true, a=document.getElementById("act");
+  if(hellp) m="<b>HELLP</b> ให้ MgSO4 ลด BP ถ้า ≥ 160/110 แก้ coagulopathy stabilize แล้วคลอด ถ้าอาการไม่ดีขึ้นหลังคลอด 48–72 ชม. แยก TTP และ aHUS";
+  else if(pe&&sev) m="<b>Preeclampsia with severe features</b> "+(sevBP?"ลด BP ภายใน 30–60 นาที (labetalol IV, hydralazine IV หรือ nifedipine IR) ":"")+"ให้ MgSO4 "+(ga<34?"corticosteroid เพื่อปอดทารก วางแผนคลอดที่ 34 สัปดาห์หรือเร็วกว่าถ้าแม่ไม่ stable":"คลอดหลัง stabilize")+" ห้าม ACEi/ARB";
+  else if(pe) m="<b>Preeclampsia ไม่มี severe features</b> admit หรือติดตามใกล้ชิด ตรวจ lab สัปดาห์ละ 1–2 ครั้ง คุม BP < 140/90 คลอดที่ 37 สัปดาห์";
+  else if(cls==="Gestational HT"&&ratTxt==="Rule out") { bad=false; m="<b>Gestational HT</b> sFlt-1/PlGF "+ra.toFixed(0)+" โอกาสเกิด PE ใน 1 สัปดาห์ต่ำ ติดตามแบบผู้ป่วยนอก คุม BP < 140/90 ด้วย labetalol หรือ nifedipine ตรวจซ้ำถ้าอาการเปลี่ยน"; }
+  else if(cls==="Gestational HT") m="<b>Gestational HT + angiogenic imbalance</b> sFlt-1/PlGF "+ra.toFixed(0)+" เสี่ยงเป็น PE ภายในไม่กี่สัปดาห์ ติดตามใกล้ชิดหรือ admit";
+  else if(cls==="Chronic HT") { bad=false; m="<b>Chronic HT</b> รักษาเมื่อ ≥ 140/90 เป้าต่ำกว่า 140/90 เปลี่ยน ACEi/ARB เป็น labetalol, nifedipine หรือ methyldopa ให้ aspirin ขนาดต่ำตั้งแต่ 12–16 สัปดาห์ เฝ้าระวัง superimposed PE"; }
+  else { bad=false; m="<b>BP ปกติ</b> ถ้ามีความเสี่ยงสูงต่อ PE ให้ aspirin ขนาดต่ำเริ่มก่อน 16 สัปดาห์"; }
+  a.innerHTML="<b>Next step:</b> "+m; a.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"HT-08", title:"Hypertensive Emergency and Hypertension in Pregnancy", lead:"โหมด emergency: เลือก organ ที่เสียหายและยา ตั้งอัตราการลด BP แล้วดูว่า SBP อยู่ในเป้าเฉพาะโรคหรือไม่ โหมด pregnancy: ใส่ BP, lab, อาการ และ sFlt-1/PlGF เพื่อจำแนกและวางแผนการคลอด",
+  scenarios:S, order:ORDER, captureMs:1200,
+  onChange:function(k,s){ var p=s.p; setMode(p.mode);
+    if(p.mode==="E"){ cSel.value=p.c; dSel.value=p.d; CE.S.set(p.S); CE.r1.set(p.r1); CE.r6.set(p.r6); }
+    else { ["ga","sbp","dbp","upcr","plt","cr","ast","ratio"].forEach(function(x){ CP[x].set(p[x]); }); Object.keys(TP).forEach(function(x){ TP[x].setAttribute("aria-pressed",p.sy.indexOf(x)>=0?"true":"false"); }); }
+    update(); },
+  refs:["van den Born BJH, Lip GYH, Brguljan-Hitij J, et al. ESC Council on hypertension position document on the management of hypertensive emergencies. Eur Heart J Cardiovasc Pharmacother 2019, 5(1): 37-46",
+        "Whelton PK, Carey RM, Aronow WS, et al. 2017 ACC/AHA guideline for the prevention, detection, evaluation, and management of high blood pressure in adults. Hypertension 2018, 71(6): e13-e115",
+        "Powers WJ, Rabinstein AA, Ackerson T, et al. Guidelines for the early management of patients with acute ischemic stroke: 2019 update. Stroke 2019, 50(12): e344-e418",
+        "Greenberg SM, Ziai WC, Cordonnier C, et al. 2022 guideline for the management of patients with spontaneous intracerebral hemorrhage. Stroke 2022, 53(7): e282-e361",
+        "American College of Obstetricians and Gynecologists. Gestational hypertension and preeclampsia: ACOG practice bulletin no. 222. Obstet Gynecol 2020, 135(6): e237-e260",
+        "Magee LA, Brown MA, Hall DR, et al. The 2021 International Society for the Study of Hypertension in Pregnancy classification, diagnosis and management recommendations. Pregnancy Hypertens 2022, 27: 148-169",
+        "Zeisler H, Llurba E, Chantraine F, et al (PROGNOSIS). Predictive value of the sFlt-1:PlGF ratio in women with suspected preeclampsia. N Engl J Med 2016, 374(1): 13-22",
+        "Thadhani R, Lemoine E, Rana S, et al (PRAECIS). Circulating angiogenic factor levels in hypertensive disorders of pregnancy. NEJM Evid 2022, 1(12): EVIDoa2200161",
+        "Tita AT, Szychowski JM, Boggess K, et al (CHAP). Treatment for mild chronic hypertension during pregnancy. N Engl J Med 2022, 386(19): 1781-1792"],
+  note:"Model เพื่อการสอน: ยาที่ titrate ได้ตามเส้นเป้าที่ผู้ใช้ตั้ง (ลด % ใน 1 ชม. และ 6 ชม.) ด้วย time constant ของยา (clevidipine 3, esmolol 2.5, nitroprusside 1, labetalol 7, nicardipine 15 นาที) และลดได้ไม่เกินฤทธิ์สูงสุดของยา ยา bolus หรือยากินลดแบบคงที่ (hydralazine 24%, nifedipine IR 20%, oral 16%) ขอบเป้าของแต่ละ organ ตามคำแนะนำในแหล่งอ้างอิง ส่วนโหมดตั้งครรภ์ใช้เกณฑ์ ACOG/ISSHP และเกณฑ์ sFlt-1/PlGF 38, 85 และ 110 ค่ามัธยฐานปกติเป็นค่าประมาณ"
+});
+})();
+</script>
+</body>
+</html>

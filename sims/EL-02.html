@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[EL-02] Body Water Compartments and Osmolality</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(120px,160px) 1fr 100px}
+.sel{display:grid;grid-template-columns:minmax(120px,160px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.grp{font:500 11.5px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin:10px 0 0}
+#cmp{max-height:330px}
+.readout{grid-template-columns:repeat(3,1fr)}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,1fr)}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+body.present .bench{grid-template-columns:1.3fr 1fr}
+body.present #cmp{max-height:260px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present #steps,body.present .grp{display:none}
+body.present .card{padding:16px 20px}
+body.present .ctls{gap:4px 16px;grid-template-columns:1fr 1fr}
+body.present .ctl{grid-template-columns:86px 1fr 70px;gap:6px;font-size:12px}
+body.present .ctl output{font-size:12px}
+body.present .sel{grid-template-columns:86px minmax(0,1fr);gap:6px;font-size:12px}
+body.present select{font-size:11.5px;padding:3px 6px}
+body.present .ro{padding:8px 12px}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>ICF และ ECF ก่อนและหลังได้สารน้ำ</h2>
+      <div class="svgwrap"><svg id="cmp" viewBox="0 0 640 330" role="img" aria-label="Intracellular and extracellular volumes before and after infusion"></svg></div>
+      <div id="live"></div>
+      <p class="hint no-present">ความกว้างของกล่องคือปริมาตร กรอบเส้นประคือก่อนให้ ลูกศรคือน้ำที่เคลื่อนระหว่าง ICF และ ECF ตาม effective osmolality ใช้ ICF osmoles คงที่ (ไม่คิด K เข้าเซลล์) ถ้าเปิดปัสสาวะ จะคิดการขับ Na+K และน้ำหลังให้สารน้ำ</p>
+      <div id="steps" class="no-present"></div>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วยและสารน้ำ</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roNa"><b>-</b><span>Na หลัง (mmol/L)</span></div>
+        <div class="ro" id="roOsm"><b>-</b><span>Effective osm (mOsm/kg)</span></div>
+        <div class="ro" id="roICF"><b>-</b><span>ΔICF (ml)</span></div>
+        <div class="ro" id="roECF"><b>-</b><span>ΔECF (ml)</span></div>
+        <div class="ro" id="roPV"><b>-</b><span>ΔPlasma (ml)</span></div>
+        <div class="ro" id="roEF"><b>-</b><span>EFWC (L)</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/calc.js"></script>
+<script src="../core/live.js"></script>
+<script>
+(function(){
+"use strict";
+/* fluid: na (mmol/L), other effective osm (mOsm/L) อยู่ใน ECF, metab = glucose ถูกใช้จนเหลือแต่น้ำ */
+var FL={
+  water:{name:"Free water / D5W",na:0,oth:0,label:"D5W"},
+  nss:{name:"0.9% NaCl",na:154,oth:0,label:"0.9% NaCl"},
+  half:{name:"0.45% NaCl",na:77,oth:0,label:"0.45% NaCl"},
+  lrs:{name:"Lactated Ringer",na:130,oth:4,label:"LRS"},
+  hyp:{name:"3% NaCl",na:513,oth:0,label:"3% NaCl"},
+  bic:{name:"7.5% NaHCO3",na:893,oth:0,label:"7.5% NaHCO3"},
+  man:{name:"20% Mannitol",na:0,oth:1098,label:"20% mannitol"}
+};
+function P(o){ var d={fl:"nss",vol:1000,w:60,sex:"m",na:140,glu:100,urine:0,uosm:0}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  nss:{name:"1 L 0.9% NaCl", p:P({}),
+    rows:[["สารน้ำ","0.9% NaCl 1 L ในผู้ป่วย Na 140"],["การกระจาย","effective osmolality ใกล้เคียง plasma จึงอยู่ใน ECF เกือบทั้งหมด"],["Plasma","เพิ่มราว 250 ml (1/4 ของ ECF ที่เพิ่ม)"]],
+    take:["Isotonic saline เพิ่ม ECF เท่านั้น ICF แทบไม่เปลี่ยน","Plasma ได้เพียงราว 1/4 ของ crystalloid ที่ให้","Na ไม่เปลี่ยนถ้า tonicity ของสารน้ำใกล้เคียง plasma"]},
+  water:{name:"1 L free water (D5W)", p:P({fl:"water"}),
+    rows:[["สารน้ำ","D5W 1 L glucose ถูก metabolize เหลือน้ำอิสระ"],["การกระจาย","กระจายตาม TBW ราว 2/3 เข้า ICF 1/3 อยู่ ECF"],["ผล","Na ลดราว 4 mmol/L ใน 60 kg plasma ได้น้อยมาก"]],
+    take:["น้ำอิสระกระจายทั่ว TBW ไม่เหมาะกับการ resuscitate","ΔNa จาก free water = Na × V/(TBW + V)","ระวัง hyponatremia เมื่อให้ hypotonic fluid หลังผ่าตัด (ADH สูง)"]},
+  hyp:{name:"3% NaCl ใน hyponatremia", p:P({fl:"hyp",vol:300,na:118}),
+    rows:[["ผู้ป่วย","Na 118 มีอาการทางสมอง"],["สารน้ำ","3% NaCl 150 ml bolus 2 ครั้ง (300 ml)"],["ผล","น้ำเคลื่อนออกจากเซลล์ (รวมสมอง) Na ขึ้นราว 1.5–2 mmol/L ต่อ bolus รวมราว 3 mmol/L"]],
+    take:["Hypertonic saline ดึงน้ำออกจาก ICF ลด cerebral edema","เป้าคือเพิ่ม Na 4–6 mmol/L ในช่วงแรกสำหรับอาการรุนแรง","จำกัดการแก้ไม่ให้เกิน 8–10 mmol/L ใน 24 ชม. (6–8 ถ้าเสี่ยง ODS)"]},
+  siad:{name:"0.9% NaCl ใน SIAD (Uosm 600)", p:P({fl:"nss",na:124,urine:510,uosm:300}),
+    rows:[["ผู้ป่วย","SIAD Na 124 urine osm 600 (Na+K ราว 300)"],["สารน้ำ","0.9% NaCl 1 L แล้วไตขับ NaCl ทั้งหมดในปัสสาวะเข้มข้น"],["ผล","Na 154 mmol ถูกขับในปัสสาวะ 0.51 L ที่เหลือราว 0.49 L เป็นน้ำอิสระที่เก็บไว้ Na ลดลงแทนที่จะขึ้น (desalination)"]],
+    take:["ใน SIAD ถ้า urine (Na+K) สูงกว่าสารน้ำ การให้ NSS ทำให้ Na ลดลง","ใช้ urine Na+K เทียบ plasma Na ตัดสินว่าจะจำกัดน้ำได้ผลหรือไม่","ถ้า Uosm สูงมาก ต้องใช้ hypertonic saline, urea หรือ vaptan"]},
+  man:{name:"Mannitol 20%", p:P({fl:"man",vol:500}),
+    rows:[["สารน้ำ","mannitol 20% 500 ml (เช่น ใน raised ICP)"],["การกระจาย","mannitol อยู่ใน ECF ดึงน้ำจาก ICF ECF ขยายมาก"],["ผล","Na ลด (translocational hyponatremia) แต่ effective osm สูงขึ้น ต้องดู osmolal gap"]],
+    take:["Na ต่ำไม่ได้แปลว่า hypotonic เสมอ ต้องดู measured osmolality","Mannitol หรือ glucose สูงทำให้ Na ลดจาก water shift","ใน AKI mannitol สะสมเสี่ยง volume overload และ hyponatremia"]},
+  hyper:{name:"Hypernatremia + D5W 3 L", p:P({fl:"water",vol:3000,na:162,w:70}),
+    rows:[["ผู้ป่วย","70 kg Na 162 จาก water loss"],["คำนวณ","free water deficit ราว 6.6 L (TBW 42 L)"],["ผล","D5W 3 L ทำให้ Na ลดราว 11 ซึ่งต้องกระจายในเวลาที่เหมาะสม"]],
+    take:["Free water deficit = TBW × (Na/140 − 1)","Chronic hypernatremia แก้ไม่เกินราว 10–12 mmol/L ต่อวัน","ต้องบวก ongoing loss (urine, GI, insensible) เข้าไปด้วย"]}
+};
+var ORDER=["nss","water","hyp","siad","man","hyper"];
+
+var box=document.getElementById("ctls"), C={}, SEL={};
+function sel(k,label,opts){ var s=Sim.h("select",{id:"s"+k},opts.map(function(o){ return Sim.h("option",{value:o[0],text:o[1]}); })); s.addEventListener("change",update); box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"s"+k,text:label}),s])); SEL[k]=s; }
+function sl(k,o,cls){ o.id="s"+k; o.onInput=function(){ update.drag=true; update(); }; C[k]=Sim.slider(o); if(cls) C[k].el.classList.add(cls); box.appendChild(C[k].el); }
+function grp(t){ box.appendChild(Sim.h("p",{class:"grp",text:t})); }
+sel("fl","สารน้ำ",Object.keys(FL).map(function(k){ return [k,FL[k].name]; }));
+sl("vol",{label:"ปริมาตร",min:50,max:4000,step:50,value:1000,unit:"ml"});
+grp("ผู้ป่วย");
+sl("w",{label:"น้ำหนัก",min:40,max:100,step:1,value:60,unit:"kg"});
+sel("sex","TBW fraction",[["m","ชาย 0.6"],["f","หญิง 0.5"],["e","สูงอายุ 0.45–0.5"]]);
+sl("na",{label:"Na เริ่มต้น",min:105,max:175,step:1,value:140,unit:"mmol/L"});
+sl("glu",{label:"Glucose",min:60,max:1200,step:10,value:100,unit:"mg/dL"},"secondary");
+grp("ปัสสาวะหลังให้");
+sl("urine",{label:"Urine volume",min:0,max:3000,step:50,value:0,unit:"ml"});
+sl("uosm",{label:"Urine Na+K",min:0,max:350,step:5,value:0,unit:"mmol/L"});
+
+var svg=document.getElementById("cmp"), Fn="IBM Plex Sans Thai, sans-serif", Mn="Geist Mono, monospace";
+function el(t,a){ return Sim.svg(t,a,svg); }
+function params(){ var o={}; for(var k in C) o[k]=C[k].get(); for(var j in SEL) o[j]=SEL[j].value; return o; }
+function update(){
+  var p=params(), f=FL[p.fl], V=p.vol/1000, Vu=p.urine/1000;
+  var frac=p.sex==="m"?0.6:p.sex==="f"?0.5:0.475, TBW=frac*p.w, ICF0=TBW*2/3, ECF0=TBW/3;
+  var gEff=p.glu/18, E0=2*p.na+gEff;
+  var icfOsm=E0*ICF0, ecfNa=2*p.na*ECF0, ecfOth=gEff*ECF0;
+  /* infusion phase */
+  var na1=ecfNa+2*f.na*V, oth1=ecfOth+f.oth*V, tbw1=TBW+V;
+  var E1=(icfOsm+na1+oth1)/tbw1, ICF1=icfOsm/E1, ECF1=(na1+oth1)/E1;
+  /* urine phase */
+  var na2=Math.max(0,na1-2*p.uosm*Vu), tbw2=tbw1-Vu, E2=(icfOsm+na2+oth1)/tbw2, ICF2=icfOsm/E2, ECF2=(na2+oth1)/E2;
+  var Na2=na2/(2*ECF2), Na1=na1/(2*ECF1);
+  var dICF=(ICF2-ICF0)*1000, dECF=(ECF2-ECF0)*1000, dPV=dECF*0.25;
+  var ef=Vu?Calc.efwc({v:Vu,una:p.uosm,uk:0,pna:+Na1.toFixed(0)}):null;
+  var V0={icf:ICF0,isf:ECF0*0.75,pl:ECF0*0.25}, VB={icf:ICF0,isf:ECF0*0.75,pl:ECF0*0.25+V}, VC={icf:ICF1,isf:ECF1*0.75,pl:ECF1*0.25}, VD={icf:ICF2,isf:ECF2*0.75,pl:ECF2*0.25};
+  LAST={p:p,f:f,V:V,Vu:Vu,TBW:TBW,tbw1:tbw1,tbw2:tbw2,V0:V0,VB:VB,VC:VC,VD:VD,E0:E0,E1:E1,E2:E2,Na1:Na1,Na2:Na2,dICF:dICF};
+  var dNa=Na2-p.na;
+  READ=function(){
+  /* readout */
+  Sim.ro("roNa",Na2.toFixed(1)+" ("+(dNa>=0?"+":"")+dNa.toFixed(1)+")",Na2<130||Na2>148?"flag":"ok");
+  Sim.ro("roOsm",E2.toFixed(0),E2<270||E2>300?"flag":"ok");
+  Sim.ro("roICF",(dICF>=0?"+":"")+Math.round(dICF));
+  Sim.ro("roECF",(dECF>=0?"+":"")+Math.round(dECF));
+  Sim.ro("roPV",(dPV>=0?"+":"")+Math.round(dPV));
+  Sim.ro("roEF",ef?ef.value.toFixed(2):"-",ef?(ef.value<0?"flag":"ok"):false);
+  };
+  var am=Calc.adrogueMadias({na:p.na,infNa:f.na,infK:0,tbw:+TBW.toFixed(1)});
+  var stepsEl=document.getElementById("steps"); Calc.renderSteps(stepsEl,am,{title:"Adrogué–Madias (ต่อ 1 L สารน้ำ ไม่คิดปัสสาวะ)"});
+  if(f.oth){ var note=document.createElement("p"); note.className="hint"; note.textContent="สูตรนี้ไม่ได้รวม mannitol หรือ glucose ที่ไม่ถูก metabolize ซึ่งดึงน้ำออกจากเซลล์ model ในภาพคิดให้แล้ว"; stepsEl.appendChild(note); }
+  var act=document.getElementById("act"), m, bad=false, rate=Math.abs(dNa);
+  if(Vu&&dNa<0&&f.na>0){ bad=true; m="<b>Na ลดลงหลังให้ NaCl</b> เพราะ urine Na+K ("+p.uosm+") สูงกว่าสารน้ำ ("+f.na+") ไตเก็บน้ำอิสระไว้ ใช้ hypertonic saline, urea หรือ vaptan และจำกัดน้ำ"; }
+  else if(p.na<125&&dNa>8){ bad=true; m="<b>Na ขึ้น "+dNa.toFixed(1)+" mmol/L</b> เกินขีด 8–10 ใน 24 ชม. เสี่ยง ODS พิจารณา D5W หรือ desmopressin clamp"; }
+  else if(p.na>150&&dNa<-12){ bad=true; m="<b>Na ลด "+(-dNa).toFixed(1)+" mmol/L</b> เร็วเกินใน chronic hypernatremia แบ่งให้ใน 48 ชม. และคิด ongoing loss"; }
+  else if(f.oth&&dNa<0) m="<b>Na ลดแต่ osmolality ไม่ได้ต่ำ</b> เป็น translocational hyponatremia ตรวจ measured osmolality และ osmolal gap ไม่ต้องแก้ Na";
+  else if(p.fl==="water"&&p.na<=145) m="<b>Free water กระจายเข้า ICF</b> ไม่ใช่สารน้ำสำหรับ resuscitation หรือ maintenance ในผู้ป่วยที่มี ADH สูง";
+  else if(p.fl==="hyp") m="<b>Hypertonic saline</b> ตรวจ Na ซ้ำทุก 2–4 ชม. หยุดเมื่ออาการดีขึ้นหรือ Na ขึ้น 4–6 mmol/L";
+  else m="<b>Isotonic fluid</b> เพิ่ม ECF โดยแทบไม่เปลี่ยน ICF เลือกใช้เมื่อขาด ECF (hypovolemia)";
+  LAST.act="<b>Next step:</b> "+m; LAST.actCls="act"+(bad?" bad":"");
+  live.load({tMax:Vu?6:1.5,unit:"ชม.",ms:Vu?9000:6000,events:events(),onFrame:frame,debounce:!!update.drag}); update.drag=false;
+}
+var live=Live.player(null,{mount:"live"}), LAST=null, READ=null;
+function readouts(){ if(READ) READ(); }
+function lerp(a,b,u){ return {icf:a.icf+(b.icf-a.icf)*u,isf:a.isf+(b.isf-a.isf)*u,pl:a.pl+(b.pl-a.pl)*u}; }
+function ease(u){ u=Math.max(0,Math.min(1,u)); return u*u*(3-2*u); }
+function events(){
+  var L=LAST, E=[], f=L.f, d1=(L.VC.icf-L.V0.icf)*1000;
+  E.push({t:0,kind:"rx",text:"เริ่มให้ "+f.label+" "+L.p.vol+" ml เข้าหลอดเลือด (plasma) ก่อน"});
+  E.push({t:0.5,kind:"phys",text:"ให้ครบ: plasma เพิ่มชั่วคราว "+Math.round(L.V*1000)+" ml"});
+  E.push({t:0.55,kind:"phys",text:"Plasma กระจายสู่ ISF ข้ามผนัง capillary จนสัดส่วน ISF:plasma กลับเป็น 3:1"});
+  if(Math.abs(d1)>15) E.push({t:0.6,kind:d1<0?"warn":"phys",text:"Effective osmolality ใน ECF "+(L.E1>L.E0?"สูงขึ้น ("+L.E0.toFixed(0)+" → "+L.E1.toFixed(0)+") ดึงน้ำออกจากเซลล์ ":"ต่ำลง ("+L.E0.toFixed(0)+" → "+L.E1.toFixed(0)+") น้ำเข้าเซลล์ ")+Math.abs(Math.round(d1))+" ml"});
+  else E.push({t:0.6,kind:"ok",text:"Effective osmolality แทบไม่เปลี่ยน น้ำไม่ย้ายเข้าออกเซลล์ สารน้ำอยู่ใน ECF ทั้งหมด"});
+  E.push({t:1.5,kind:"ok",text:"สมดุล: plasma "+((L.VC.pl-L.V0.pl)*1000>=0?"+":"")+Math.round((L.VC.pl-L.V0.pl)*1000)+" ml, ISF "+((L.VC.isf-L.V0.isf)*1000>=0?"+":"")+Math.round((L.VC.isf-L.V0.isf)*1000)+" ml, ICF "+(d1>=0?"+":"")+Math.round(d1)+" ml, Na "+L.Na1.toFixed(1)});
+  if(L.Vu){ E.push({t:1.6,kind:"phys",text:"ไตขับปัสสาวะ "+L.p.urine+" ml ที่ Na+K "+L.p.uosm+(L.p.uosm>f.na?" (เข้มข้นกว่าสารน้ำ: เก็บน้ำอิสระไว้)":" (เจือจางกว่าสารน้ำ: ขับน้ำอิสระ)")});
+    E.push({t:6,kind:L.Na2<L.Na1-0.3?"warn":"ok",text:"หลังปัสสาวะ Na "+L.Na2.toFixed(1)+" (จาก "+L.p.na+")"}); }
+  return E;
+}
+function frame(t,done){
+  var L=LAST, st, na, ph;
+  if(t<=0.5){ st=lerp(L.V0,L.VB,ease(t/0.5)); na=L.p.na; ph=0; }
+  else if(t<=1.5){ st=lerp(L.VB,L.VC,ease((t-0.5)/1)); na=L.p.na+(L.Na1-L.p.na)*ease((t-0.5)/1); ph=1; }
+  else { var u=L.Vu?ease((t-1.5)/4.5):1; st=lerp(L.VC,L.VD,u); na=L.Na1+(L.Na2-L.Na1)*u; ph=2; }
+  draw(st,na,t,ph,done);
+  if(done){ readouts(); var a=document.getElementById("act"); a.innerHTML=L.act; a.className=L.actCls; }
+  else { ["roNa","roOsm","roICF","roECF","roPV","roEF"].forEach(function(id){ Sim.ro(id,"…"); }); Sim.ro("roNa",na.toFixed(1)); var a2=document.getElementById("act"); a2.innerHTML="<b>"+(ph===0?"กำลังให้สารน้ำ":ph===1?"กำลังกระจายระหว่าง compartment":"ไตกำลังขับปัสสาวะ")+"</b> ICF "+st.icf.toFixed(2)+" L ISF "+st.isf.toFixed(2)+" L plasma "+st.pl.toFixed(2)+" L"; a2.className="act"; }
+}
+function draw(st,na,t,ph,done){
+  var L=LAST, p=L.p, f=L.f;
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  var sc=400/Math.max(L.TBW,L.tbw1,L.tbw2)/1.05, x0=110, y0=70, h=150;
+  function boxes(v,y,dash){
+    var wI=v.icf*sc, wS=v.isf*sc, wP=v.pl*sc;
+    el("rect",{x:x0,y:y,width:wI,height:h,rx:10,fill:dash?"none":"#EFEDFF",stroke:"#5B4BFF","stroke-width":dash?1.5:2,"stroke-dasharray":dash?"5 4":"none"});
+    el("rect",{x:x0+wI+6,y:y,width:wS,height:h,rx:10,fill:dash?"none":"#E7F8FB",stroke:"#19C8E6","stroke-width":dash?1.5:2,"stroke-dasharray":dash?"5 4":"none"});
+    el("rect",{x:x0+wI+6+wS+3,y:y,width:wP,height:h,rx:8,fill:dash?"none":"#FBE3E4",stroke:"#B4232A","stroke-width":dash?1.5:2,"stroke-dasharray":dash?"5 4":"none"});
+    if(!dash){
+      el("text",{x:x0+wI/2,y:y+h/2-6,"text-anchor":"middle","font-size":14,"font-weight":600,fill:"#3A2DB8","font-family":Fn,text:"ICF"});
+      el("text",{x:x0+wI/2,y:y+h/2+14,"text-anchor":"middle","font-size":13,fill:"#3A2DB8","font-family":Mn,text:v.icf.toFixed(1)+" L"});
+      el("text",{x:x0+wI+6+wS/2,y:y+h/2-6,"text-anchor":"middle","font-size":13,"font-weight":600,fill:"#0E6E80","font-family":Fn,text:"ISF"});
+      el("text",{x:x0+wI+6+wS/2,y:y+h/2+14,"text-anchor":"middle","font-size":12,fill:"#0E6E80","font-family":Mn,text:v.isf.toFixed(1)+" L"});
+      el("text",{x:x0+wI+9+wS+wP/2,y:y-8,"text-anchor":"middle","font-size":12,"font-weight":600,fill:"#8E1C22","font-family":Fn,text:"Plasma"});
+      el("text",{x:x0+wI+9+wS+wP/2,y:y+h+16,"text-anchor":"middle","font-size":12,fill:"#8E1C22","font-family":Mn,text:v.pl.toFixed(2)+" L"});
+    }
+    return {bIS:x0+wI+3,bSP:x0+wI+6+wS+1.5,end:x0+wI+9+wS+wP};
+  }
+  boxes(L.V0,y0,true); var g=boxes(st,y0,false);
+  el("text",{x:20,y:y0+h/2+4,"font-size":12.5,fill:"#5E6075","font-family":Fn,text:"TBW"});
+  el("text",{x:20,y:y0+h/2+20,"font-size":12,fill:"#0B0B1F","font-family":Mn,text:(st.icf+st.isf+st.pl).toFixed(1)+" L"});
+  /* moving water drops */
+  function drops(xa,xb,n,col,y1,y2){ for(var i=0;i<n;i++){ var u=((t*1.8+i/n)%1), x=xa+(xb-xa)*u, y=y1+(y2-y1)*((i*37)%n)/n; el("circle",{cx:x,cy:y,r:4,fill:col,opacity:(0.25+0.75*Math.sin(Math.PI*u)).toFixed(2)}); } }
+  var dI=(L.VC.icf-L.V0.icf)*1000, dU=(L.VD.icf-L.VC.icf)*1000;
+  if(!done&&ph===0){ drops(g.end+40,g.end+2,6,"#E5484D",y0+20,y0+h-20); el("text",{x:g.end+44,y:y0+h/2,"font-size":12,fill:"#B4232A","font-family":Fn,text:"IV "+f.label}); }
+  if(!done&&ph===1){ drops(g.bSP+16,g.bSP-30,6,"#3A9AD9",y0+20,y0+h-20); if(Math.abs(dI)>15){ if(dI<0) drops(g.bIS-28,g.bIS+28,8,"#3A9AD9",y0+25,y0+h-25); else drops(g.bIS+28,g.bIS-28,8,"#3A9AD9",y0+25,y0+h-25); } }
+  if(!done&&ph===2&&L.Vu){ drops(g.end-4,g.end+40,6,"#C9A227",y0+20,y0+h-20); el("text",{x:g.end+12,y:y0+h+16,"font-size":12,fill:"#8A6D10","font-family":Fn,text:"Urine"}); if(Math.abs(dU)>15){ if(dU<0) drops(g.bIS-28,g.bIS+28,6,"#3A9AD9",y0+25,y0+h-25); else drops(g.bIS+28,g.bIS-28,6,"#3A9AD9",y0+25,y0+h-25); } }
+  var shift=(st.icf-L.V0.icf)*1000;
+  if(Math.abs(shift)>15){
+    var dir=shift>0?-1:1, y=y0+h+38, ax=g.bIS;
+    el("path",{d:"M"+(ax-40*dir)+" "+y+" L"+(ax+40*dir)+" "+y,stroke:"#0B0B1F","stroke-width":2.5});
+    el("path",{d:"M"+(ax+40*dir)+" "+y+" l"+(-8*dir)+" -5 l0 10 z",fill:"#0B0B1F"});
+    el("text",{x:ax,y:y+20,"text-anchor":"middle","font-size":12.5,fill:"#0B0B1F","font-family":Fn,text:"Water "+(shift>0?"into cells ":"out of cells ")+Math.abs(Math.round(shift))+" ml"});
+  }
+  el("text",{x:20,y:28,"font-size":13,"font-weight":600,fill:"#0B0B1F","font-family":Fn,text:f.label+" "+p.vol+" ml"+(L.Vu?"  then urine "+p.urine+" ml (Na+K "+p.uosm+")":"")});
+  el("text",{x:20,y:48,"font-size":12,fill:"#5E6075","font-family":Mn,text:"Na "+p.na+" → "+na.toFixed(1)+"   "+(ph===0?"Infusing":ph===1?"Redistributing":L.Vu&&!done?"Urine output":"Steady state")});
+}
+Sim.mount({code:"EL-02", title:"Body Water Compartments and Osmolality", lead:"เลือกสารน้ำและปริมาตร ดูน้ำกระจายระหว่าง ICF, ISF และ plasma ตาม effective osmolality แล้วเปิดปัสสาวะเพื่อดูว่าไตเปลี่ยนผลของสารน้ำอย่างไร",
+  scenarios:S, order:ORDER, captureMs:1200,
+  onChange:function(k,s){ var p=s.p; SEL.fl.value=p.fl; SEL.sex.value=p.sex; ["vol","w","na","glu","urine","uosm"].forEach(function(x){ C[x].set(p[x]); }); update(); },
+  refs:["Adrogué HJ, Madias NE. Hyponatremia. N Engl J Med 2000, 342(21): 1581-1589",
+        "Edelman IS, Leibman J, O'Meara MP, Birkenfeld LW. Interrelations between serum sodium concentration, serum osmolarity and total exchangeable sodium, total exchangeable potassium and total body water. J Clin Invest 1958, 37(9): 1236-1256",
+        "Steele A, Gowrishankar M, Abrahamson S, et al. Postoperative hyponatremia despite near-isotonic saline infusion: a phenomenon of desalination. Ann Intern Med 1997, 126(1): 20-25",
+        "Spasovski G, Vanholder R, Allolio B, et al. Clinical practice guideline on diagnosis and treatment of hyponatraemia. Nephrol Dial Transplant 2014, 29 Suppl 2: i1-i39"],
+  note:"Model เพื่อการสอน: TBW = fraction x น้ำหนัก ICF 2/3 ECF 1/3 plasma 1/4 ของ ECF effective osmolality = 2Na + glucose/18 (+ mannitol) urea ไม่นับเพราะผ่านเยื่อหุ้มเซลล์ ICF osmoles คงที่ glucose ใน D5W ถือว่าถูก metabolize หมด"
+});
+})();
+</script>
+</body>
+</html>

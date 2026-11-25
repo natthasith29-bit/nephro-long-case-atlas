@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[HD-04] Urea Kinetics and Adequacy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.kv{display:grid;grid-template-columns:1fr auto;gap:2px 12px;font-size:13.5px;margin-top:10px}
+.kv span:nth-child(odd){color:var(--muted)}
+.kv span:nth-child(even){font-family:var(--mono);text-align:right}
+.sel{display:grid;grid-template-columns:minmax(120px,170px) 1fr;gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+.ctl{grid-template-columns:minmax(110px,150px) 1fr 108px}
+body.present .bench{grid-template-columns:1.5fr 1fr}
+body.present #plot{max-height:440px}
+body.present .readout{grid-template-columns:repeat(3,1fr)}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present #steps{display:none}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>BUN ตลอด 1 สัปดาห์ (steady state)</h2>
+      <div class="svgwrap"><svg id="plot" viewBox="0 0 640 330" role="img" aria-label="Urea sawtooth curve"></svg></div>
+      <p class="hint no-present">แถบสีจาง = ช่วงฟอก จุดคือ pre และ post BUN ของ session กลางสัปดาห์ที่ใช้คำนวณ เส้นประ = ความเข้มข้นหลัง equilibration (rebound)</p>
+      <div class="tools no-present">
+        <button class="tog" type="button" id="tLate" aria-pressed="false">เจาะ post BUN ช้า 15 นาทีหลังหยุดปั๊ม</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Prescription</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roPre"><b>-</b><span>Pre BUN (mg/dL)</span></div>
+        <div class="ro" id="roPost"><b>-</b><span>Post BUN (mg/dL)</span></div>
+        <div class="ro" id="roURR"><b>-</b><span>URR (%)</span></div>
+        <div class="ro" id="roSp"><b>-</b><span>spKt/V</span></div>
+        <div class="ro" id="roE"><b>-</b><span>eKt/V</span></div>
+        <div class="ro" id="roStd"><b>-</b><span>stdKt/V รวม RKF</span></div>
+      </div>
+      <div class="kv secondary" id="kv"></div>
+      <details class="secondary" style="margin-top:12px" id="steps"><summary style="cursor:pointer;color:var(--accent);font-weight:500">Worked steps (แบบเขียนใน MEQ)</summary><ol class="steps" id="stepList"></ol></details>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script>
+(function(){
+"use strict";
+var INK="#0B0B1F", ACC="#5B4BFF", ACC2="#19C8E6", LINE="#E6E7F0", MUTED="#5E6075", RED="#B4232A", TEAL="#1F7A72";
+var MONO="Geist Mono, monospace", THAI="IBM Plex Sans Thai, sans-serif";
+/* ---------- scenarios ---------- */
+var S = {
+  normal:{name:"3 ครั้ง/สัปดาห์ มาตรฐาน", p:{W:72,t:240,Qb:300,Qd:500,KoA:1200,N:3,gain:1.0,Kru:0,G:8},
+    rows:[["Prescription","HD 3 ครั้ง/สัปดาห์ 4 ชั่วโมง Qb 300 Qd 500 KoA 1,200 dry weight 72 kg"],["ผล","spKt/V ราว 1.4 และ stdKt/V ราว 2.3 ผ่านเป้า KDOQI 2015"],["จุดสังเกต","BUN สูงสุดคือก่อนฟอกครั้งแรกหลัง long interval (วันจันทร์)"]],
+    take:["spKt/V เป้า 1.4 ต่อ session ขั้นต่ำที่ยอมรับ 1.2 (thrice weekly)","stdKt/V เป้า 2.3 ขั้นต่ำ 2.1 ใช้เทียบข้ามความถี่ได้","เจาะ pre และ post BUN ใน session กลางสัปดาห์","Dose ที่สูงเกินเป้าไม่ลด mortality"],
+    quiz:[{q:"ผู้ป่วย HD 3 ครั้ง/สัปดาห์ spKt/V 1.52 stdKt/V 2.4 albumin 3.9 ไม่มีอาการ uremia ข้อใดเหมาะที่สุด",opts:["ให้ prescription เดิม ติดตาม Kt/V ทุกเดือน","เพิ่มเวลาเป็น 5 ชั่วโมงเพื่อให้ eKt/V ≥ 1.5","เปลี่ยนเป็น HDF เพื่อเพิ่ม Kt/V","เพิ่มเป็น 4 ครั้ง/สัปดาห์"],ans:0,why:"Kt/V ผ่านเป้าแล้ว HEMO แสดงว่าการเพิ่ม dose เกินเป้าไม่ลด mortality จึงให้ prescription เดิมและติดตามเป็นประจำ"}]},
+  short:{name:"Session สั้น 3 ชั่วโมง", p:{W:72,t:180,Qb:300,Qd:500,KoA:1200,N:3,gain:1.0,Kru:0,G:8},
+    rows:[["Prescription","เหมือนเดิมแต่ t 180 นาที"],["ผล","spKt/V ต่ำกว่า 1.2 และ stdKt/V ต่ำกว่า 2.1"],["สาเหตุที่พบบ่อย","ผู้ป่วยขอเลิกก่อน, alarm หยุดปั๊ม, เริ่มช้า"]],
+    take:["เวลาฟอกเป็นตัวแปรที่แรงที่สุดในทางปฏิบัติ","ตรวจ treatment time จริงใน HD sheet ก่อนเปลี่ยน dialyzer","นอกจาก urea เวลาที่ยาวขึ้นยังช่วยเรื่อง UF rate และ phosphate"],
+    quiz:[{q:"spKt/V 1.05 ทั้งที่สั่ง 4 ชั่วโมง HD sheet บันทึกว่าลงเครื่องจริง 3 ชั่วโมงทุกครั้งเพราะผู้ป่วยขอเลิก ขั้นต่อไปที่เหมาะที่สุดคือข้อใด",opts:["เปลี่ยน dialyzer เป็น KoA สูงขึ้น","คุยกับผู้ป่วยเรื่องอาการที่ทำให้ขอเลิกและให้ครบเวลาที่สั่ง","ส่ง fistulogram","เพิ่ม Qd เป็น 800 ml/min"],ans:1,why:"ปัญหาคือ delivered time ไม่ใช่ prescription ต้องหาสาเหตุ (cramp, IDH, ปวด) และแก้ให้ฟอกครบเวลา ก่อนปรับ K"}]},
+  large:{name:"ตัวใหญ่ V มาก", p:{W:110,t:240,Qb:350,Qd:500,KoA:1200,N:3,gain:1.5,Kru:0,G:12},
+    rows:[["ผู้ป่วย","ชาย dry weight 110 kg V ราว 60 L"],["ผล","prescription มาตรฐานได้ spKt/V ต่ำกว่า 1.2"],["ทางแก้","เพิ่ม t ก่อน แล้วเพิ่ม Qb และ KoA หรือเพิ่มความถี่"]],
+    take:["Kt/V แปรผกผันกับ V คนตัวใหญ่ต้องการ Kt มากขึ้นเป็นสัดส่วน","K เพิ่มตาม Qb และ KoA แบบอิ่มตัว เพิ่ม Qb จาก 400 ไป 500 ได้ K เพิ่มไม่มาก","การเพิ่ม t ให้ผลเกือบเป็นเส้นตรง"],
+    quiz:[{q:"ชาย 110 kg HD 4 ชั่วโมง Qb 350 KoA 1,200 spKt/V 1.08 access ทำงานดี ไม่มี recirculation ข้อใดเพิ่ม Kt/V ได้มากที่สุดและเป็นไปได้",opts:["เพิ่ม Qd จาก 500 เป็น 600","เพิ่มเวลาเป็น 5 ชั่วโมงร่วมกับ Qb 400 และ dialyzer KoA สูง","ลด UF ต่อ session","เปลี่ยน heparin เป็น heparin-free"],ans:1,why:"Kt/V แปรตาม K × t / V การเพิ่ม t เกือบเป็นเส้นตรง ร่วมกับเพิ่ม K จาก Qb และ KoA ส่วน Qd เพิ่มได้น้อยมากเมื่อเกิน 1.5 เท่าของ Qb"}]},
+  twiceKru:{name:"2 ครั้ง/สัปดาห์ + Kru 4", p:{W:70,t:240,Qb:300,Qd:500,KoA:1200,N:2,gain:0.6,Kru:4,G:7},
+    rows:[["Prescription","incremental HD 2 ครั้ง/สัปดาห์ เพิ่งเริ่ม KRT"],["RKF","Kru 4 ml/min ปัสสาวะราว 1 L/วัน"],["ผล","stdKt/V จากเครื่องอย่างเดียวไม่ถึง 2.1 แต่รวม RKF แล้วผ่าน"]],
+    take:["twice weekly ใช้ได้เมื่อมี RKF พอ (แนวปฏิบัติส่วนใหญ่ใช้ Kru ราว 3 ml/min ขึ้นไป) และ total stdKt/V ≥ 2.1","spKt/V ต่อ session ใช้ตัดสิน twice weekly ไม่ได้ ต้องใช้ stdKt/V","ต้องวัด Kru ซ้ำทุก 1–3 เดือน (urine collection ช่วง interdialytic)","เมื่อ Kru ลดลงต้องเพิ่มเป็น 3 ครั้ง/สัปดาห์"],
+    quiz:[{q:"ผู้ป่วย incremental HD 2 ครั้ง/สัปดาห์ เดิม Kru 4 ml/min วันนี้วัดได้ 1.5 ml/min stdKt/V รวมลดเหลือ 1.8 ขั้นต่อไปที่เหมาะที่สุดคือข้อใด",opts:["คงเดิมเพราะ spKt/V ต่อ session 1.6","เพิ่มเป็น HD 3 ครั้ง/สัปดาห์","ให้ furosemide ขนาดสูงเพื่อเพิ่ม Kru","เพิ่ม Qb เป็น 450 ml/min แล้วคง 2 ครั้ง"],ans:1,why:"เมื่อ RKF ลดลงจน total stdKt/V ต่ำกว่า 2.1 ต้องเพิ่มความถี่ furosemide เพิ่มปริมาณปัสสาวะแต่ไม่เพิ่ม urea clearance"}]},
+  twiceLow:{name:"2 ครั้ง/สัปดาห์ RKF น้อย", p:{W:70,t:240,Qb:300,Qd:500,KoA:1200,N:2,gain:1.2,Kru:0.5,G:7},
+    rows:[["Prescription","HD 2 ครั้ง/สัปดาห์ แต่ Kru เหลือ 0.5 ml/min"],["ผล","spKt/V ต่อ session ดูดี แต่ stdKt/V ต่ำกว่า 2.1 ชัดเจน BUN ก่อนฟอกสูงมาก"],["ความเสี่ยง","interval ยาว 3–4 วัน น้ำเกินและ hyperkalemia"]],
+    take:["spKt/V สูงต่อ session ไม่ได้แปลว่า weekly dose พอ","stdKt/V คิดจากทั้งสัปดาห์ จึงลงโทษความถี่ต่ำ","ผู้ป่วยไม่มี RKF ต้อง HD อย่างน้อย 3 ครั้ง/สัปดาห์"],
+    quiz:[{q:"HD 2 ครั้ง/สัปดาห์ spKt/V 1.7 ต่อ session Kru 0.5 ml/min K 6.4 ก่อนฟอกวันจันทร์ ข้อใดถูกต้อง",opts:["dose เพียงพอเพราะ spKt/V > 1.4","stdKt/V ไม่ถึง 2.1 ควรเพิ่มเป็น 3 ครั้ง/สัปดาห์","เพิ่ม KoA เพื่อให้ spKt/V 2.0 แล้วคง 2 ครั้ง","เปลี่ยนเป็น HDF 2 ครั้ง/สัปดาห์"],ans:1,why:"เป้า spKt/V 1.2–1.4 ใช้กับ thrice weekly เท่านั้น ความถี่ 2 ครั้งโดยไม่มี RKF ให้ stdKt/V ต่ำและเสี่ยง K และน้ำเกินช่วง interval ยาว"}]},
+  catheter:{name:"Catheter Qb 220", p:{W:72,t:240,Qb:220,Qd:500,KoA:1200,N:3,gain:1.0,Kru:0,G:8},
+    rows:[["Access","tunneled catheter ได้ Qb สูงสุด 220 ml/min"],["ผล","K ลดลง spKt/V ต่ำกว่า 1.2"],["ทางแก้ระยะสั้น","เพิ่ม t, แก้ catheter dysfunction (tPA lock), วางแผน AVF"]],
+    take:["Qb เป็นตัวจำกัด K เมื่อ KoA สูงแล้ว","Catheter dysfunction: นิยามเดิม (KDOQI 2006) คือ Qb ไม่ถึง 300 ml/min ทั้งที่ prepump arterial pressure ติดลบเกิน −250 mmHg ส่วน KDOQI 2019 ใช้ Qb ไม่ถึงที่สั่งจนฟอกได้ไม่เพียงพอ","แก้สาเหตุของ Qb ต่ำก่อนเพิ่มเวลา"],
+    quiz:[{q:"ผู้ป่วยใช้ tunneled catheter ได้ Qb เพียง 220 ml/min เพราะ arterial pressure alarm ทุกครั้งที่เพิ่มขึ้น spKt/V 1.1 ขั้นต่อไปที่เหมาะที่สุดคือข้อใด",opts:["สลับสาย arterial และ venous ถาวร","ให้ thrombolytic lock (alteplase) และประเมิน catheter dysfunction","เพิ่ม Qd เป็น 800","ลดเวลาเพื่อลด alarm"],ans:1,why:"Qb ต่ำจาก catheter มักเกิดจาก thrombus หรือ fibrin sheath ใช้ alteplase lock ก่อน ถ้าไม่ดีขึ้นพิจารณาเปลี่ยนสาย การสลับสายเพิ่ม recirculation"}]},
+  sampling:{name:"Post BUN เจาะช้า", p:{W:72,t:240,Qb:300,Qd:500,KoA:1200,N:3,gain:1.0,Kru:0,G:8}, late:true,
+    rows:[["Prescription","เหมือน baseline ทุกอย่าง"],["การเจาะ","post BUN เจาะหลังหยุดปั๊ม 15 นาที"],["ผล","post BUN สูงจาก urea rebound URR และ spKt/V ต่ำปลอม"]],
+    take:["post BUN ต้องเจาะด้วย slow-flow (Qb 100 ml/min 15–30 วินาที) หรือหยุด dialysate flow 3–5 นาทีก่อนเจาะ","เจาะช้าได้ post BUN ใกล้ equilibrated BUN ค่า Kt/V ที่คำนวณได้จึงต่ำกว่า spKt/V จริง","เจาะ pre BUN ปน saline หรือ heparin ทำให้ pre ต่ำและ Kt/V ต่ำปลอมเช่นกัน"],
+    quiz:[{q:"spKt/V ลดจาก 1.45 เหลือ 1.12 ในเดือนนี้ โดย prescription, delivered time และ access flow เหมือนเดิม พบว่าพยาบาลใหม่เจาะ post BUN หลังถอดเข็ม ข้อใดเหมาะที่สุด",opts:["เพิ่มเวลาฟอกเป็น 4.5 ชั่วโมง","เปลี่ยน dialyzer","เจาะ post BUN ใหม่ด้วย slow-flow technique ก่อนปรับ prescription","ส่ง access flow surveillance"],ans:2,why:"Kt/V ลดลงทันทีโดยไม่มีอะไรเปลี่ยนให้สงสัย sampling error ก่อน การเจาะช้าทำให้ post BUN สูงจาก rebound"}]}
+};
+var ORDER=["normal","short","large","twiceKru","twiceLow","catheter","sampling"];
+
+/* ---------- controls ---------- */
+var box=document.getElementById("ctls"), C={};
+function sl(k,o){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); box.appendChild(C[k].el); return C[k]; }
+sl("W",{label:"Dry weight",min:40,max:120,step:1,value:65,unit:"kg"});
+sl("t",{label:"Time (t)",min:120,max:360,step:15,value:240,unit:"min"});
+sl("Qb",{label:"Qb",min:150,max:500,step:10,value:350,unit:"ml/min"});
+sl("Qd",{label:"Qd",min:300,max:800,step:50,value:500,unit:"ml/min"}).el.classList.add("secondary");
+sl("KoA",{label:"Dialyzer KoA",min:600,max:1800,step:50,value:1200,unit:""}).el.classList.add("secondary");
+var nSel=Sim.h("select",{id:"sN"},[2,3,4,6].map(function(n){ return Sim.h("option",{value:n,text:n+" ครั้ง/สัปดาห์"}); }));
+nSel.value="3"; nSel.addEventListener("change",update);
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"sN",text:"ความถี่"}),nSel]));
+sl("gain",{label:"Fluid gain",min:0,max:2.5,step:0.1,value:1,unit:"L/วัน",fmt:function(v){return v.toFixed(1);}}).el.classList.add("secondary");
+sl("Kru",{label:"Kru (RKF)",min:0,max:8,step:0.5,value:0,unit:"ml/min",fmt:function(v){return v.toFixed(1);}});
+sl("G",{label:"Urea generation",min:4,max:14,step:0.5,value:8,unit:"mg/min",fmt:function(v){return v.toFixed(1);}}).el.classList.add("secondary");
+var late=false, tLate=document.getElementById("tLate");
+tLate.addEventListener("click",function(){ late=!late; tLate.setAttribute("aria-pressed",late?"true":"false"); update(); });
+
+/* ---------- model ---------- */
+// Michaels equation on blood-water flow with in vivo KoA (0.75 x in vitro)
+function clearance(Qb,Qd,KoA){
+  var qb=Qb*0.86, koa=KoA*0.7, r=qb/Qd, z=koa/qb*(1-r);
+  if(Math.abs(1-r)<1e-6) return qb*koa/(qb+koa);
+  var e=Math.exp(z); return qb*(e-1)/(e-r);
+}
+function schedule(N){ // session start times (min from Monday 00:00), 08:00
+  var days={2:[0,3],3:[0,2,4],4:[0,1,3,5],6:[0,1,2,3,4,5]}[N];
+  return days.map(function(d){ return d*1440+480; });
+}
+function simulate(p){
+  var K=clearance(p.Qb,p.Qd,p.KoA)/100, Kr=p.Kru/100; // dL/min
+  var Vd=0.55*p.W*10, starts=schedule(p.N), wk=10080, dt=2;
+  var gainPerMin=p.gain*10/1440; // dL/min of fluid gain
+  // UF per session = gain over preceding interval
+  var uf=starts.map(function(s,i){ var prev=starts[(i-1+starts.length)%starts.length]; var gap=(s-prev+wk)%wk; return gap*gainPerMin; });
+  var V=Vd+uf[0], M=V*60, pts=[], rep=null, repIdx=Math.floor(starts.length/2);
+  for(var w=0; w<4; w++){
+    for(var m=0; m<wk; m+=dt){
+      var on=-1; for(var i=0;i<starts.length;i++){ if(m>=starts[i] && m<starts[i]+p.t){ on=i; break; } }
+      var Cc=M/V, Kt=Kr+(on>=0?K:0);
+      M += (p.G - Kt*Cc)*dt;
+      V += on>=0 ? -uf[on]/p.t*dt : gainPerMin*dt;
+      if(w===3){
+        if(m%20===0) pts.push([m, M/V]);
+        if(on===repIdx && m===starts[repIdx]) rep={pre:Cc, V0:V};
+        if(on===repIdx && m===starts[repIdx]+p.t-dt) { rep.post=M/V; rep.Vpost=V; }
+      }
+    }
+  }
+  return {pts:pts, rep:rep, K:K*100, starts:starts, uf:uf[repIdx]/10, ufw:uf.reduce(function(a,b){return a+b;},0)/10, Vpost:rep.Vpost/10};
+}
+function daugirdas(R,th,UF,W){ return -Math.log(R-0.008*th)+(4-3.5*R)*UF/W; }
+function eKtV(sp,th){ return sp-0.6*sp/th+0.03; }
+function stdKtV(e,t,N,ufw,V){
+  var a=1-Math.exp(-e), S=(10080*a/t)/(a/e+10080/(N*t)-1);
+  return S/(1-0.74/N*ufw/V);
+}
+
+/* ---------- draw ---------- */
+var svg=document.getElementById("plot");
+function txt(x,y,s,o){ o=o||{}; return Sim.svg("text",{x:x,y:y,"text-anchor":o.a||"middle","font-family":o.mono?MONO:THAI,"font-size":o.s||11.5,"font-weight":o.w||400,fill:o.f||MUTED,text:s},svg); }
+function draw(r,meas){
+  svg.innerHTML="";
+  var X0=46,X1=624,Y0=290,Y1=22, maxC=Math.max(120, Math.ceil(Math.max.apply(null,r.pts.map(function(q){return q[1];}))/20)*20+10);
+  var sx=function(m){ return X0+(X1-X0)*m/10080; }, sy=function(c){ return Y0-(Y0-Y1)*c/maxC; };
+  for(var c=0;c<=maxC;c+=20){ Sim.svg("line",{x1:X0,x2:X1,y1:sy(c),y2:sy(c),stroke:LINE},svg); txt(X0-8,sy(c)+4,String(c),{a:"end",mono:true,s:10.5}); }
+  ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].forEach(function(d,i){ txt(sx(i*1440+720),Y0+18,d,{s:11.5}); Sim.svg("line",{x1:sx(i*1440),x2:sx(i*1440),y1:Y1,y2:Y0,stroke:LINE,"stroke-dasharray":"2 4"},svg); });
+  r.starts.forEach(function(s){ Sim.svg("rect",{x:sx(s),y:Y1,width:Math.max(2,sx(s+C.t.get())-sx(s)),height:Y0-Y1,fill:"#EFEDFF"},svg); });
+  txt(X0,Y1-8,"BUN (mg/dL)",{a:"start",s:11});
+  var d=r.pts.map(function(q,i){ return (i?"L":"M")+sx(q[0]).toFixed(1)+" "+sy(q[1]).toFixed(1); }).join(" ");
+  Sim.svg("path",{d:d,fill:"none",stroke:INK,"stroke-width":2.2,"stroke-linejoin":"round"},svg);
+  // continuous kidney-equivalent (TAC) line
+  var tac=r.pts.reduce(function(a,q){return a+q[1];},0)/r.pts.length;
+  Sim.svg("line",{x1:X0,x2:X1,y1:sy(tac),y2:sy(tac),stroke:ACC2,"stroke-width":1.5,"stroke-dasharray":"6 4"},svg);
+  txt(X1,sy(tac)-6,"TAC "+tac.toFixed(0),{a:"end",mono:true,s:10.5,f:"#0e8aa0"});
+  // report session markers
+  var s0=r.starts[Math.floor(r.starts.length/2)], t=C.t.get();
+  var ceqY=sy(meas.ceq);
+  Sim.svg("path",{d:"M"+sx(s0+t)+" "+sy(r.rep.post)+" Q"+(sx(s0+t)+10)+" "+ceqY+" "+(sx(s0+t+60))+" "+ceqY,fill:"none",stroke:ACC,"stroke-width":1.6,"stroke-dasharray":"3 3"},svg);
+  [[s0,r.rep.pre,"pre "+r.rep.pre.toFixed(0),INK],[s0+t+(late?15:0),meas.post,"post "+meas.post.toFixed(0),late?RED:ACC]].forEach(function(q,i){
+    Sim.svg("circle",{cx:sx(q[0]),cy:sy(q[1]),r:5,fill:"#fff",stroke:q[3],"stroke-width":2.4},svg);
+    txt(sx(q[0])+(i?10:-8),sy(q[1])+(i?16:-8),q[2],{a:i?"start":"end",mono:true,s:11.5,f:q[3],w:500});
+  });
+}
+
+/* ---------- update ---------- */
+function params(){ return {W:C.W.get(),t:C.t.get(),Qb:C.Qb.get(),Qd:C.Qd.get(),KoA:C.KoA.get(),N:parseInt(nSel.value,10),gain:C.gain.get(),Kru:C.Kru.get(),G:C.G.get()}; }
+function update(){
+  var p=params(), r=simulate(p), th=p.t/60, V=r.Vpost, W=p.W;
+  // true values (prompt sample)
+  var R=r.rep.post/r.rep.pre, sp=daugirdas(R,th,r.uf,W), e=eKtV(sp,th);
+  var ceq=r.rep.post*Math.exp(sp-e);
+  var post=late ? r.rep.post+(ceq-r.rep.post)*(1-Math.exp(-15/12)) : r.rep.post;
+  var Rm=post/r.rep.pre, spm=daugirdas(Rm,th,r.uf,W), em=eKtV(spm,th);
+  var stdD=stdKtV(em,p.t,p.N,r.ufw,V), ren=p.Kru*10080/(V*1000), std=stdD+ren, urr=(1-Rm)*100;
+  draw(r,{post:post,ceq:ceq});
+  var thrice=p.N===3;
+  Sim.ro("roPre",Sim.fmt(r.rep.pre,0));
+  Sim.ro("roPost",Sim.fmt(post,0),late?"flag":false);
+  Sim.ro("roURR",Sim.fmt(urr,0),thrice?(urr<65?"flag":"ok"):false);
+  Sim.ro("roSp",Sim.fmt(spm,2),thrice?(spm<1.2?"flag":(spm>=1.4?"ok":false)):false);
+  Sim.ro("roE",Sim.fmt(em,2));
+  Sim.ro("roStd",Sim.fmt(std,2),std<2.1?"flag":(std>=2.3?"ok":false));
+  document.getElementById("kv").innerHTML="";
+  [["K (Michaels, in vivo)",Sim.fmt(r.K,0)+" ml/min"],["V post (0.55 × W)",Sim.fmt(V,1)+" L"],["Model Kt/V = K × t / V",Sim.fmt(r.K*p.t/(V*1000),2)],["UF session กลางสัปดาห์",Sim.fmt(r.uf,1)+" L"],["stdKt/V จากเครื่อง",Sim.fmt(stdD,2)],["Renal Kt/V ต่อสัปดาห์",Sim.fmt(ren,2)],["เป้า (KDOQI 2015)",thrice?"spKt/V ≥ 1.2 เป้า 1.4":"ใช้ stdKt/V ≥ 2.1"]].forEach(function(x){
+    document.getElementById("kv").appendChild(Sim.h("span",{text:x[0]})); document.getElementById("kv").appendChild(Sim.h("span",{text:x[1]}));
+  });
+  var L=document.getElementById("stepList"); L.innerHTML="";
+  ["R = post/pre = "+post.toFixed(1)+"/"+r.rep.pre.toFixed(1)+" = "+Rm.toFixed(3),
+   "spKt/V = −ln(R − 0.008 × t) + (4 − 3.5R) × UF/W = −ln("+Rm.toFixed(3)+" − 0.008 × "+th.toFixed(2)+") + (4 − 3.5 × "+Rm.toFixed(3)+") × "+r.uf.toFixed(1)+"/"+W+" = "+spm.toFixed(2),
+   "eKt/V = spKt/V − 0.6 × spKt/V / t + 0.03 = "+em.toFixed(2),
+   "stdKt/V (FHN) = [10080(1 − e^−eKt/V)/t] / [(1 − e^−eKt/V)/eKt/V + 10080/(N t) − 1] แล้วหารด้วย 1 − 0.74/N × UFweek/V = "+stdD.toFixed(2),
+   "Renal = Kru × 10080 / V = "+p.Kru.toFixed(1)+" × 10080 / "+(V*1000).toFixed(0)+" = "+ren.toFixed(2)+" รวม "+std.toFixed(2)
+  ].forEach(function(s){ L.appendChild(Sim.h("li",{},[Sim.h("code",{text:s})])); });
+}
+
+Sim.mount({code:"HD-04", title:"Urea Kinetics and Adequacy", lead:"ปรับเวลา Qb dialyzer ความถี่ และ RKF แล้วดู BUN sawtooth, URR, spKt/V, eKt/V และ stdKt/V",
+  scenarios:S, order:ORDER,
+  onChange:function(k,s){ var p=s.p; ["W","t","Qb","Qd","KoA","gain","Kru","G"].forEach(function(x){ C[x].set(p[x]); }); nSel.value=String(p.N); late=!!s.late; tLate.setAttribute("aria-pressed",late?"true":"false"); update(); },
+  refs:["National Kidney Foundation. KDOQI Clinical Practice Guideline for Hemodialysis Adequacy: 2015 Update. Am J Kidney Dis 2015, 66(5): 884-930",
+        "Daugirdas JT. Second generation logarithmic estimates of single-pool variable volume Kt/V: an analysis of error. J Am Soc Nephrol 1993, 4(5): 1205-1213",
+        "Daugirdas JT, Depner TA, Greene T, et al. Standard Kt/V urea: a method of calculation that includes effects of fluid removal and residual kidney clearance. Kidney Int 2010, 77(7): 637-644",
+        "Eknoyan G, Beck GJ, Cheung AK, et al. Effect of dialysis dose and membrane flux in maintenance hemodialysis (HEMO). N Engl J Med 2002, 347(25): 2010-2019",
+        "Michaels AS. Operating parameters and performance criteria for hemodialyzers and other membrane-separation devices. Trans Am Soc Artif Intern Organs 1966, 12: 387-392"],
+  note:"Single-pool variable-volume model, V = 0.55 × dry weight, K จาก Michaels equation (blood water 0.86, KoA in vivo 0.7) ค่าเพื่อการสอน"
+});
+})();
+</script>
+</body>
+</html>

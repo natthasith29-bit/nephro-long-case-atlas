@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[AKI-12] AKI Biomarkers and Furosemide Stress Test</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.3fr 1fr}}
+.sel{display:grid;grid-template-columns:minmax(80px,150px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.two{display:grid;grid-template-columns:1.35fr 0.65fr;gap:12px;align-items:center}
+@media (max-width:700px){.two{grid-template-columns:1fr}}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.tools{margin-top:12px}
+#roQ b{font-size:18px;word-break:break-word}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:14px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .ro{padding:6px 12px}
+body.present .ro b{font-size:19px}
+body.present .ctls{gap:2px}
+body.present .ctl{font-size:13px}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Biomarker เทียบ cut-off ตามเวลาหลัง insult</h2>
+      <div class="two">
+        <div id="chart"></div>
+        <div class="svgwrap"><svg id="quad" viewBox="0 0 220 230" role="img" aria-label="Functional and damage biomarker quadrant"></svg></div>
+      </div>
+      <p class="hint no-present">แกนซ้ายเป็นค่าเท่าของ cut-off (log) เกิน 1 คือผลบวก damage marker (NGAL, TIMP-2 x IGFBP7) ขึ้นก่อน Cr หลายชั่วโมง CCL14 ใช้ทำนาย persistent AKI เมื่อเป็น stage 2–3 แล้ว ช่องขวาคือการแบ่ง AKI ตาม functional (Cr/UO) และ damage marker</p>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วยและการตรวจ</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roN"><b>-</b><span>Urine NGAL (ng/mL)</span></div>
+        <div class="ro" id="roT"><b>-</b><span>TIMP-2 x IGFBP7</span></div>
+        <div class="ro" id="roC"><b>-</b><span>Urine CCL14 (ng/mL)</span></div>
+        <div class="ro" id="roCr"><b>-</b><span>Cr / baseline</span></div>
+        <div class="ro" id="roF"><b>-</b><span>FST UO ใน 2 ชม. (mL)</span></div>
+        <div class="ro" id="roQ"><b>-</b><span>Category</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script>
+(function(){
+"use strict";
+/* dam: damage magnitude, fun: functional loss (GFR drop 0..1), pers: persistence */
+var TY={none:{n:"ไม่มี AKI",dam:0.1,fun:0,pers:0},func:{n:"Functional (prerenal, hemodynamic)",dam:0.25,fun:0.5,pers:0},sub:{n:"Subclinical damage",dam:2.5,fun:0.15,pers:0.2},atn:{n:"ATN ฟื้นได้",dam:3,fun:0.65,pers:0.4},sev:{n:"ATN รุนแรง persistent",dam:8,fun:0.85,pers:1}};
+function P(o){ var d={ty:"atn",t:12,w:70,fst:false,exp:false}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  early:{name:"หลัง cardiac surgery 4 ชม.", p:P({ty:"atn",t:4}),
+    rows:[["ผู้ป่วย","CABG + valve bypass 180 นาที"],["ชั่วโมงที่ 4","NGAL และ TIMP-2 x IGFBP7 สูง Cr ยังปกติ"],["ความหมาย","มี tubular stress/damage ก่อน Cr ขึ้น"]],
+    take:["Damage biomarker ขึ้นก่อน Cr 24–48 ชม. ช่วยระบุกลุ่มเสี่ยงสูงให้ทำ care bundle เร็ว","TIMP-2 x IGFBP7 > 0.3 = high risk ต่อ AKI stage 2–3 ใน 12 ชม. > 2.0 = very high risk","ผลบวกควรนำไปสู่การกระทำ (หยุด nephrotoxin, optimize hemodynamics, หลีกเลี่ยง hyperglycemia)"]},
+  func:{name:"Prerenal/functional", p:P({ty:"func",t:24}),
+    rows:[["ผู้ป่วย","ท้องเสีย Cr 1.0 → 1.6"],["Biomarker","NGAL และ TIMP-2 x IGFBP7 ต่ำ"],["ความหมาย","functional AKI ไม่มี tubular damage พยากรณ์ดี"]],
+    take:["แบ่ง AKI เป็น 4 กลุ่มตาม functional marker (Cr/UO) และ damage marker","Functional+ damage− บอกว่า Cr ขึ้นจาก hemodynamic ไม่ใช่ injury","ไม่ต้องใช้ biomarker ในทุกเคส ใช้เมื่อผลจะเปลี่ยนการรักษา"]},
+  sub:{name:"Subclinical AKI", p:P({ty:"sub",t:24}),
+    rows:[["ผู้ป่วย","หลัง contrast ขนาดสูง Cr ไม่ขึ้นเกิน 0.3"],["Biomarker","NGAL สูง"],["ความหมาย","damage+ functional− ยังมีความเสี่ยง outcome แย่กว่า"]],
+    take:["Subclinical AKI (damage+ functional−) สัมพันธ์กับ mortality และ KRT มากกว่า damage−","Cr ปกติไม่ได้แปลว่าไม่มี injury โดยเฉพาะคนที่ renal reserve สูง","นิยาม AKI/AKD รุ่นใหม่เริ่มนำ structural biomarker มาใช้ร่วมกับ Cr และ UO"]},
+  fstPos:{name:"FST ทำนายว่าจะแย่ลง", p:P({ty:"sev",t:14,fst:true}),
+    rows:[["ผู้ป่วย","septic AKI stage 1–2 euvolemic ไม่เคยได้ furosemide"],["FST","furosemide 1 mg/kg IV UO 2 ชม. 120 mL"],["ความหมาย","< 200 mL ทำนาย progression เป็น stage 3 และอาจต้อง KRT"]],
+    take:["Furosemide stress test: 1 mg/kg (เคยได้ loop 1.5 mg/kg) ทดแทน UO ด้วย crystalloid ป้องกัน volume depletion","UO < 200 mL ใน 2 ชม. ทำนาย progression ได้ดี ใช้ประกอบการวางแผน KRT","ต้องไม่มี hypovolemia หรือ obstruction ก่อนทำ"]},
+  fstNeg:{name:"FST ตอบสนองดี", p:P({ty:"atn",t:30,fst:true}),
+    rows:[["ผู้ป่วย","AKI stage 2 หลัง sepsis ดีขึ้น"],["FST","UO 2 ชม. 450 mL"],["ความหมาย","tubular function ยังดี โอกาสฟื้นสูง ชะลอ KRT"]],
+    take:["FST ตอบสนองดี บอกว่า TAL ยังทำงาน (ต้อง secrete furosemide ผ่าน PT และ NKCC2 ทำงาน)","ช่วยตัดสินใจ watchful waiting แทนการเริ่ม KRT ทันที","ผลไม่ใช่การรักษา furosemide ไม่ช่วยให้ไตฟื้น"]},
+  ccl:{name:"CCL14 ทำนาย persistent AKI", p:P({ty:"sev",t:48}),
+    rows:[["ผู้ป่วย","AKI stage 3 ชั่วโมงที่ 48"],["CCL14","> 1.3 ng/mL"],["ความหมาย","เสี่ยง persistent severe AKI (≥ 72 ชม.) สูง"]],
+    take:["CCL14 เป็น marker ของ tubular repair ที่ผิดปกติ ใช้ทำนายว่า AKI stage 2–3 จะ persistent หรือไม่","ช่วยวางแผน KRT และ follow-up AKD","Biomarker แต่ละตัวมี timing ที่เหมาะ ตรวจผิดเวลาให้ผลลบปลอม"]}
+};
+var ORDER=["early","func","sub","fstPos","fstNeg","ccl"];
+var box=document.getElementById("ctls"), C={};
+var ts=Sim.h("select",{id:"ty"},Object.keys(TY).map(function(k){ return Sim.h("option",{value:k,text:TY[k].n}); })); ts.addEventListener("change",update);
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"ty",text:"ชนิด insult"}),ts]));
+function sl(k,o){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("t",{label:"เวลาที่เก็บตัวอย่าง",min:1,max:72,step:1,value:12,unit:" ชม."});
+sl("w",{label:"น้ำหนัก",min:40,max:110,step:1,value:70,unit:" kg"});
+var T={}, tb=document.getElementById("tools");
+[["fst","Furosemide stress test"],["exp","เคยได้ loop diuretic"]].forEach(function(x){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:x[1]}); b.addEventListener("click",function(){ b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); tb.appendChild(b); T[x[0]]=b; });
+function on(k){ return T[k].getAttribute("aria-pressed")==="true"; }
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?260:280,aria:"Biomarkers as multiples of cut-off over seventy-two hours",
+  x:{min:0,max:72,step:12,label:"Hours after insult"},y:{min:0.1,max:30,log:true,label:"Multiple of cut-off"},y2:{min:0.8,max:4,step:0.5,label:"Cr / baseline"},
+  series:[{id:"n",name:"NGAL",color:A.accent,data:[],width:2.4},{id:"t",name:"TIMP-2 x IGFBP7",color:A.teal,data:[],width:2.4},{id:"c",name:"CCL14",color:A.gold,data:[],width:2},{id:"cr",name:"Cr ratio",color:A.red,data:[],width:1.8,dash:[4,3],axis:"y2"}],
+  hlines:[{y:1,label:"Cut-off",color:A.ink,dash:[3,3]}],legend:true});
+function curves(ty){
+  var N=[],Tm=[],Cc=[],Cr=[];
+  function g(t,pk,w){ return Math.exp(-Math.pow((Math.log(t+0.5)-Math.log(pk))/w,2)); }
+  for(var t=0;t<=72;t+=1){
+    var sat=1-Math.exp(-t/4), n=0.25+ty.dam*g(t,6,0.9)+ty.dam*0.6*sat*Math.exp(-t/(30+50*ty.pers)), tm=0.3+ty.dam*0.7*g(t,10,0.8)+ty.dam*0.25*sat*Math.exp(-t/(24+40*ty.pers)), cc=0.35+ty.pers*1.8*g(t,48,0.6)+(ty.dam>2?0.15:0);
+    var gf=1-ty.fun*(t<6?t/6:1)*(ty.pers<0.5&&t>36?Math.max(0.3,1-(t-36)/50):1);
+    var tau=24;
+    var cr=1+(1/Math.max(0.1,gf)-1)*(1-Math.exp(-t/tau*(ty.fun>0.8?0.7:1)));
+    N.push([t,n]); Tm.push([t,tm]); Cc.push([t,cc]); Cr.push([t,cr]);
+  }
+  return {N:N,T:Tm,C:Cc,Cr:Cr};
+}
+var qs=document.getElementById("quad");
+function quad(fpos,dpos){
+  qs.innerHTML="";
+  function tx(x,y,s,o){ o=o||{}; Sim.svg("text",{x:x,y:y,"text-anchor":o.a||"middle","font-family":"IBM Plex Sans Thai, sans-serif","font-size":o.fs||10.5,"font-weight":o.fw||400,fill:o.fill||"#0B0B1F",text:s},qs); }
+  var L=[["No AKI",0,0],["Subclinical",0,1],["Functional",1,0],["AKI with damage",1,1]];
+  L.forEach(function(q){ var x=30+q[1]*95, y=125-q[2]*95, on=(fpos===!!q[1])&&(dpos===!!q[2]);
+    Sim.svg("rect",{x:x,y:y,width:90,height:90,rx:10,fill:on?"#0B0B1F":"#F4F5F9",stroke:"#D3D5E2"},qs);
+    tx(x+45,y+50,q[0],{fill:on?"#fff":"#5E6075",fw:on?600:400,fs:10.5}); });
+  tx(125,228,"Damage marker",{fs:10.5,fill:"#5E6075"}); tx(77,224,"−",{fs:12}); tx(172,224,"+",{fs:12});
+  Sim.svg("text",{x:12,y:125,"text-anchor":"middle","font-family":"IBM Plex Sans Thai, sans-serif","font-size":10.5,fill:"#5E6075",transform:"rotate(-90 12 125)",text:"Functional (Cr/UO)"},qs);
+  tx(24,175,"−",{fs:12}); tx(24,80,"+",{fs:12});
+}
+function update(){
+  var ty=TY[ts.value], t=C.t.get(), w=C.w.get(), fst=on("fst"), ex=on("exp");
+  var cv=curves(ty);
+  chart.setSeries("n",cv.N); chart.setSeries("t",cv.T); chart.setSeries("c",cv.C); chart.setSeries("cr",cv.Cr);
+  chart.update({vlines:[{x:t,label:"Sample",color:A.ink}],y2:{min:0.8,max:Math.max(2.5,Math.ceil(cv.Cr[72][1]*2)/2+0.5),step:0.5,label:"Cr / baseline"}});
+  var i=Math.round(t), n=cv.N[i][1]*150, tm=cv.T[i][1]*0.3, cc=cv.C[i][1]*1.3, cr=cv.Cr[i][1];
+  Sim.ro("roN",n.toFixed(0),n>150?"flag":"ok");
+  Sim.ro("roT",tm.toFixed(2),tm>2?"flag":tm>0.3?"flag":"ok");
+  Sim.ro("roC",cc.toFixed(2),cc>1.3?"flag":"ok");
+  Sim.ro("roCr",cr.toFixed(2),cr>=1.5?"flag":"ok");
+  /* FST: UO in 2 h after furosemide depends on remaining tubular function */
+  var tubular=Math.max(0.03,(1-ty.fun*0.9)*(1-0.5*Math.min(1,ty.dam/8))), uo=fst?Math.round((60+620*tubular)*(w/70)*(ex?0.85:1)):null;
+  Sim.ro("roF",fst?String(uo):"-",fst?(uo<200?"flag":"ok"):null);
+  var fpos=cr>=1.5||ty.fun>=0.5&&t>=12, dpos=n>150||tm>0.3;
+  var cat=fpos&&dpos?"AKI + damage":fpos?"Functional":dpos?"Subclinical":"No AKI";
+  Sim.ro("roQ",cat,cat==="No AKI"?"ok":"flag");
+  quad(fpos,dpos);
+  var a=document.getElementById("act"), m, bad=true;
+  var timing=(t<2&&ty.dam>1)?" (เก็บเร็วเกินไป marker อาจยังไม่ขึ้น)":(t>36&&ty.pers<0.5&&dpos===false&&ty.dam>1?" (เก็บช้าเกินไป NGAL ลดแล้ว)":"");
+  if(fst&&uo<200) m="<b>FST ไม่ตอบสนอง</b> UO "+uo+" mL ใน 2 ชม. เสี่ยง progression เป็น stage 3 และ KRT ทดแทน UO ด้วย crystalloid เฝ้าระวังข้อบ่งชี้ KRT อย่างใกล้ชิด (ดู AKI-10)";
+  else if(fst&&uo>=200&&ty.fun>0.3){ bad=false; m="<b>FST ตอบสนอง</b> tubular function ยังดี watchful waiting ได้ ทดแทน UO ด้วย crystalloid ไม่ใช้ furosemide เพื่อรักษา AKI"; }
+  else if(cat==="AKI + damage"&&cc>1.3) m="<b>เสี่ยง persistent severe AKI</b> วางแผน KRT และ AKD follow-up หลีกเลี่ยง nephrotoxin ทุกชนิด";
+  else if(dpos&&!fpos) m="<b>Biomarker บวกก่อน Cr</b>"+timing+" ใช้ KDIGO care bundle: หยุด nephrotoxin, optimize volume และ MAP, monitor Cr และ UO, หลีกเลี่ยง hyperglycemia และ contrast";
+  else if(cat==="Functional"){ bad=false; m="<b>Functional AKI</b> แก้ volume/hemodynamics หยุด RAASi/NSAID ชั่วคราว คาดว่าจะฟื้นเร็ว"; }
+  else if(cat==="AKI + damage") m="<b>AKI with tubular damage</b> ประคับประคอง หาสาเหตุ ปรับยา พิจารณา FST ถ้าต้องตัดสินใจเรื่อง KRT";
+  else { bad=false; m="<b>ไม่มีหลักฐาน AKI</b>"+timing+" ไม่ต้องตรวจซ้ำถ้าความเสี่ยงต่ำ"; }
+  a.innerHTML="<b>Next step:</b> "+m; a.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"AKI-12", title:"AKI Biomarkers and Furosemide Stress Test", lead:"เลือกชนิดของ insult และเวลาที่เก็บตัวอย่าง ดู NGAL, TIMP-2 x IGFBP7, CCL14 และ Cr ตามเวลา จัดกลุ่มตาม functional และ damage marker แล้วลอง furosemide stress test เพื่อทำนาย progression",
+  scenarios:S, order:ORDER, captureMs:600,
+  onChange:function(k,s){ ts.value=s.p.ty; C.t.set(s.p.t); C.w.set(s.p.w); T.fst.setAttribute("aria-pressed",s.p.fst?"true":"false"); T.exp.setAttribute("aria-pressed",s.p.exp?"true":"false"); update(); },
+  refs:["Kashani K, Al-Khafaji A, Ardiles T, et al (Sapphire). Discovery and validation of cell cycle arrest biomarkers in human acute kidney injury. Crit Care 2013, 17(1): R25",
+        "Ostermann M, Zarbock A, Goldstein S, et al (ADQI 23). Recommendations on acute kidney injury biomarkers from the Acute Disease Quality Initiative consensus conference. JAMA Netw Open 2020, 3(10): e2019209",
+        "Chawla LS, Davison DL, Brasha-Mitchell E, et al. Development and standardization of a furosemide stress test to predict the severity of acute kidney injury. Crit Care 2013, 17(5): R207",
+        "Hoste E, Bihorac A, Al-Khafaji A, et al (RUBY). Identification and validation of biomarkers of persistent acute kidney injury: the RUBY study. Intensive Care Med 2020, 46(5): 943-953",
+        "Haase M, Kellum JA, Ronco C. Subclinical AKI, an emerging syndrome with important consequences. Nat Rev Nephrol 2012, 8(12): 735-739",
+        "Meersch M, Schmidt C, Hoffmeier A, et al (PrevAKI). Prevention of cardiac surgery-associated AKI by implementing the KDIGO guidelines in high risk patients identified by biomarkers. Intensive Care Med 2017, 43(11): 1551-1561",
+        "KDIGO 2026 Clinical Practice Guideline for AKI and AKD, public review draft (2026)"],
+  note:"Cut-off ที่ใช้: urine NGAL 150 ng/mL, TIMP-2 x IGFBP7 0.3 (high risk) และ 2.0 (very high risk) (ng/mL)²/1000, urine CCL14 1.3 ng/mL, FST UO < 200 mL ใน 2 ชม. รูปร่างเส้นตามเวลาเป็น model เพื่อการสอน (NGAL สูงสุดราว 6 ชม., TIMP-2 x IGFBP7 ราว 10 ชม., CCL14 ราว 48 ชม. ใน persistent AKI) ค่า assay แตกต่างตามบริษัท"
+});
+})();
+</script>
+</body>
+</html>

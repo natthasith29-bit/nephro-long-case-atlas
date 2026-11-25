@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[AKI-13] Drug-Induced Kidney Disease: Mechanism by Phenotype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.6fr 1fr}}
+.readout{grid-template-columns:1fr}
+.readout .ro b{font-size:20px;line-height:1.25}
+#vis,#mapA{width:100%;height:auto;display:block}
+.svgwrap{overflow-x:auto}
+@media (max-width:820px){#vis,#mapA{min-width:700px}}
+.dchips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.dchips button{border:1px solid var(--line-strong);background:var(--card);color:var(--ink);border-radius:999px;padding:6px 12px;font:500 13.5px var(--body);cursor:pointer}
+.dchips button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
+.dchips button:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
+.ctlnote{font-size:13px;color:var(--muted);margin:-4px 0 10px}
+#vis .dot{pointer-events:none}
+.sel{display:grid;grid-template-columns:minmax(70px,110px) minmax(0,1fr);gap:10px;align-items:center;font-size:14px;margin-bottom:8px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+table.syn{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:10px}
+table.syn th,table.syn td{border-bottom:1px solid var(--line);padding:7px 6px;text-align:left;vertical-align:top}
+table.syn th{font-weight:600;color:var(--muted);font-size:12.5px}
+table.syn tr{cursor:pointer}
+table.syn tr.on td{background:var(--accent-soft)}
+table.syn td.n{font-family:var(--mono);width:26px}
+table.syn .q{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}
+[hidden]{display:none!important}
+body.present .hint{display:none}
+body.present .card{padding:12px 16px}
+body.present .take ul{columns:3;column-gap:22px}
+body.present .take li{font-size:13px;line-height:1.4;break-inside:avoid}
+body.present .take h3{margin-bottom:4px}
+body.present .takeaway{font-size:14px;padding:6px 12px;margin-top:6px}
+body.present .readout .ro b{font-size:17px}
+body.present .ro{padding:6px 10px}
+body.present .dchips{margin-bottom:6px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present #vis{max-height:420px}
+body.present #mapA{max-height:300px}
+body.present table.syn{font-size:11.5px}
+body.present table.syn td,body.present table.syn th{padding:3px 5px}
+body.present table.syn td div{display:none}
+body.present #atlasView table.syn tr:nth-child(n+7){display:none}
+body.present #mapA{max-height:270px}
+body.present .dchips button{padding:4px 10px;font-size:12.5px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2 id="h2L">-</h2>
+      <div id="mechView">
+        <div class="svgwrap"><svg id="vis" viewBox="0 0 760 420" role="img" aria-label="Mechanism"></svg><div id="pathoBox" hidden></div></div>
+        <p class="takeaway" id="tk"></p>
+      </div>
+      <div id="atlasView" hidden>
+        <div class="svgwrap"><svg id="mapA" viewBox="0 0 760 430" role="img" aria-label="Nephron compartments for the selected drug"></svg></div>
+        <p class="takeaway" id="tkA"></p>
+        <table class="syn" id="synT"></table>
+        <details class="more"><summary>ตำแหน่งตาม KDIGO 2026 (function x damage)</summary><div class="more-body"><svg id="quadA" viewBox="0 0 300 250" style="max-width:340px;width:100%" role="img" aria-label="Function and damage quadrant"></svg></div></details>
+      </div>
+    </div>
+    <div class="card">
+      <h2 id="h2R">เลือกยาและปรับ</h2>
+      <div id="mechCtl"><div class="dchips" id="dchips" role="group" aria-label="Drug"></div><p class="ctlnote" id="dnote"></p><div class="ctls" id="ctls"></div></div>
+      <div id="atlasCtl" hidden>
+        <div class="sel"><label for="clsS">กลุ่มยา</label><select id="clsS"></select></div>
+        <div class="sel"><label for="drugS">ยา</label><select id="drugS"></select></div>
+      </div>
+      <div class="readout">
+        <div class="ro" id="ro1"><b>-</b><span>-</span></div>
+        <div class="ro" id="ro2"><b>-</b><span>-</span></div>
+        <div class="ro" id="ro3"><b>-</b><span>-</span></div>
+      </div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/patho.js"></script>
+<script>
+(function(){
+"use strict";
+var FONT="IBM Plex Sans Thai, sans-serif", MONO="Geist Mono, monospace";
+var C={ink:"#0B0B1F",acc:"#5B4BFF",acc2:"#19C8E6",soft:"#EFEDFF",line:"#E6E7F0",line2:"#D3D5E2",muted:"#5E6075",faint:"#9A9CB2",red:"#B4232A",teal:"#1F7A72",gold:"#A8842C",canvas:"#F4F5F9"};
+function SV(t,a,p){ var o={}; for(var k in a){ if(a[k]!==null && a[k]!==undefined) o[k]=a[k]; } return Sim.svg(t,o,p); }
+function cl(x,a,b){ return x<a?a:(x>b?b:x); }
+function uniq(a){ return a.filter(function(x,i){return a.indexOf(x)===i;}); }
+function roSet(id,val,label,state){ var e=document.getElementById(id); e.querySelector("span").textContent=label; Sim.ro(id,val,state); e.querySelector("b").style.fontSize=String(val).length>22?"16px":""; }
+/* ================= drawing helpers ================= */
+var ANIM=!(Sim.reduce||Sim.capture);
+function T(p,x,y,t,o){ o=o||{}; return SV("text",{x:x,y:y,"font-family":o.mono?MONO:FONT,"font-size":o.fs||12,"font-weight":o.fw||null,fill:o.c||C.ink,"text-anchor":o.a||null,text:t},p); }
+function pill(p,x,y,w,label,st,sub){
+  var fill={n:"#fff",b:"#FBE9EA",g:"#E3F3F1",f:"#FBE9EA",d:C.soft}[st]||"#fff";
+  var stroke={n:C.line2,b:C.red,g:C.teal,f:C.red,d:C.acc}[st]||C.line2;
+  SV("rect",{x:x-w/2,y:y-14,width:w,height:28,rx:14,fill:fill,stroke:stroke,"stroke-width":st==="n"?1.5:2.4,"stroke-dasharray":st==="f"?"4 3":null},p);
+  T(p,x,y+4,label,{a:"middle",fs:11.5,fw:600,c:(st==="b"||st==="f")?C.red:(st==="g"?C.teal:(st==="d"?C.acc:C.ink))});
+  if(st==="b"||st==="f"){ var bx=x+w/2+10;
+    SV("circle",{cx:bx,cy:y-8,r:9,fill:C.red},p);
+    SV("rect",{x:bx-5,y:y-9.6,width:10,height:3.2,rx:1.6,fill:"#fff"},p); }
+  if(st==="g") SV("path",{d:"M"+(x+w/2+3)+" "+(y-1)+" l8 -13 l8 13 z",fill:C.teal},p);
+  if(sub) T(p,x,y+27,sub,{a:"middle",fs:10,c:C.muted});
+}
+function dots(p,d,n,dur,col,r){
+  var path=SV("path",{d:d,fill:"none",stroke:"none"},p), L=path.getTotalLength();
+  for(var i=0;i<n;i++){
+    var c=SV("circle",{r:r||4,fill:col,"class":"dot"},p);
+    if(ANIM && dur>0){ SV("animateMotion",{dur:dur+"s",repeatCount:"indefinite",begin:(-dur*i/n)+"s",path:d},c); }
+    else { var pt=path.getPointAtLength(L*(i+.5)/n); c.setAttribute("cx",pt.x); c.setAttribute("cy",pt.y); }
+  }
+}
+function arrow(p,x1,y1,x2,y2,col,w){
+  var a=Math.atan2(y2-y1,x2-x1), h=9;
+  SV("line",{x1:x1,y1:y1,x2:x2-Math.cos(a)*h*.8,y2:y2-Math.sin(a)*h*.8,stroke:col,"stroke-width":w||2.5,"stroke-linecap":"round"},p);
+  SV("path",{d:"M"+x2+" "+y2+" L"+(x2-h*Math.cos(a-.45))+" "+(y2-h*Math.sin(a-.45))+" L"+(x2-h*Math.cos(a+.45))+" "+(y2-h*Math.sin(a+.45))+" Z",fill:col},p);
+}
+function cellFrame(p,title,cellFill){
+  SV("rect",{x:14,y:44,width:150,height:340,rx:16,fill:"#F2F8FB"},p);
+  T(p,89,66,"Tubular lumen",{a:"middle",fs:12,fw:600,c:C.muted});
+  SV("rect",{x:600,y:44,width:146,height:340,rx:16,fill:"#FBF1F1"},p);
+  T(p,673,66,"Blood",{a:"middle",fs:12,fw:600,c:C.muted});
+  SV("rect",{x:178,y:52,width:408,height:324,rx:28,fill:cellFill||"#fff",stroke:C.line2,"stroke-width":2},p);
+  T(p,382,30,title,{a:"middle",fs:14,fw:600});
+}
+function badgeRow(p,y,items){
+  var x=20;
+  items.forEach(function(it){
+    var w=it[0].length*7.4+24, col=it[1]==="up"?C.red:(it[1]==="down"?"#0E7FA0":C.teal);
+    SV("rect",{x:x,y:y-15,width:w,height:25,rx:12,fill:"#fff",stroke:col,"stroke-width":1.8},p);
+    T(p,x+w/2,y+3,it[0],{a:"middle",fs:12,fw:600,c:col}); x+=w+8;
+  });
+}
+/* ================= Scenes ================= */
+var SC={};
+
+/* ---------- 1 Haemodynamic ---------- */
+SC.hemo={
+  h2:"ยาเปลี่ยน tone ของ afferent และ efferent แล้ว GFR เปลี่ยนตาม",
+  drugs:[["nsaid","NSAID"],["acei","ACEi / ARB"],["diu","Diuretic"],["cni","CNI"],["sglt2","SGLT2i"]], multi:true,
+  init:{sel:{nsaid:true,acei:true,diu:true},vol:true},
+  note:"กดเลือกยาได้หลายตัวพร้อมกัน",
+  ctls:function(P){ return [Sim.h("div",{"class":"tools"},[Sim.toggle("Volume depletion (ท้องเสีย กินได้น้อย)",function(v){P.vol=v;redraw();},P.vol)])]; },
+  draw:function(svg,P){
+    var s=P.sel, vol=P.vol;
+    var MAP=(vol?76:92)-(s.diu?4:0);
+    var Ra=(vol&&!s.nsaid?.78:1)*(s.nsaid?1.15:1)*(s.cni?1.3:1)*(s.sglt2?1.08:1);
+    var Re=vol?(s.acei?.8:1.4):(s.acei?.88:1);
+    var Q=(MAP-8)/(Ra+Re), PGC=8+Q*Re, Q0=42;
+    var gfr=Math.max(4,cl((PGC-32)/18,0,1.2)*Math.pow(Q/Q0,.25)*100);
+    var wa=cl(32/Math.pow(Ra,2.1),8,46), we=cl(26/Math.pow(Re,2.1),7,46);
+    T(svg,382,26,"Glomerular hemodynamics",{a:"middle",fs:14,fw:600});
+    SV("path",{d:"M24 206 L286 206",stroke:"#E7B9BC","stroke-width":wa,"stroke-linecap":"round"},svg);
+    SV("path",{d:"M478 206 L736 206",stroke:"#E7B9BC","stroke-width":we,"stroke-linecap":"round"},svg);
+    T(svg,30,206-wa/2-14,"Afferent arteriole",{fs:12.5,fw:600});
+    T(svg,730,206-we/2-14,"Efferent arteriole",{fs:12.5,fw:600,a:"end"});
+    SV("circle",{cx:382,cy:206,r:100,fill:"#fff",stroke:C.line2,"stroke-width":2},svg);
+    var pc=cl((PGC-30)/25,0,1);
+    for(var i=0;i<7;i++){ var an=i/7*Math.PI*2; SV("circle",{cx:382+42*Math.cos(an),cy:206+42*Math.sin(an),r:22,fill:"rgba(180,35,42,"+(.1+.42*pc)+")",stroke:"#d9a7aa"},svg); }
+    T(svg,382,200,"PGC",{a:"middle",fs:12,c:C.muted});
+    T(svg,382,224,Math.round(PGC)+" mmHg",{a:"middle",fs:16,fw:600,mono:1});
+    dots(svg,"M24 206 L286 206 L478 206 L736 206",14,cl(6*Q0/Q,2.5,14),"#B4232A",4);
+    arrow(svg,382,310,382,368,C.acc,cl(gfr/100*16,2.5,18));
+    T(svg,398,356,"GFR "+Math.round(gfr)+"%",{fs:16,fw:600,c:C.acc,mono:1});
+    var aL=[], eL=[];
+    if(vol&&!s.nsaid) aL.push(["PGE2 and PGI2 still dilating",C.teal]);
+    if(s.nsaid) aL.push(["NSAID: prostaglandin dilation lost",C.red]);
+    if(s.cni) aL.push(["CNI: endothelin, TXA2, less NO",C.red]);
+    if(s.sglt2) aL.push(["SGLT2i: NaCl at macula densa, TGF",C.gold]);
+    if(vol&&!s.acei) eL.push(["Angiotensin II still constricting",C.teal]);
+    if(s.acei) eL.push(["ACEi/ARB: Ang II tone lost",C.red]);
+    if(s.diu) eL.push(["Diuretic: less effective volume",C.gold]);
+    aL.forEach(function(l,i){ T(svg,30,262+i*20+wa/2,l[0],{fs:12,c:l[1],fw:600}); });
+    eL.forEach(function(l,i){ T(svg,730,262+i*20+we/2,l[0],{fs:12,c:l[1],fw:600,a:"end"}); });
+    T(svg,24,410,"MAP "+MAP+" mmHg"+(vol?"   volume depleted":""),{fs:13,c:C.muted,mono:1});
+    T(svg,736,410,"Afferent "+(Ra>1.05?"constricted":(Ra<.95?"dilated":"normal"))+"   /   Efferent "+(Re>1.05?"constricted":(Re<.95?"dilated":"normal")),{fs:13,c:C.muted,a:"end"});
+    var trip=s.nsaid&&s.acei&&(s.diu||vol);
+    var tk;
+    if(gfr<45) tk="<b>"+(trip?"Triple whammy":"Afferent หดพร้อม efferent ขยาย")+"</b> PGC ตกเหลือ "+Math.round(PGC)+" mmHg GFR เหลือ <span class=\"num\">"+Math.round(gfr)+"%</span> ทั้งที่ tubule ยังไม่เสียหาย urine จึง bland แก้ volume และหยุด NSAID แล้วฟื้นได้";
+    else if(gfr<90) tk="GFR เหลือ <span class=\"num\">"+Math.round(gfr)+"%</span> จากการเปลี่ยน tone เป็น dysfunction without damage ถ้าเป็น dip ที่คาดไว้จาก RASi หรือ SGLT2i ไม่ต้องหยุดยา";
+    else tk="ไตยังรักษา PGC ไว้ที่ "+Math.round(PGC)+" mmHg เพราะ prostaglandin ขยาย afferent และ angiotensin II หด efferent ชดเชยกันอยู่";
+    return {ro:[[Math.round(gfr)+"%","GFR เทียบปกติ",gfr<60?"flag":"ok"],
+      [Math.round(PGC)+" mmHg","Glomerular capillary pressure",PGC<44?"flag":null],
+      [trip?"Triple whammy":(gfr<60?"Hemodynamic AKI":"ยังชดเชยได้"),"Phenotype",gfr<60?"flag":"ok"]],tk:tk};
+  },
+  rows:[["กลไก","Afferent ขยายด้วย prostaglandin efferent หดด้วย angiotensin II เมื่อ volume ต่ำไตต้องพึ่งทั้งสองอย่าง"],
+   ["ยาที่หด afferent","NSAID, COX-2i, CNI, SGLT2i (TGF), iodinated contrast"],
+   ["ยาที่ขยาย efferent","ACEi, ARB, ARNI, aliskiren"],
+   ["Urine","bland FENa ต่ำ (ไม่น่าเชื่อถือถ้าได้ diuretic)"]],
+  take:["Hemodynamic AKI คือ dysfunction without damage ฟื้นใน 24–72 ชม. หลังแก้ volume และหยุด NSAID",
+   "NSAID + RASi + diuretic เสี่ยงสูงสุดในเดือนแรกของการใช้ร่วมกัน",
+   "Cr ขึ้นไม่เกิน 30% หลังเริ่ม RASi หรือ dip เล็กน้อยจาก SGLT2i เป็นสิ่งที่คาดไว้ ไม่ต้องหยุดยา",
+   "อันตรายที่ใหญ่กว่าคือหยุดยาที่ปกป้องหัวใจและไตแล้วไม่ได้เริ่มใหม่"]
+};
+/* ---------- 2 Pseudo-AKI ---------- */
+var PSD={
+ tmp:{n:"Trimethoprim",oct:.8,mate:.8,note:"บล็อก OCT2 และ MATE (และบล็อก ENaC ทำ K สูงแยกกัน)"},
+ cim:{n:"Cimetidine",oct:.7,mate:.7,note:"บล็อก OCT2 และ MATE"},
+ dtg:{n:"Dolutegravir",oct:.55,note:"บล็อก OCT2 iohexol GFR ไม่เปลี่ยน"},
+ cobi:{n:"Cobicistat",mate:.65,note:"บล็อก MATE1 และยังเพิ่ม exposure ของ tenofovir"},
+ cdk:{n:"CDK4/6 inhibitor",oct:.6,mate:.6,note:"abemaciclib, ribociclib Cr ขึ้นแล้ว plateau"},
+ tzp:{n:"Pip-tazo + vancomycin",oat:.5,note:"แย่ง OAT1/3 vancomycin ลดการแสดงออกของ transporter"},
+ none:{n:"ไม่มียา",note:"creatinine ถูกกรองและ secrete ตามปกติ"}
+};
+SC.pseudo={
+  h2:"Cr ขึ้นเพราะ secretion ถูกบล็อก แต่ GFR ไม่ได้ลด",
+  drugs:Object.keys(PSD).map(function(k){return [k,PSD[k].n];}),
+  init:{sel:"tmp",gfr:60},
+  noteF:function(P){ return PSD[P.sel].note; },
+  ctls:function(P){ return [Sim.slider({id:"pg",label:"GFR จริงของผู้ป่วย",min:15,max:110,step:5,value:P.gfr,unit:"mL/min",onInput:function(v){P.gfr=v;redraw();}}).el]; },
+  draw:function(svg,P){
+    var d=PSD[P.sel];
+    var sec=.1+.3*cl(1-P.gfr/100,0,1);
+    var block=Math.max(d.oct||0,d.mate||0,d.oat||0);
+    var rise=1/(1-sec*block)-1;
+    SV("rect",{x:14,y:40,width:150,height:258,rx:16,fill:"#F2F8FB"},svg);
+    T(svg,89,62,"Tubular lumen",{a:"middle",fs:12,fw:600,c:C.muted});
+    SV("rect",{x:600,y:40,width:146,height:258,rx:16,fill:"#FBF1F1"},svg);
+    T(svg,673,62,"Blood",{a:"middle",fs:12,fw:600,c:C.muted});
+    SV("rect",{x:178,y:48,width:408,height:242,rx:28,fill:"#fff",stroke:C.line2,"stroke-width":2},svg);
+    T(svg,382,28,"Proximal tubule cell: how creatinine leaves the blood",{a:"middle",fs:14,fw:600});
+    T(svg,89,86,"Filtered Cr (unchanged)",{a:"middle",fs:11,c:C.muted});
+    dots(svg,"M89 98 L89 290",5,6,"#9A9CB2",4);
+    pill(svg,586,120,96,"OCT2",d.oct?"b":"n","uptake");
+    pill(svg,586,208,96,"OAT1/3",d.oat?"b":"n","uptake");
+    pill(svg,178,164,108,"MATE1/2-K",d.mate?"b":"n","efflux to urine");
+    var flow=1-block, path="M702 120 L586 120 L380 150 L178 164 L56 164";
+    SV("path",{d:path,fill:"none",stroke:block>.3?"#E3C4C6":C.line2,"stroke-width":2,"stroke-dasharray":block>.3?"6 5":null},svg);
+    if(flow>.15) dots(svg,path,Math.max(2,Math.round(7*flow)),7,"#7a6cff",4.5);
+    else { dots(svg,"M702 120 L632 120",3,3,"#7a6cff",4.5); T(svg,660,152,"stopped",{a:"middle",fs:11.5,c:C.red,fw:600}); }
+    T(svg,382,250,"Secretion = "+Math.round(sec*100)+"% of creatinine clearance at GFR "+P.gfr,{a:"middle",fs:12,c:C.muted});
+    T(svg,382,272,block?("Drug blocks "+Math.round(block*100)+"% of that secretion"):"Nothing blocked",{a:"middle",fs:12.5,fw:600,c:block?C.red:C.teal});
+    var bx=200, bw=420, y0=334;
+    [["True GFR",0,C.teal],["Serum Cr",rise,C.red],["Cystatin C",0,C.teal]].forEach(function(m,i){
+      var y=y0+i*28;
+      T(svg,bx-10,y+5,m[0],{a:"end",fs:12.5,fw:600});
+      SV("rect",{x:bx,y:y-9,width:bw*.52,height:18,rx:9,fill:"#E6E7F0"},svg);
+      SV("rect",{x:bx,y:y-9,width:bw*.52*(1+m[1]),height:18,rx:9,fill:m[1]>0?m[2]:"#C9CBD8"},svg);
+      T(svg,bx+bw*.52*(1+m[1])+10,y+5,m[1]>0?("+"+Math.round(m[1]*100)+"%"):"no change",{fs:12.5,fw:600,mono:m[1]>0,c:m[1]>0?m[2]:C.muted});
+    });
+    T(svg,bx,y0-20,"What the lab shows",{fs:12,fw:600,c:C.muted});
+    var cr0=P.gfr>=95?.9:Math.round(90/P.gfr*.9*100)/100, dd=cr0*rise;
+    var tk=block?("ยาบล็อก secretion ทำให้ Cr ขึ้น <span class=\"num\">"+Math.round(rise*100)+"%</span> (ราว +"+dd.toFixed(2)+" mg/dL จาก "+cr0.toFixed(2)+") ขณะที่ GFR และ cystatin C คงเดิม ยิ่ง GFR ต่ำ secretion ยิ่งมีสัดส่วนมาก Cr จึงขึ้นมากกว่า")
+      :"ไม่มียาบล็อก secretion Cr จึงสะท้อน GFR ตามปกติ";
+    return {ro:[["+"+Math.round(rise*100)+"%","Serum Cr เปลี่ยนจาก baseline",rise>.1?"flag":"ok"],
+      ["ไม่เปลี่ยน","Cystatin C และ true GFR","ok"],
+      [block?"Pseudo-AKI":"ปกติ","Phenotype",block?"flag":"ok"]],tk:tk};
+  },
+  rows:[["รูปแบบ","Cr ขึ้นราว 10–40% ใน 1–2 สัปดาห์แรกแล้ว plateau"],
+   ["Urine","bland ไม่มี oliguria"],
+   ["ยืนยัน","cystatin C หรือ measured GFR คงที่ (steroid ทำ cystatin C ขึ้นได้)"],
+   ["กลไกอื่นที่ทำ Cr หลอก","Jaffe interference (cefoxitin), creatine supplement, fenofibrate"]],
+  take:["ยาที่บล็อก OCT2, MATE หรือ OAT ทำให้ Cr ขึ้นโดย GFR ไม่เปลี่ยน",
+   "สัดส่วน secretion มากขึ้นเมื่อ GFR ต่ำ ผู้ป่วย CKD จึงเห็น Cr ขึ้นชัดกว่า",
+   "ยืนยันด้วย cystatin C ก่อนหยุดยาที่จำเป็น",
+   "Pseudo-AKI ไม่ตัดความเป็นไปได้ของ injury จริงจากยาตัวเดียวกัน ให้ดู sediment ด้วย"]
+};
+/* ---------- 3 Proximal tubule ---------- */
+var PTD={
+ ag:{n:"Aminoglycoside",route:"meg",org:"lyso",ati:.85,fanc:.35,prot:"Extended-interval dosing + TDM",pf:.55,note:"เข้าทาง megalin สะสมใน lysosome เกิด myeloid bodies"},
+ van:{n:"Vancomycin",route:"meg",org:"mito",ati:.75,fanc:.1,prot:"AUC-guided dosing (AUC 400–600)",pf:.5,note:"megalin uptake, oxidative stress, uromodulin cast"},
+ tdf:{n:"Tenofovir DF",route:"oat",org:"mito",ati:.35,fanc:.95,prot:"เปลี่ยนเป็น TAF",pf:.12,note:"เข้าทาง OAT1/3 มากกว่าออกทาง MRP2/4 จึงสะสมและทำลาย mitochondria"},
+ cis:{n:"Cisplatin",route:"oct",org:"mito",ati:.95,fanc:.25,prot:"Hydration + Mg ทุก cycle",pf:.65,note:"เข้าทาง OCT2 ที่ S3 segment (carboplatin เป็น substrate ที่แย่กว่าจึงพิษน้อยกว่า)"},
+ ifo:{n:"Ifosfamide",route:"oct",org:"mito",ati:.5,fanc:.95,prot:"จำกัด cumulative dose < 60 g/m2",pf:.6,note:"OCT2 แล้วถูกเปลี่ยนเป็น chloroacetaldehyde"},
+ col:{n:"Colistin",route:"meg",org:"lyso",ati:.95,fanc:.2,prot:"หลีกเลี่ยง nephrotoxin ร่วม",pf:.8,note:"megalin uptake แล้วทำลาย membrane"}
+};
+SC.pt={
+  h2:"Uptake มากกว่า efflux ยาจึงสะสมในเซลล์ proximal tubule",
+  drugs:Object.keys(PTD).map(function(k){return [k,PTD[k].n];}),
+  init:{sel:"ag",exp:70,prot:false},
+  noteF:function(P){ return PTD[P.sel].note; },
+  ctls:function(P){
+    var sl=Sim.slider({id:"pe",label:"Exposure (ขนาด x ระยะเวลา)",min:0,max:100,step:5,value:P.exp,unit:"%",onInput:function(v){P.exp=v;redraw();}});
+    return [sl.el,Sim.h("div",{"class":"tools"},[Sim.toggle(PTD[P.sel].prot,function(v){P.prot=v;redraw();},P.prot)])];
+  },
+  draw:function(svg,P){
+    var d=PTD[P.sel], f=P.exp/100*(P.prot?d.pf:1);
+    var acc=cl(f*1.1,0,1), inj=cl(1/(1+Math.exp(-(acc-.5)*9))-0.01,0,1);
+    var ati=inj*d.ati, fan=inj*d.fanc, fail=fan>.3;
+    cellFrame(svg,"Proximal tubule cell",acc>.05?"rgba(91,75,255,"+(.03+.15*acc)+")":"#fff");
+    [["SGLT2","glucose"],["NaPi-IIa","phosphate"],["NHE3","HCO3"],["URAT1","urate"]].forEach(function(a,i){
+      pill(svg,178,96+i*44,88,a[0],fail?"f":"n"); });
+    pill(svg,178,306,88,"Megalin",d.route==="meg"?"d":"n");
+    pill(svg,178,356,88,"MRP2/4",d.route==="oat"?"d":"n","efflux");
+    pill(svg,586,150,88,"OAT1/3",d.route==="oat"?"d":"n");
+    pill(svg,586,236,88,"OCT2",d.route==="oct"?"d":"n");
+    var n=Math.max(1,Math.round(2+acc*8));
+    if(d.route==="meg") dots(svg,"M56 306 L178 306 L300 290",n,4,C.acc,4.5);
+    if(d.route==="oat"){ dots(svg,"M700 150 L586 150 L420 172",n,4,C.acc,4.5); dots(svg,"M330 356 L178 356 L60 356",2,4,C.acc,4); }
+    if(d.route==="oct") dots(svg,"M700 236 L586 236 L430 232",n,4,C.acc,4.5);
+    var rnd=Patho.rng(7);
+    for(var i=0;i<Math.round(acc*38);i++) SV("circle",{cx:252+rnd()*300,cy:92+rnd()*180,r:3.2,fill:C.acc,opacity:.7},svg);
+    var oc=inj>.4?C.red:C.muted;
+    if(d.org==="lyso"){
+      for(var j=0;j<3;j++){ var cx=320+j*78, cy=170+(j%2)*48;
+        SV("circle",{cx:cx,cy:cy,r:18,fill:"#fff",stroke:oc,"stroke-width":2},svg);
+        for(var q=1;q<4;q++) SV("circle",{cx:cx,cy:cy,r:18-q*4.5,fill:"none",stroke:oc,"stroke-width":1},svg); }
+      T(svg,418,292,inj>.4?"Lysosomal phospholipidosis":"Lysosomes",{a:"middle",fs:12,c:oc,fw:600});
+    } else {
+      for(var j2=0;j2<4;j2++){ var mx=312+j2*62, my=176+(j2%2)*40;
+        SV("ellipse",{cx:mx,cy:my,rx:24,ry:11,fill:inj>.4?"#FBE9EA":"#fff",stroke:oc,"stroke-width":2,"stroke-dasharray":inj>.6?"5 3":null},svg);
+        SV("path",{d:"M"+(mx-16)+" "+my+" q6 -8 12 0 q6 8 12 0",fill:"none",stroke:oc,"stroke-width":1.2},svg); }
+      T(svg,418,292,inj>.4?"Mitochondrial injury, ATP falls":"Mitochondria",{a:"middle",fs:12,c:oc,fw:600});
+    }
+    if(fail){ T(svg,89,404,"Urine: glucose, PO4, HCO3,",{a:"middle",fs:11.5,c:C.red,fw:600});
+      T(svg,89,418,"urate, amino acids, LMW protein",{a:"middle",fs:11.5,c:C.red,fw:600}); }
+    if(ati>.35) T(svg,418,330,"Cell necrosis: granular casts, GFR falls",{a:"middle",fs:12.5,c:C.red,fw:600});
+    var ph=(ati>.35&&fan>.3)?"ATI + Fanconi":ati>.35?"ATI/ATN":fan>.3?"Fanconi (damage ที่ GFR ยังปกติได้)":(inj>.15?"Subclinical injury":"ยังไม่มี injury");
+    var tk="<b>"+d.n+"</b> สะสมในเซลล์ <span class=\"num\">"+Math.round(acc*100)+"%</span> "
+      +(inj>.4?((d.org==="lyso"?"จน lysosome เสียหาย":"จน mitochondria เสียและ ATP ตก")+" ได้ภาพ "+ph):"ยังไม่ถึงระดับที่เซลล์เสียหาย")
+      +(P.prot?" การใช้ "+d.prot+" ลดปริมาณยาที่เข้าเซลล์":"");
+    return {ro:[[Math.round(acc*100)+"%","ยาที่สะสมในเซลล์",acc>.5?"flag":null],
+      [Math.round(inj*100)+"%","Cell injury",inj>.4?"flag":"ok"],
+      [ph,"Phenotype",inj>.15?"flag":"ok"]],tk:tk};
+  },
+  rows:[["Uptake ทางยอด","megalin-cubilin: aminoglycoside, polymyxin, vancomycin, cisplatin"],
+   ["Uptake ทางฐาน","OAT1/3: tenofovir, adefovir, cidofovir  OCT2: cisplatin, ifosfamide, metformin"],
+   ["Efflux","MRP2/4 และ MATE ถ้า uptake มากกว่า efflux ยาจะสะสม"],
+   ["ผลลัพธ์","ATI (granular casts, GFR ลด) หรือ Fanconi (glycosuria, phosphaturia, type 2 RTA) หรือทั้งคู่"]],
+  take:["พิษต่อ proximal tubule ขึ้นกับขนาดและระยะเวลา ปรับขนาดและ TDM ช่วยได้",
+   "ATP ตกทำให้ transporter ทางยอดล้มทั้งชุด จึงเห็น Fanconi แม้ eGFR ยังปกติ",
+   "ทางป้องกันขึ้นกับทางเข้าเซลล์ เช่น extended-interval aminoglycoside, TAF แทน TDF, hydration กับ cisplatin",
+   "Normoglycemic glycosuria กับ hypophosphatemia เป็นสัญญาณแรกที่เห็นก่อน Cr ขึ้น"]
+};
+/* ---------- 4 Distal tubulopathy ---------- */
+var DT={
+ ag:{n:"Aminoglycoside / colistin",seg:"TAL",gain:["CaSR"],block:["NKCC2","ROMK"],par:1,syn:"Bartter-like",
+  pat:[["K low","down"],["Mg low","down"],["HCO3 high","up"],["Urine Ca high","up"],["BP normal","ok"]],
+  clue:"Urine Ca สูงโดยไม่ได้ใช้ loop diuretic",tx:"หยุดยา ให้ Mg และ K หายราว 2 สัปดาห์"},
+ loop:{n:"Loop diuretic",seg:"TAL",block:["NKCC2"],par:1,syn:"Bartter-like (pharmacological)",
+  pat:[["K low","down"],["Mg low","down"],["HCO3 high","up"],["Urine Ca high","up"],["Volume low","down"]],
+  clue:"ต้องตัด covert diuretic use ออกก่อนเสมอ",tx:"ลดขนาดยา ทดแทน K และ Mg"},
+ thz:{n:"Thiazide",seg:"DCT",block:["NCC"],down:["TRPM6"],syn:"Gitelman-like",
+  pat:[["K low","down"],["Mg low","down"],["HCO3 high","up"],["Urine Ca low","down"],["Na low (risk)","down"]],
+  clue:"Urine Ca ต่ำ แยกจาก loop และ CaSR agonist",tx:"ลดขนาด เพิ่ม K-sparing ถ้าจำเป็น"},
+ cis:{n:"Cisplatin",seg:"DCT",block:["NCC"],down:["TRPM6"],syn:"Mg wasting ที่อาจถาวร",
+  pat:[["Mg very low","down"],["K low","down"],["FEMg high","up"],["Urine Ca low","down"]],
+  clue:"FEMg สูงขณะ Mg ต่ำ และอยู่ได้หลายปีหลังหยุดยา",tx:"ให้ Mg ใน hydration ทุก cycle ติดตามระยะยาว"},
+ egfr:{n:"Cetuximab / panitumumab",seg:"DCT",block:["EGFR"],down:["TRPM6"],syn:"Isolated renal Mg wasting",
+  pat:[["Mg low","down"],["Ca low (secondary)","down"],["K low (secondary)","down"]],
+  clue:"EGF ไม่ส่งสัญญาณ TRPM6 จึงไม่ถูกนำขึ้นมาที่ membrane",tx:"วัด Mg ทุก cycle ให้ IV Mg เมื่อมีอาการ"},
+ tac:{n:"Tacrolimus",seg:"DCT",gain:["NCC"],down:["TRPM6","TRPV5"],syn:"Gordon-like (PHA2)",
+  pat:[["K high","up"],["HCO3 low","down"],["BP high","up"],["Mg low","down"],["Urine Ca high","up"]],
+  clue:"Calcineurin ไม่ถอด phosphate ออกจาก NCC จึงเปิดค้าง ตอบสนองต่อ thiazide",tx:"ปรับ level ให้ Mg ใช้ thiazide คุม BP และ K"},
+ tmp:{n:"Trimethoprim / pentamidine",seg:"CD",block:["ENaC"],syn:"Voltage-dependent distal RTA",
+  pat:[["K high","up"],["HCO3 low","down"],["Urine pH > 5.5","up"],["Urine AG positive","up"]],
+  clue:"เสีย lumen-negative voltage จึงขับทั้ง K และ H ไม่ได้",tx:"ลดขนาด หยุด RASi หรือ MRA ที่ไม่จำเป็น ใช้ K binder"},
+ amb:{n:"Amphotericin B",seg:"CD",leak:["HATP"],syn:"Distal RTA type 1 + K wasting",
+  pat:[["K low","down"],["HCO3 low","down"],["Urine pH > 5.5","up"],["Polyuria","up"]],
+  clue:"รูบน membrane ทำให้ H ที่ขับออกรั่วกลับ urine pH จึงไม่ต่ำกว่า 5.5",tx:"ให้ K และ alkali เปลี่ยนเป็น liposomal หรือ echinocandin"},
+ li:{n:"Lithium",seg:"CD",entry:["ENaC"],down:["AQP2"],syn:"Nephrogenic DI",
+  pat:[["Polyuria","up"],["Urine dilute","down"],["Na high ถ้าดื่มน้ำไม่ได้","up"]],
+  clue:"Li เข้าทาง ENaC แล้วยับยั้ง GSK3B ทำให้ AQP2 ลด",tx:"Amiloride บล็อกทางเข้าของ Li เป็นการรักษาจำเพาะ"},
+ mra:{n:"MRA / heparin / RASi",seg:"CD",block:["MR"],down:["ENaC","ROMK"],syn:"Type 4 RTA",
+  pat:[["K high","up"],["HCO3 slightly low","down"],["Urine pH < 5.5","ok"]],
+  clue:"Aldosterone effect ลด ammoniagenesis ลด แต่ urine pH ยังลดได้",tx:"ลดยา จำกัด K ใช้ loop diuretic หรือ K binder"}
+};
+SC.distal={
+  h2:"ยาจับ transporter ตัวไหนใน distal nephron แล้วได้ pattern อะไร",
+  drugs:Object.keys(DT).map(function(k){return [k,DT[k].n];}),
+  init:{sel:"ag"},
+  noteF:function(P){ return "Segment: "+{TAL:"Thick ascending limb",DCT:"Distal convoluted tubule",CD:"Collecting duct"}[DT[P.sel].seg]; },
+  draw:function(svg,P){
+    var d=DT[P.sel];
+    var st=function(id){
+      if((d.block||[]).indexOf(id)>=0) return "b";
+      if((d.gain||[]).indexOf(id)>=0) return "g";
+      if((d.down||[]).indexOf(id)>=0) return "f";
+      if((d.leak||[]).indexOf(id)>=0) return "b";
+      if((d.entry||[]).indexOf(id)>=0) return "d";
+      return "n"; };
+    var seg=d.seg;
+    if(seg==="TAL"){
+      cellFrame(svg,"Thick ascending limb cell");
+      pill(svg,178,124,92,"NKCC2",st("NKCC2"),"Na K 2Cl");
+      pill(svg,178,210,92,"ROMK",st("ROMK"),"K back to lumen");
+      pill(svg,586,120,92,"CaSR",st("CaSR"));
+      pill(svg,586,206,92,"ClC-Kb",st("ClC-Kb"));
+      pill(svg,586,292,104,"Na/K-ATPase","n");
+      SV("rect",{x:178,y:338,width:408,height:24,rx:12,fill:d.par?"#FBE9EA":"#F2F8FB",stroke:d.par?C.red:C.line2,"stroke-width":d.par?2:1,"stroke-dasharray":d.par?"5 4":null},svg);
+      T(svg,382,354,"Paracellular claudin-16/19: Ca and Mg follow the lumen-positive voltage",{a:"middle",fs:11.5,fw:600,c:d.par?C.red:C.ink});
+      if(st("NKCC2")!=="b") dots(svg,"M56 124 L178 124 L320 136",4,4,C.acc2,4);
+      if(st("CaSR")==="g"){ arrow(svg,548,138,404,164,C.red,2.5); T(svg,382,208,"Cationic drug switches CaSR on: NKCC2 and ROMK turned down",{a:"middle",fs:12,c:C.red,fw:600}); }
+      if(P.sel==="loop") T(svg,382,208,"Loop diuretic blocks NKCC2 directly",{a:"middle",fs:12,c:C.red,fw:600});
+      T(svg,382,298,d.par?"Lumen-positive voltage lost: Ca and Mg reabsorption falls":"Lumen-positive voltage maintained",{a:"middle",fs:12,c:d.par?C.red:C.muted});
+    } else if(seg==="DCT"){
+      cellFrame(svg,"Distal convoluted tubule cell");
+      pill(svg,178,120,88,"NCC",st("NCC"),"Na Cl");
+      pill(svg,178,212,88,"TRPM6",st("TRPM6"),"Mg2+");
+      pill(svg,178,300,88,"TRPV5",st("TRPV5"),"Ca2+");
+      pill(svg,586,136,88,"EGFR",st("EGFR"),"binds pro-EGF");
+      pill(svg,586,246,104,"Na/K-ATPase","n");
+      SV("rect",{x:286,y:100,width:200,height:34,rx:10,fill:"#fff",stroke:P.sel==="tac"?C.teal:C.line2,"stroke-width":P.sel==="tac"?2.2:1.4},svg);
+      T(svg,386,122,"WNK-SPAK keeps phospho-NCC on",{a:"middle",fs:11.5,c:P.sel==="tac"?C.teal:C.muted,fw:600});
+      if(P.sel==="tac") T(svg,386,152,"Calcineurin blocked, phosphate not removed: NCC stays on",{a:"middle",fs:12,c:C.teal,fw:600});
+      SV("path",{d:"M540 150 C470 180 320 196 228 208",fill:"none",stroke:st("EGFR")==="b"?C.red:C.line2,"stroke-width":2,"stroke-dasharray":"6 5"},svg);
+      T(svg,392,238,"EGF to EGFR to Rac1 inserts TRPM6",{a:"middle",fs:11.5,c:st("EGFR")==="b"?C.red:C.muted});
+      if(st("NCC")!=="b") dots(svg,"M56 120 L178 120 L300 132",st("NCC")==="g"?7:4,st("NCC")==="g"?2.5:4,C.acc2,4);
+      if(st("TRPM6")==="n") dots(svg,"M56 212 L178 212 L280 212",3,4,C.teal,4);
+      T(svg,386,344,"This is the last segment that can reclaim Mg",{a:"middle",fs:11.5,c:C.muted});
+    } else {
+      cellFrame(svg,"Collecting duct: principal cell and alpha-intercalated cell");
+      SV("line",{x1:382,y1:58,x2:382,y2:372,stroke:C.line2,"stroke-dasharray":"5 5"},svg);
+      T(svg,276,86,"Principal cell",{a:"middle",fs:11.5,c:C.muted,fw:600});
+      T(svg,490,86,"Alpha-intercalated cell",{a:"middle",fs:11.5,c:C.muted,fw:600});
+      pill(svg,178,134,84,"ENaC",st("ENaC"),"Na+");
+      pill(svg,178,216,84,"ROMK",st("ROMK"),"K+");
+      pill(svg,178,300,84,"AQP2",st("AQP2"),"water");
+      pill(svg,586,140,84,"MR",st("MR"),"aldosterone");
+      pill(svg,586,246,84,"V2R","n","vasopressin");
+      pill(svg,470,340,104,"H+-ATPase",st("HATP"));
+      var volt=(st("ENaC")==="b"||st("ENaC")==="f");
+      T(svg,286,182,volt?"Lumen-negative voltage lost: K and H stay in":"ENaC makes the lumen negative, driving K and H out",{a:"middle",fs:11.5,c:volt?C.red:C.muted,fw:volt?600:400});
+      if(st("ENaC")==="n") dots(svg,"M56 134 L178 134 L286 146",4,4,C.acc2,4);
+      if(st("ENaC")==="d"){ dots(svg,"M56 134 L178 134 L286 152",5,3.5,C.gold,4.5); T(svg,286,254,"Lithium inside: GSK3B inhibited, AQP2 falls",{a:"middle",fs:11.5,c:C.red,fw:600}); }
+      if(st("HATP")==="b"){ arrow(svg,196,366,418,352,C.red,2.2); T(svg,300,386,"Membrane pores: secreted H leaks back",{a:"middle",fs:11.5,c:C.red,fw:600}); }
+    }
+    badgeRow(svg,406,d.pat);
+    return {ro:[[d.syn,"Syndrome","flag"],[d.clue,"เบาะแสที่แยกจากภาวะอื่น",null],[d.tx,"จัดการ",null]],
+      tk:"<b>"+d.n+"</b> ที่ "+{TAL:"TAL",DCT:"DCT",CD:"collecting duct"}[seg]+" ให้ภาพ <b>"+d.syn+"</b> "+d.clue};
+  },
+  rows:[["TAL","CaSR agonist (aminoglycoside, colistin) หรือ loop diuretic ให้ Bartter-like urine Ca สูง"],
+   ["DCT","thiazide และ cisplatin ให้ Gitelman-like urine Ca ต่ำ  EGFR mAb ให้ Mg ต่ำอย่างเดียว  tacrolimus ให้ Gordon-like"],
+   ["Collecting duct","ENaC block ให้ K สูง urine pH > 5.5  amphotericin B ให้ dRTA K ต่ำ  lithium ให้ NDI  MRA และ heparin ให้ type 4"],
+   ["PPI","Mg ต่ำจากการดูดซึมที่ลำไส้ ไม่ใช่ tubulopathy FEMg < 2%"]],
+  take:["Urine Ca แยก thiazide-like (ต่ำ) ออกจาก loop และ CaSR agonist (สูง)",
+   "ENaC block ทำให้ขับทั้ง K และ H ได้น้อยลง จึงได้ K สูงพร้อม urine pH > 5.5",
+   "Amphotericin B ทำให้ H รั่วกลับ จึงได้ distal RTA ที่ K ต่ำ",
+   "TRPM6 เป็นจุดรวมของยาหลายกลุ่มที่ทำให้ Mg ต่ำ ต้องแก้ Mg ก่อนจึงจะแก้ K ได้"]
+};
+/* ---------- 5 AIN ---------- */
+var AIND={
+ bl:{n:"Beta-lactam",lat:"7–10 วัน (3–5 วันถ้าเคยได้ยามาก่อน)",res:3},
+ ppi:{n:"PPI",lat:"10–11 สัปดาห์ มักไม่มีอาการนำ",res:3},
+ nsaid:{n:"NSAID",lat:"หลายเดือน อาจมาพร้อม MCD",res:3},
+ ici:{n:"Checkpoint inhibitor",lat:"ราว 14 สัปดาห์ อาจเกิดหลังโดสสุดท้าย",res:6},
+ rif:{n:"Rifampicin",lat:"ชั่วโมงถึงวัน โดยเฉพาะเมื่อเริ่มยาซ้ำ",res:3}
+};
+SC.ain={
+  h2:"ยิ่งหยุดยาช้า การอักเสบยิ่งนาน fibrosis ยิ่งมาก",
+  drugs:Object.keys(AIND).map(function(k){return [k,AIND[k].n];}),
+  init:{sel:"ppi",delay:4,ster:false},
+  noteF:function(P){ return "Onset หลังเริ่มยา: "+AIND[P.sel].lat; },
+  ctls:function(P){
+    var sl=Sim.slider({id:"ad",label:"หยุดยาหลังเริ่มมี AKI",min:0,max:10,step:1,value:P.delay,unit:"สัปดาห์",onInput:function(v){P.delay=v;redraw();}});
+    return [sl.el,Sim.h("div",{"class":"tools"},[Sim.toggle("ให้ steroid หลังหยุดยา 1 สัปดาห์",function(v){P.ster=v;redraw();},P.ster)])];
+  },
+  draw:function(svg,P){
+    var a=AIND[P.sel], decay=P.ster?1:a.res, W=P.delay+decay;
+    var ifta=cl(4+6.5*Math.max(0,W-1.5),0,75), rec=Math.round(100-ifta*.9);
+    T(svg,382,24,"Interstitium "+(P.delay+1)+" weeks after AIN started",{a:"middle",fs:14,fw:600});
+    var tx0=56, tx1=712, span=12; function X(w){ return tx0+(tx1-tx0)*Math.min(w,span)/span; }
+    SV("line",{x1:tx0,y1:56,x2:tx1,y2:56,stroke:C.line2,"stroke-width":3},svg);
+    SV("rect",{x:X(0),y:50,width:X(W)-X(0),height:13,rx:6,fill:"rgba(180,35,42,.28)"},svg);
+    T(svg,(X(0)+X(W))/2,44,"Inflammation "+W+" weeks",{a:"middle",fs:11,c:C.red,fw:600});
+    var marks=[[0,"AIN starts",C.red],[P.delay,"Drug stopped",C.ink]];
+    if(P.ster) marks.push([P.delay+1,"Steroid",C.teal]);
+    marks.forEach(function(m,i){ var x=X(m[0]);
+      SV("circle",{cx:x,cy:56,r:6,fill:m[2]},svg);
+      T(svg,x,80+(i===2?15:0),m[1],{a:"middle",fs:11.5,fw:600,c:m[2]}); });
+    T(svg,tx1+24,60,"weeks",{fs:11,c:C.muted});
+    SV("rect",{x:30,y:104,width:700,height:276,rx:18,fill:"#FBF7F2"},svg);
+    var rnd=Patho.rng(11);
+    for(var f=0;f<Math.round(ifta*1.3);f++){ var x=42+rnd()*676, y=114+rnd()*256;
+      SV("path",{d:"M"+x+" "+y+" q12 -6 24 0 t24 0",fill:"none",stroke:"#5B8DB8","stroke-width":1.6,opacity:.7},svg); }
+    [[150,196],[330,272],[520,186],[640,306],[246,340]].forEach(function(t,i){
+      var atro=ifta>35&&i%2===0;
+      SV("circle",{cx:t[0],cy:t[1],r:atro?30:46,fill:"#fff",stroke:"#C9B8A4","stroke-width":atro?6:8},svg);
+      SV("circle",{cx:t[0],cy:t[1],r:atro?10:18,fill:"#F2F8FB"},svg);
+    });
+    var nT=Math.round((P.delay+1)*15*(P.ster?.45:1));
+    for(var c=0;c<nT;c++){ var cx=48+rnd()*664, cy=118+rnd()*250;
+      SV("circle",{cx:cx,cy:cy,r:4.4,fill:c%7===0?"#D9534F":"#3D3A8C"},svg); }
+    T(svg,44,370,"Blue dots, T cells. Red dots, eosinophils. Blue strands, collagen (IFTA). Pale rings, atrophic tubules",{fs:11.5,c:C.muted});
+    T(svg,30,406,"IFTA "+Math.round(ifta)+"%",{fs:13,fw:600,mono:1,c:ifta>25?C.red:C.ink});
+    T(svg,730,406,"Expected eGFR recovery "+rec+"% of baseline",{fs:13,fw:600,a:"end",c:rec<75?C.red:C.teal});
+    var tk="หยุด "+a.n+" หลังเริ่มมี AKI <span class=\"num\">"+P.delay+"</span> สัปดาห์ การอักเสบรวม "+W+" สัปดาห์ IFTA ราว <span class=\"num\">"+Math.round(ifta)+"%</span> คาดว่า eGFR ฟื้นราว "+rec+"% ของเดิม"
+      +(P.sel==="ici"?" ICI-AIN ควรเริ่ม steroid ภายใน 3 วัน":"")
+      +(P.sel==="nsaid"?" NSAID อาจมาพร้อม MCD จึงมี proteinuria ระดับ nephrotic":"");
+    return {ro:[[W+" สัปดาห์","ระยะที่ interstitium อักเสบ",W>4?"flag":null],
+      [Math.round(ifta)+"%","IFTA (fibrosis) ตัวทำนาย eGFR สุดท้าย",ifta>25?"flag":"ok"],
+      [rec+"%","eGFR ที่คาดว่าจะฟื้น",rec<75?"flag":"ok"]],tk:tk};
+  },
+  rows:[["กลไก","T-cell hypersensitivity ต่อ drug hapten บน tubular basement membrane ไม่ขึ้นกับขนาดยา"],
+   ["อาการ","non-oliguric AKI, sterile pyuria, WBC casts ไข้ ผื่น eosinophilia ครบสามอย่างพบราว 10%"],
+   ["สัดส่วนสาเหตุ","ยาเป็นสาเหตุ 70–75% ของ AIN โดยยาปฏิชีวนะราวครึ่งหนึ่ง รองมาเป็น PPI และ NSAID"],
+   ["Pathology","interstitial edema, mononuclear และ eosinophil infiltrate, tubulitis IFTA บอก eGFR สุดท้าย"]],
+  take:["เวลาจนหยุดยาเป็นตัวกำหนดการฟื้นตัว fibrosis เริ่มภายใน 7–10 วันถ้ายังอักเสบต่อ",
+   "หยุดยาที่สงสัยก่อน ถ้า Cr ไม่ลงใน 5–7 วันจึง biopsy แล้วพิจารณา prednisolone 0.5–1 mg/kg/day",
+   "ICI-AIN ให้ steroid เร็วภายใน 3 วัน และตัดสินเรื่อง rechallenge ร่วมกับ oncology",
+   "บันทึกยาที่เป็นสาเหตุเป็น drug allergy เพื่อไม่ให้ได้รับซ้ำ"]
+};
+/* ---------- 6 Crystalline nephropathy ---------- */
+var CRD={
+ mtx:{n:"HD-methotrexate",ph:"acid",sol:1.0,note:"ละลายน้อยในปัสสาวะกรด ต้อง alkalinize ให้ pH ≥ 7"},
+ sdz:{n:"Sulfadiazine",ph:"acid",sol:1.1,note:"ผลึกรูป shocks of wheat ในปัสสาวะกรด"},
+ acv:{n:"Acyclovir IV",ph:"none",sol:1.25,note:"ตกผลึกได้ทุก pH ขึ้นกับความเข้มข้นและความเร็วที่ให้"},
+ amx:{n:"IV amoxicillin ขนาดสูง",ph:"acid",sol:1.35,note:"ให้ช้า หลีกเลี่ยง bolus"},
+ ind:{n:"Indinavir / atazanavir",ph:"alk",sol:1.0,note:"ละลายน้อยในปัสสาวะด่าง นิ่วไม่เห็นบน CT"},
+ cip:{n:"Ciprofloxacin",ph:"alk",sol:1.5,note:"ตกผลึกเมื่อปัสสาวะเป็นด่างและขนาดยาสูง"}
+};
+SC.crys={
+  h2:"น้ำถูกดูดกลับ ยาเข้มข้นขึ้นเรื่อยๆ จนเกินจุดละลาย",
+  drugs:Object.keys(CRD).map(function(k){return [k,CRD[k].n];}),
+  init:{sel:"mtx",ph:5.5,uo:1.0,slow:false},
+  noteF:function(P){ return CRD[P.sel].note; },
+  ctls:function(P){
+    var a=Sim.slider({id:"cph",label:"Urine pH",min:5,max:8,step:.1,value:P.ph,fmt:function(v){return v.toFixed(1);},onInput:function(v){P.ph=v;redraw();}});
+    var b=Sim.slider({id:"cuo",label:"Urine output",min:.4,max:4,step:.1,value:P.uo,unit:"L/day",fmt:function(v){return v.toFixed(1);},onInput:function(v){P.uo=v;redraw();}});
+    return [a.el,b.el,Sim.h("div",{"class":"tools"},[Sim.toggle("ให้ยาช้า และปรับขนาดตาม GFR",function(v){P.slow=v;redraw();},P.slow)])];
+  },
+  draw:function(svg,P){
+    var d=CRD[P.sel];
+    var phF=d.ph==="acid"?cl(1+(6.6-P.ph)*.85,.35,3.2):d.ph==="alk"?cl(1+(P.ph-6.4)*.85,.35,3.2):1;
+    var conc=(1.6/P.uo)*(P.slow?.5:1)*phF/d.sol;
+    var sat=cl(conc,0,4);
+    var risk=cl((sat-.85)/1.3,0,1);
+    T(svg,382,24,"Concentration along the tubule",{a:"middle",fs:14,fw:600});
+    var segs=[["Filtrate",120,.05],["Proximal tubule",270,.28],["Loop",420,.55],["Distal tubule",560,.8],["Collecting duct",690,1]];
+    SV("path",{d:"M60 150 L720 150",stroke:"#DDE6EC","stroke-width":52,"stroke-linecap":"round"},svg);
+    var crossed=false;
+    segs.forEach(function(s){
+      var c=sat*(.12+s[2]*.88), over=c>=1;
+      SV("rect",{x:s[1]-56,y:124,width:112,height:52,rx:8,fill:over?"rgba(180,35,42,"+cl(.18+ (c-1)*.22,.18,.55)+")":"rgba(91,75,255,"+cl(c*.26,.05,.3)+")"},svg);
+      T(svg,s[1],198,s[0],{a:"middle",fs:11.5,c:C.muted});
+      T(svg,s[1],156,"x"+c.toFixed(1),{a:"middle",fs:13,mono:1,fw:600,c:over?C.red:C.ink});
+      if(over&&!crossed){ crossed=true; T(svg,s[1],214,"crystals form here",{a:"middle",fs:11,fw:600,c:C.red}); }
+    });
+    T(svg,60,112,"Water is reabsorbed, so the drug concentrates. Numbers are multiples of its solubility limit",{fs:11.5,c:C.muted});
+    var crystals=Math.round(risk*26);
+    var rnd=Patho.rng(5);
+    SV("rect",{x:470,y:236,width:276,height:150,rx:14,fill:"#F6F6FA",stroke:C.line},svg);
+    T(svg,608,256,"Distal tubule and collecting duct lumen",{a:"middle",fs:11.5,fw:600,c:C.muted});
+    for(var i=0;i<crystals;i++){
+      var x=486+rnd()*244, y=272+rnd()*100, a2=rnd()*3.14;
+      SV("rect",{x:x,y:y,width:3.4,height:13+rnd()*10,fill:"#6E5BD8",transform:"rotate("+(a2*57)+" "+x+" "+y+")"},svg);
+    }
+    if(!crystals) T(svg,608,324,"No crystals: drug stays in solution",{a:"middle",fs:12,c:C.teal,fw:600});
+    var bx=60, bw=330, by=300;
+    T(svg,bx,by-34,"Supersaturation at the collecting duct",{fs:12,fw:600,c:C.muted});
+    SV("rect",{x:bx,y:by-18,width:bw,height:22,rx:11,fill:"#E6E7F0"},svg);
+    SV("rect",{x:bx,y:by-18,width:bw*cl(sat/4,0,1),height:22,rx:11,fill:risk>0?C.red:C.teal},svg);
+    var sx=bx+bw/4;
+    SV("line",{x1:sx,y1:by-26,x2:sx,y2:by+12,stroke:C.ink,"stroke-width":2},svg);
+    T(svg,sx,by+28,"Solubility limit",{a:"middle",fs:11.5,fw:600});
+    T(svg,bx,by+54,"x"+sat.toFixed(2)+" of the limit",{fs:13,fw:600,mono:1,c:risk>0?C.red:C.teal});
+    var state=risk>.55?"Crystal AKI: obstruction + tubular injury":risk>0?"Crystalluria, early obstruction":"ปลอดภัย";
+    T(svg,60,404,{acid:"This drug precipitates in acid urine",alk:"This drug precipitates in alkaline urine",none:"This drug precipitates at any pH"}[d.ph],{fs:12.5,c:C.muted});
+    var fix=[];
+    if(P.uo<2) fix.push("เพิ่ม urine output ให้ถึง 2–3 L/day");
+    if(d.ph==="acid"&&P.ph<7) fix.push("alkalinize urine ให้ pH ≥ 7");
+    if(d.ph==="alk"&&P.ph>6.5) fix.push("ไม่ต้อง alkalinize ยานี้ตกผลึกในด่าง");
+    if(!P.slow) fix.push("ให้ยาช้าและปรับขนาดตาม GFR");
+    var tk=risk>0 ? ("ความเข้มข้นที่ collecting duct <span class=\"num\">x"+sat.toFixed(2)+"</span> ของจุดละลาย ผลึกเริ่มอุด tubule "+(fix.length?"แก้ได้ด้วย "+fix.join(", "):""))
+      : "ความเข้มข้นที่ collecting duct <span class=\"num\">x"+sat.toFixed(2)+"</span> ของจุดละลาย ยายังอยู่ในสารละลาย ไม่ตกผลึก";
+    return {ro:[["x"+sat.toFixed(2),"ความเข้มข้นเทียบจุดละลาย",risk>0?"flag":"ok"],
+      [Math.round(risk*100)+"%","โอกาสเกิด crystal AKI",risk>.4?"flag":"ok"],
+      [state,"Phenotype",risk>0?"flag":"ok"]],tk:tk};
+  },
+  rows:[["ปัจจัยที่แก้ได้ทั้งหมด","ขนาดและความเร็วที่ให้ ปริมาณปัสสาวะ pH ของปัสสาวะ และ GFR"],
+   ["ปัสสาวะกรด","methotrexate, sulfadiazine, amoxicillin, triamterene, uric acid"],
+   ["ปัสสาวะด่าง","ciprofloxacin, indinavir, atazanavir, calcium phosphate"],
+   ["ไม่ขึ้นกับ pH","acyclovir ให้ช้าอย่างน้อย 1 ชม. และคิดขนาดจาก ideal body weight"]],
+  take:["ผลึกเกิดเมื่อความเข้มข้นในท่อไตเกินจุดละลาย จึงป้องกันได้เกือบทั้งหมดด้วยน้ำ ขนาดยา และ pH",
+   "ผลึกทำให้เกิดทั้งการอุดกั้นและการบาดเจ็บของเซลล์โดยตรง และกระตุ้นการอักเสบจนเป็นพังผืดถ้าค้างนาน",
+   "ดู urine sediment เพื่อหาผลึกก่อนตัดสินว่า Cr ที่ขึ้นเป็น pseudo-AKI",
+   "HD-methotrexate ที่ระดับยาค้าง ให้ glucarpidase ภายใน 48–60 ชม. และหยุดยาที่ชะลอการขับ"]
+};
+/* ---------- 7 Drug-induced TMA ---------- */
+var TMD={
+ qui:{n:"Quinine",type:"immune",tgt:"ab",on:"ชั่วโมงหลังได้ยาซ้ำ ถ้าเป็นครั้งแรกภายใน 21 วัน",pres:"เฉียบพลันรุนแรง มีไข้ หนาวสั่น oliguric AKI",tpe:"ไม่ช่วย (ASFA category IV)",re:"ห้ามให้ซ้ำเด็ดขาด"},
+ tic:{n:"Ticlopidine",type:"immune",tgt:"adam",on:"2–4 สัปดาห์",pres:"เหมือน immune TTP ADAMTS13 < 10%",tpe:"เป็นการรักษาหลัก (ASFA category I)",re:"ห้ามให้ซ้ำ"},
+ gem:{n:"Gemcitabine",type:"toxic",tgt:"endo",on:"หลายเดือน สัมพันธ์กับ cumulative dose",pres:"ค่อยเป็นค่อยไป ความดันสูงใหม่ proteinuria มักจำกัดที่ไต",tpe:"ไม่ช่วย (ASFA category IV)",re:"หยุดยา คุม BP พิจารณา complement inhibitor ถ้าแย่ลงต่อ"},
+ mmc:{n:"Mitomycin C",type:"toxic",tgt:"endo",on:"หลายเดือน ขึ้นกับขนาดสะสม",pres:"รุนแรงและฟื้นยาก มักเหลือ CKD ระยะท้าย",tpe:"ไม่ช่วย",re:"หยุดยา ประคับประคอง"},
+ vegf:{n:"VEGF inhibitor",type:"toxic",tgt:"vegf",on:"สัปดาห์ถึงเดือน",pres:"ความดันสูงมาก่อน แล้วตามด้วย proteinuria มักจำกัดที่ไต ไม่มี MAHA ชัด",tpe:"ไม่ใช่การรักษาหลัก",re:"คุมความดัน ลดขนาดหรือหยุดยาตามความรุนแรง"},
+ cni:{n:"CNI / mTOR inhibitor",type:"toxic",tgt:"endo",on:"สัปดาห์ถึงเดือน",pres:"มักจำกัดที่ไต Cr ขึ้นพร้อม proteinuria",tpe:"ไม่ใช่การรักษาหลัก",re:"ลดขนาดหรือเปลี่ยนยา เลี่ยงใช้ CNI ร่วมกับ mTORi"},
+ car:{n:"Carfilzomib",type:"toxic",tgt:"endo",on:"ไม่กี่ cycle แรก",pres:"ความดันสูง MAHA เกล็ดเลือดต่ำ AKI",tpe:"ไม่เปลี่ยนผลลัพธ์ (ASFA category III)",re:"หยุดยา ประคับประคอง"}
+};
+SC.tma={
+  h2:"Endothelium ถูกทำลายจากภูมิคุ้มกันหรือจากพิษโดยตรง",
+  drugs:Object.keys(TMD).map(function(k){return [k,TMD[k].n];}),
+  init:{sel:"gem"},
+  noteF:function(P){ return TMD[P.sel].type==="immune"?"กลไกภูมิคุ้มกัน: เกิดเร็ว รุนแรง และกลับเป็นซ้ำทันทีเมื่อได้ยาอีก":"กลไกพิษโดยตรง: ค่อยเป็นค่อยไป สัมพันธ์กับขนาดสะสม"; },
+  draw:function(svg,P){
+    var d=TMD[P.sel], imm=d.type==="immune";
+    T(svg,382,24,"Glomerular capillary: endothelial injury and thrombosis",{a:"middle",fs:14,fw:600});
+    SV("rect",{x:40,y:48,width:680,height:150,rx:20,fill:"#FBF1F1"},svg);
+    SV("path",{d:"M60 170 L700 170",stroke:"#C9B8A4","stroke-width":10,"stroke-linecap":"round"},svg);
+    var injured=true;
+    for(var i=0;i<14;i++){
+      var x=72+i*46, dmg=(i%2===0);
+      SV("rect",{x:x-20,y:150,width:40,height:16,rx:7,fill:dmg?"#E8B4B7":"#CFE3EC",stroke:dmg?C.red:"#8FB8CA","stroke-width":dmg?2:1},svg);
+    }
+    T(svg,60,134,"Endothelial cells: swollen, detached",{fs:11.5,c:C.red,fw:600});
+    for(var t=0;t<4;t++){
+      var tx=150+t*150;
+      SV("ellipse",{cx:tx,cy:120,rx:34,ry:18,fill:"#F3D9D9",stroke:C.red,"stroke-width":2},svg);
+      T(svg,tx,124,"thrombus",{a:"middle",fs:10.5,c:C.red,fw:600});
+    }
+    for(var r=0;r<9;r++){
+      var rx=80+r*74, ry=78+(r%2)*16;
+      SV("path",{d:"M"+rx+" "+ry+" q7 -8 14 0 q-7 6 -14 0 z",fill:"#B4232A",opacity:.85},svg);
+    }
+    T(svg,60,66,"Fragmented red cells (schistocytes) and platelet consumption",{fs:11.5,c:C.muted});
+    var y0=236;
+    SV("rect",{x:40,y:y0-24,width:328,height:150,rx:16,fill:imm?"#FBE9EA":"#F6F6FA",stroke:imm?C.red:C.line,"stroke-width":imm?2.2:1},svg);
+    T(svg,204,y0-4,"Immune mechanism",{a:"middle",fs:12.5,fw:600,c:imm?C.red:C.faint});
+    T(svg,204,y0+22,"Drug-dependent antibodies bind platelet",{a:"middle",fs:11.5,c:imm?C.ink:C.faint});
+    T(svg,204,y0+40,"GPIb/IX and endothelium (quinine)",{a:"middle",fs:11.5,c:imm?C.ink:C.faint});
+    T(svg,204,y0+64,"or autoantibody to ADAMTS13 (ticlopidine)",{a:"middle",fs:11.5,c:imm?C.ink:C.faint});
+    T(svg,204,y0+94,imm?"Abrupt, systemic, returns on re-exposure":"not the mechanism here",{a:"middle",fs:12,fw:600,c:imm?C.red:C.faint});
+    SV("rect",{x:392,y:y0-24,width:328,height:150,rx:16,fill:!imm?"#FBE9EA":"#F6F6FA",stroke:!imm?C.red:C.line,"stroke-width":!imm?2.2:1},svg);
+    T(svg,556,y0-4,"Direct toxic mechanism",{a:"middle",fs:12.5,fw:600,c:!imm?C.red:C.faint});
+    var tox={endo:"Direct endothelial toxicity (gemcitabine, mitomycin C, CNI, carfilzomib)",vegf:"VEGF blocked: podocyte cannot maintain the endothelium",ab:"",adam:""}[d.tgt]||"";
+    T(svg,556,y0+22,!imm?(d.tgt==="vegf"?"VEGF signal from podocyte to":"Endothelium injured by the drug"):"not the mechanism here",{a:"middle",fs:11.5,c:!imm?C.ink:C.faint});
+    T(svg,556,y0+40,!imm?(d.tgt==="vegf"?"endothelium is blocked":"itself, cumulative with dose"):"",{a:"middle",fs:11.5,c:!imm?C.ink:C.faint});
+    T(svg,556,y0+64,!imm?"Complement and coagulation switched on locally":"",{a:"middle",fs:11.5,c:!imm?C.ink:C.faint});
+    T(svg,556,y0+94,!imm?"Insidious, often limited to the kidney":"",{a:"middle",fs:12,fw:600,c:!imm?C.red:C.faint});
+    T(svg,40,400,"Renal-limited TMA is common in the toxic group, where MAHA and low platelets may be absent",{fs:12,c:C.muted});
+    return {ro:[[imm?"Immune (drug-dependent antibody)":"Toxic (dose-related)","กลไก","flag"],
+      [d.on,"Onset",null],
+      [d.tpe,"Plasma exchange",null]],
+      tk:"<b>"+d.n+"</b> ทำให้เกิด TMA แบบ "+(imm?"ภูมิคุ้มกัน":"พิษโดยตรง")+" "+d.pres+" การจัดการ: "+d.re};
+  },
+  rows:[["เกณฑ์","MAHA (schistocytes, LDH สูง, haptoglobin ต่ำ, Coombs ลบ) เกล็ดเลือดต่ำ และอวัยวะบาดเจ็บ"],
+   ["ต้องแยก","TTP (ADAMTS13 < 10%), STEC-HUS, aHUS (complement), มะเร็ง, ความดันสูงวิกฤต, ครรภ์, SLE/APS"],
+   ["Immune","quinine (ชัดเจนที่สุด), ticlopidine, oxaliplatin, vancomycin, interferon"],
+   ["Toxic","gemcitabine, mitomycin C, VEGF inhibitor, CNI, mTOR inhibitor, proteasome inhibitor"]],
+  take:["แยก immune ออกจาก toxic ด้วยความเร็วของการเกิดและพฤติกรรมเมื่อได้ยาซ้ำ",
+   "Plasma exchange เป็นการรักษาหลักเฉพาะกลุ่ม immune ที่มี autoantibody ต่อ ADAMTS13 ไม่ใช่ในกลุ่ม toxic",
+   "Renal-limited TMA พบได้บ่อย ถ้าไม่มี MAHA ชัดต้องอาศัย biopsy",
+   "ยาที่ทำ TMA แบบภูมิคุ้มกันห้ามให้ซ้ำ เพราะกลับเป็นเร็วและอาจถึงชีวิต"]
+};
+/* ---------- 8 Glomerular disease ---------- */
+var GLD={
+ nsaid:{n:"NSAID",les:"mcd",pat:"nephrotic",ab:"",ex:"มักพบร่วมกับ AIN ในชิ้นเนื้อเดียวกัน",tx:"หยุดยา proteinuria มักหายภายในไม่กี่เดือน"},
+ ifn:{n:"Interferon",les:"collapse",pat:"nephrotic",ab:"",ex:"สัมพันธ์กับ APOL1 high-risk genotype",tx:"หยุดยา การฟื้นมักไม่ครบ"},
+ pam:{n:"Pamidronate",les:"collapse",pat:"nephrotic",ab:"",ex:"ขนาดสูงหรือใช้นาน zoledronate ให้ ATN แทน",tx:"หยุดยา ฟื้นได้บางส่วน"},
+ anab:{n:"Anabolic steroid",les:"fsgs",pat:"nephrotic",ab:"",ex:"มวลกล้ามเนื้อเพิ่มทำให้ hyperfiltration ร่วมกับพิษโดยตรง",tx:"หยุดยา ร่วมกับ RAS inhibitor"},
+ vegfT:{n:"VEGFR-TKI",les:"mcd",pat:"nephrotic",ab:"",ex:"มักมาพร้อมความดันสูงและ proteinuria",tx:"ลดขนาดหรือหยุดยา คุมความดัน"},
+ nell:{n:"Mercury / thiol drug",les:"mn",pat:"nephrotic",ab:"NELL-1",ex:"captopril, penicillamine, gold, mercury, lipoic acid",tx:"หยุดการสัมผัส มักหายเองโดยไม่ต้องกดภูมิ"},
+ nsaidMN:{n:"NSAID (membranous)",les:"mn",pat:"nephrotic",ab:"PCSK6",ex:"เป็น MN ระยะต้น PLA2R มักลบ",tx:"หยุดยา หายภายในไม่กี่เดือน"},
+ ptu:{n:"Propylthiouracil",les:"crescent",pat:"nephritic",ab:"MPO-ANCA",ex:"ANCA บวกได้ 20–41% ของผู้ใช้ แต่เป็น vasculitis จริงราว 3%",tx:"หยุดยา ถ้ามีอวัยวะสำคัญให้ steroid ร่วมกับ rituximab หรือ cyclophosphamide"},
+ hyd:{n:"Hydralazine",les:"crescent",pat:"nephritic",ab:"MPO +/- PR3, antihistone",ex:"ขนาดและระยะเวลาสะสม ซ้อนทับกับ drug-induced lupus",tx:"หยุดยาและไม่ให้ซ้ำ รักษาเหมือน ANCA vasculitis"},
+ lev:{n:"Levamisole-adulterated cocaine",les:"crescent",pat:"nephritic",ab:"MPO และ PR3, anti-elastase",ex:"มี retiform purpura, ear necrosis, neutropenia",tx:"หยุดการสัมผัส ให้ยากดภูมิเมื่อมี GN"},
+ alem:{n:"Alemtuzumab",les:"antigbm",pat:"nephritic",ab:"anti-GBM",ex:"เกิดหลัง lymphocyte reconstitution ตรวจปัสสาวะทุกเดือนนาน 4 ปี",tx:"รักษาเหมือน anti-GBM disease: PLEX, cyclophosphamide, steroid"},
+ ici:{n:"Checkpoint inhibitor",les:"crescent",pat:"nephritic",ab:"pauci-immune (บางราย)",ex:"พบน้อยกว่า AIN มาก มีได้ทั้ง podocytopathy, C3, membranous",tx:"หยุดยา ให้ steroid พิจารณา rituximab ถ้าเป็น vasculitis"}
+};
+SC.glom={
+  h2:"ยาทำร้าย podocyte หรือกระตุ้นภูมิคุ้มกันต่อ glomerulus",
+  drugs:Object.keys(GLD).map(function(k){return [k,GLD[k].n];}),
+  init:{sel:"nsaid"},
+  noteF:function(P){ return GLD[P.sel].ex; },
+  draw:function(svg,P){
+    var d=GLD[P.sel], box=document.getElementById("pathoBox");
+    var neph=d.pat==="nephrotic";
+    T(svg,382,24,neph?"Podocyte injury: protein leaks into the urine":"Immune attack: crescents and hematuria",{a:"middle",fs:14,fw:600});
+    var y=150;
+    SV("rect",{x:40,y:56,width:680,height:40,rx:14,fill:"#F2F8FB"},svg);
+    T(svg,54,82,"Urinary space",{fs:12,fw:600,c:C.muted});
+    SV("rect",{x:40,y:200,width:680,height:86,rx:18,fill:"#FBF1F1"},svg);
+    T(svg,54,250,"Capillary lumen",{fs:12,fw:600,c:C.muted});
+    SV("rect",{x:40,y:160,width:680,height:40,rx:6,fill:"#EDE8F6",stroke:d.les==="mn"?C.acc:C.line2,"stroke-width":d.les==="mn"?2.5:1.5},svg);
+    T(svg,54,186,"GBM",{fs:11.5,fw:600,c:C.muted});
+    var eff={mcd:.95,fsgs:.7,collapse:1,mn:.3,crescent:.25,antigbm:.3}[d.les];
+    var nFeet=16;
+    for(var i=0;i<nFeet;i++){
+      var x=60+i*42, gap=2+(1-eff)*20;
+      SV("rect",{x:x,y:124,width:42-gap,height:36,rx:5,fill:"#C9BFF0",stroke:"#8E7FD8"},svg);
+    }
+    T(svg,54,116,eff>.6?"Podocyte foot processes effaced":"Podocyte foot processes",{fs:11.5,fw:600,c:eff>.6?C.red:C.muted});
+    if(d.les==="mn"){ for(var m=0;m<13;m++) SV("circle",{cx:72+m*52,cy:160,r:7,fill:"#6E5BD8"},svg);
+      T(svg,382,312,"Subepithelial immune deposits with spikes"+(d.ab?" (antigen "+d.ab+")":""),{a:"middle",fs:12.5,fw:600,c:C.acc}); }
+    if(d.les==="collapse"){ SV("path",{d:"M300 200 C360 250 420 250 480 200",fill:"#E7DFF8",stroke:"#8E7FD8","stroke-width":2},svg);
+      T(svg,382,312,"Capillary tuft collapses, podocytes proliferate",{a:"middle",fs:12.5,fw:600,c:C.red}); }
+    if(d.les==="fsgs") T(svg,382,312,"Segmental sclerosis after podocyte loss",{a:"middle",fs:12.5,fw:600,c:C.red});
+    if(d.les==="mcd") T(svg,382,312,"Light microscopy normal, effacement only on electron microscopy",{a:"middle",fs:12.5,fw:600,c:C.ink});
+    if(d.les==="crescent"||d.les==="antigbm"){
+      SV("path",{d:"M120 96 C260 60 500 60 650 96 L650 118 C500 86 260 86 120 118 Z",fill:"#D8D4F2",stroke:"#5B4BFF","stroke-width":2},svg);
+      T(svg,382,80,"Cellular crescent fills the urinary space",{a:"middle",fs:12,fw:600,c:C.acc});
+      for(var b=0;b<9;b++){ var bx=90+b*70; SV("path",{d:"M"+bx+" 170 l10 -12 l10 12 l-10 12 z",fill:C.red},svg); }
+      T(svg,382,312,d.les==="antigbm"?"Linear IgG along the GBM, GBM breaks":"Fibrinoid necrosis with GBM breaks, pauci-immune",{a:"middle",fs:12.5,fw:600,c:C.red});
+    }
+    var nd=neph?10:3;
+    for(var p=0;p<nd;p++){ var px=90+p*(620/Math.max(1,nd-1))*(neph?1:1);
+      SV("circle",{cx:cl(px+40,120,700),cy:68,r:neph?7:5,fill:neph?"#6E5BD8":"#B4232A"},svg); }
+    T(svg,382,340,neph?"Urine: heavy proteinuria with bland sediment":"Urine: dysmorphic red cells, red cell casts, proteinuria under 3 g",{a:"middle",fs:12.5,c:neph?C.acc:C.red,fw:600});
+    if(d.ab) T(svg,382,366,"Serology: "+d.ab,{a:"middle",fs:12,c:C.muted});
+    return {ro:[[neph?"Nephrotic pattern":"Nephritic pattern","รูปแบบทางคลินิก","flag"],
+      [{mcd:"Minimal change disease",fsgs:"FSGS",collapse:"Collapsing FSGS",mn:"Membranous nephropathy",crescent:"Pauci-immune crescentic GN",antigbm:"Anti-GBM disease"}[d.les],"Lesion",null],
+      [d.tx,"การจัดการ",null]],
+      tk:"<b>"+d.n+"</b> ให้ภาพ "+{mcd:"minimal change",fsgs:"FSGS",collapse:"collapsing FSGS",mn:"membranous nephropathy",crescent:"crescentic GN",antigbm:"anti-GBM disease"}[d.les]+" "+d.ex};
+  },
+  rows:[["Nephrotic","NSAID และ VEGFR-TKI ให้ MCD  pamidronate, interferon, anabolic steroid ให้ FSGS หรือ collapsing  thiol drug และ mercury ให้ membranous"],
+   ["Nephritic","PTU, hydralazine, levamisole-adulterated cocaine, minocycline, anti-TNF ให้ ANCA vasculitis  alemtuzumab ให้ anti-GBM"],
+   ["เบาะแส","ANCA titer สูงมาก มี dual MPO และ PR3 หรือมี antihistone ร่วม ชี้ไปที่ยา"],
+   ["Checkpoint inhibitor","พบ pauci-immune, podocytopathy, immune complex, C3 ได้ทั้งหมด แต่พบน้อยกว่า AIN"]],
+  take:["Nephrotic pattern จากยามักเป็น podocyte injury และมักหายหลังหยุดยา",
+   "Nephritic pattern จากยาเป็นภูมิคุ้มกันต่อตัวเอง ต้องหยุดยาถาวรและมักต้องให้ยากดภูมิเมื่อมีอวัยวะสำคัญ",
+   "NSAID ทำได้ทั้ง AIN และ MCD ในเวลาเดียวกัน จึงเห็น proteinuria ระดับ nephrotic ร่วมกับ sterile pyuria",
+   "หลังเริ่ม alemtuzumab ต้องตรวจปัสสาวะและ Cr ทุกเดือนนาน 4 ปี"]
+};
+
+/* ---------- 9 Chronic DIKD ---------- */
+var CHD={
+ li:{n:"Lithium",les:"micro",yrs:"หลายปี",risk:"CKD เพิ่มราว 2.5 เท่า ESKD ราว 6 เท่า",feat:"microcyst ที่ distal tubule, NDI, proteinuria น้อย",act:"คุมระดับยา พิจารณา amiloride สำหรับ NDI ชั่งน้ำหนักกับประโยชน์ทางจิตเวช"},
+ analg:{n:"Analgesic (phenacetin, NSAID)",les:"papilla",yrs:"หลายปี",risk:"ไตเล็กขอบขรุขระ และมะเร็งทางเดินปัสสาวะใน phenacetin",feat:"papillary necrosis, papillary calcification",act:"หยุดใช้ยาแก้ปวดต่อเนื่อง เฝ้าระวังทางเดินปัสสาวะ"},
+ aa:{n:"Aristolochic acid",les:"fibrosis",yrs:"หลายเดือนถึงปี",risk:"มะเร็งทางเดินปัสสาวะส่วนบนสูงมาก ต้องเฝ้าระวังตลอดชีวิต",feat:"พังผืดลุกลามเร็วโดยมีเซลล์อักเสบน้อย ซีดมากกว่าที่ระดับ eGFR ควรเป็น",act:"หยุดสัมผัสสมุนไพร เฝ้าระวังมะเร็ง"},
+ cni:{n:"Calcineurin inhibitor",les:"stripe",yrs:"หลายปี",risk:"พังผืดสะสมตามระยะเวลาที่ได้ยา",feat:"arteriolar hyalinosis และ striped interstitial fibrosis",act:"ใช้ขนาดต่ำสุดที่คุมโรคได้ ติดตาม level"},
+ pt:{n:"TDF, cisplatin, ifosfamide",les:"tubule",yrs:"หลายเดือนถึงปี",risk:"eGFR ลดถาวรถ้าหยุดยาช้า",feat:"proximal tubular injury เรื้อรังและ Fanconi ที่ไม่หายสนิท",act:"เปลี่ยนยาเร็ว ติดตาม PO4 urine glucose และ uPCR"},
+ ppi:{n:"Proton pump inhibitor",les:"fibrosis",yrs:"หลายเดือนถึงปี",risk:"ข้อมูลจากการศึกษาเชิงสังเกต ส่วน COMPASS ที่เป็น RCT ไม่พบความเสียหายต่อไต",feat:"AIN ที่เงียบแล้วกลายเป็น chronic interstitial nephritis",act:"deprescribe เมื่อไม่มีข้อบ่งชี้ต่อเนื่อง"}
+};
+SC.chronic={
+  h2:"ยาที่ใช้นานทำให้เกิดพังผืด ไม่ใช่ AKI",
+  drugs:Object.keys(CHD).map(function(k){return [k,CHD[k].n];}),
+  init:{sel:"li"},
+  noteF:function(P){ return "ระยะเวลาที่สัมผัส: "+CHD[P.sel].yrs; },
+  draw:function(svg,P){
+    var d=CHD[P.sel];
+    T(svg,382,24,"Chronic exposure: scarring rather than a creatinine spike",{a:"middle",fs:14,fw:600});
+    SV("path",{d:"M160 70 C70 110 70 300 180 352 C240 380 300 370 330 330 L330 92 C300 56 220 44 160 70 Z",fill:"#FBF7F2",stroke:"#C9B8A4","stroke-width":3},svg);
+    T(svg,246,62,"Kidney",{a:"middle",fs:12,fw:600,c:C.muted});
+    var rnd=Patho.rng(3);
+    if(d.les==="micro"){
+      for(var i=0;i<22;i++){ var a=rnd()*6.28, r=30+rnd()*90;
+        SV("circle",{cx:230+Math.cos(a)*r*.75,cy:210+Math.sin(a)*r,r:4+rnd()*5,fill:"#fff",stroke:"#5B8DB8","stroke-width":1.8},svg); }
+      T(svg,246,398,"Distal tubular microcysts",{a:"middle",fs:12,c:"#2F6B8F",fw:600});
+    }
+    if(d.les==="papilla"){
+      SV("path",{d:"M300 150 L330 175 L300 200 Z",fill:"#E8B4B7",stroke:C.red,"stroke-width":2},svg);
+      SV("path",{d:"M300 230 L330 255 L300 280 Z",fill:"#E8B4B7",stroke:C.red,"stroke-width":2,"stroke-dasharray":"4 3"},svg);
+      T(svg,246,398,"Papillary necrosis and calcification",{a:"middle",fs:12,c:C.red,fw:600});
+    }
+    if(d.les==="fibrosis"||d.les==="stripe"||d.les==="tubule"){
+      for(var f=0;f<(d.les==="stripe"?7:40);f++){
+        if(d.les==="stripe"){ var sx=130+f*28; SV("path",{d:"M"+sx+" 90 L"+(sx-16)+" 340",stroke:"#5B8DB8","stroke-width":7,opacity:.5},svg); }
+        else { var x2=120+rnd()*200, y2=90+rnd()*250;
+          SV("path",{d:"M"+x2+" "+y2+" q12 -6 24 0 t24 0",fill:"none",stroke:"#5B8DB8","stroke-width":1.8,opacity:.7},svg); }
+      }
+      T(svg,246,398,d.les==="stripe"?"Striped interstitial fibrosis":"Diffuse interstitial fibrosis",{a:"middle",fs:12,c:"#2F6B8F",fw:600});
+    }
+    var bx=400, bw=320;
+    [["Acute Cr rise","rarely seen",.12,C.faint],["Interstitial fibrosis","builds up with exposure",.9,"#2F6B8F"],["Reversibility","usually does not return",.2,C.red]].forEach(function(m,i){
+      var y=120+i*74;
+      T(svg,bx,y-16,m[0],{fs:12.5,fw:600});
+      SV("rect",{x:bx,y:y-4,width:bw,height:20,rx:10,fill:"#E6E7F0"},svg);
+      SV("rect",{x:bx,y:y-4,width:bw*m[2],height:20,rx:10,fill:m[3]},svg);
+      T(svg,bx,y+34,m[1],{fs:12,c:C.muted});
+    });
+    return {ro:[[d.feat,"ลักษณะเฉพาะ","flag"],[d.risk,"ความเสี่ยงระยะยาว",null],[d.act,"สิ่งที่ต้องทำ",null]],
+      tk:"<b>"+d.n+"</b> ที่ใช้ต่อเนื่องเป็น"+d.yrs+" ทำให้เกิด "+d.feat+" การตรวจพบจึงอาศัยการติดตาม eGFR และปัสสาวะ ไม่ใช่รอ Cr ขึ้นเฉียบพลัน"};
+  },
+  rows:[["Lithium","CTIN พร้อม distal microcyst และ NDI ความเสี่ยง CKD ราว 2.5 เท่า ESKD ราว 6 เท่า"],
+   ["ยาแก้ปวด","papillary necrosis ไตเล็กขอบขรุขระ phenacetin เพิ่มมะเร็งทางเดินปัสสาวะ"],
+   ["Aristolochic acid","พังผืดลุกลามเร็ว ซีดมาก เสี่ยงมะเร็งทางเดินปัสสาวะส่วนบน"],
+   ["CNI","arteriolar hyalinosis และ striped fibrosis ตามระยะเวลาที่ได้ยา"]],
+  take:["พิษเรื้อรังไม่แสดงเป็น AKI แต่เป็น eGFR ที่ค่อยลดและ urine ที่แทบไม่ผิดปกติ",
+   "ต้องถามถึงสมุนไพรและยาที่ซื้อเอง เพราะผู้ป่วยมักไม่บอกเอง",
+   "เมื่อเป็นพังผืดแล้วมักไม่กลับคืน การหยุดยาเร็วจึงสำคัญกว่าการรักษาภายหลัง",
+   "ผู้ที่เคยสัมผัส aristolochic acid หรือ phenacetin ต้องเฝ้าระวังมะเร็งทางเดินปัสสาวะตลอดชีวิต"]
+};
+SC.hemo.name="Hemodynamic AKI";
+SC.pseudo.name="Pseudo-AKI";
+SC.pt.name="Proximal tubule: ATI และ Fanconi";
+SC.distal.name="Tubulopathy: TAL, DCT, CD";
+SC.ain.name="Acute interstitial nephritis";
+SC.crys.name="Crystalline nephropathy";
+SC.tma.name="Thrombotic microangiopathy";
+SC.glom.name="Glomerular disease";
+SC.chronic.name="Chronic DIKD";
+var AT=[
+ ["Antibiotic","Aminoglycosides",[["pt","B","Non-oliguric ATN","Muddy brown granular casts, LMW proteinuria, slow recovery","Day 5–7, may be late"],["tal","D","Bartter-like (CaSR)","HypoK, hypoMg, hypoCa with hypercalciuria, alkalosis","1–2 weeks"],["pt","D","Proximal tubulopathy","Partial Fanconi: aminoaciduria, glycosuria, phosphaturia","1–2 weeks"],["cd","D","Nephrogenic DI","Polyuria, loss of concentrating ability","Days–weeks"],["int","B","CKD after repeat courses","Incomplete recovery, persisting Mg wasting","Months"]]],
+ ["Antibiotic","Vancomycin",[["pt","B","ATN","Granular casts, AKI tracks AUC and trough","Day 4–7"],["lum","B","Vancomycin cast nephropathy","Obstructive vancomycin-uromodulin casts at high AUC","Day 4–7"],["int","B","AIN","Sterile pyuria, WBC casts, eosinophilia","1–3 weeks"],["sys","B","DRESS with AIN","Fever, rash, eosinophilia, HLA-A*32:01","2–6 weeks"]]],
+ ["Antibiotic","Penicillins",[["int","B","AIN","Fever, rash, eosinophilia, sterile pyuria (classic with methicillin)","7–10 days"],["cd","D","Non-reabsorbable anion","HypoK with alkalosis from distal K secretion","Days"],["sys","F","Sodium load of salt form","Hypernatremia, volume overload","Days"]]],
+ ["Antibiotic","Piperacillin-tazobactam",[["sec","N","Pseudo-AKI","Cr up with cystatin C flat (OAT1/3), no true GFR loss","Within 48 h"],["int","B","AIN","Sterile pyuria, WBC casts","1–2 weeks"],["sec","N","With vancomycin","More Cr-defined AKI, no consistent dialysis signal","First week"]]],
+ ["Antibiotic","Cephalosporins",[["int","B","AIN","Fever, rash, sterile pyuria, eosinophilia","7–10 days"],["uro","B","Ceftriaxone precipitation","Ca-ceftriaxone sludge and stones, obstruction","Days–weeks"],["sys","B","Ceftriaxone immune hemolysis","Hemoglobinuria with pigment AKI","Hours after dose"]]],
+ ["Antibiotic","Fluoroquinolones",[["int","B","AIN, often granulomatous","Sterile pyuria, may lack rash or eosinophilia","1–2 weeks"],["lum","B","Crystalluria in alkaline urine","Needle crystals, obstruction, hematuria","First days"],["pt","B","ATN at high dose","Granular casts, usually with volume depletion","Days"]]],
+ ["Antibiotic","Trimethoprim-sulfamethoxazole",[["cd","D","ENaC block (voltage-dependent dRTA)","HyperK + hyperchloremic acidosis, worse with RASi/MRA","Day 3–5"],["sec","N","Pseudo-AKI","Cr up with cystatin C flat (OCT2/MATE)","Day 2–3"],["int","B","AIN","Fever, rash, eosinophilia, sterile pyuria","1–2 weeks"],["lum","B","Sulfamethoxazole crystals","Crystals in acid urine, obstruction","First week"]]],
+ ["Antibiotic","Sulfadiazine",[["lum","B","Crystalline nephropathy","Shocks-of-wheat crystals in acid urine, oliguric AKI, loin pain","First week"],["uro","B","Radiolucent stones","Obstruction, needs alkalinization and fluids","First week"]]],
+ ["Antibiotic","Colistin / polymyxin B",[["pt","B","Dose-dependent ATN","Often oliguric, reversible if stopped early","Day 3–7"],["tal","D","Acquired Bartter-like","HypoK, metabolic alkalosis, hypoMg","1–2 weeks"]]],
+ ["Antibiotic","Rifampicin",[["int","B","Immune AIN with ATN","Flu-like illness, loin pain, oliguric AKI on restarted therapy","Hours–days"],["sys","B","Intravascular hemolysis","Hemoglobinuria, pigment AKI","Hours after dose"],["pt","D","Proximal tubulopathy","Fanconi features, proteinuria","Weeks"]]],
+ ["Antibiotic","Pentamidine",[["cd","D","ENaC block (voltage-dependent dRTA)","HyperK, urine pH > 5.5, positive UAG","First week"],["pt","B","ATN","Granular casts, dose related","1–2 weeks"],["dct","D","Mg and Ca wasting","HypoMg, hypoCa, hypoglycemia (islet toxicity)","1–2 weeks"]]],
+ ["Antifungal","Amphotericin B deoxycholate",[["art","F","Afferent vasoconstriction","Reversible GFR fall, worse with volume depletion","First doses"],["pt","B","ATN","Granular casts, cumulative dose related","Days–weeks"],["cd","D","Distal RTA type 1 (H+ back-leak)","Urine pH will not fall below 5.5, positive UAG","1–2 weeks"],["cd","D","Renal K wasting","HypoK, large daily replacement","1–2 weeks"],["dct","D","Renal Mg wasting","HypoMg with secondary hypoCa","1–2 weeks"],["cd","D","Nephrogenic DI","Polyuria","Weeks"]]],
+ ["Antifungal","Liposomal amphotericin B",[["pt","B","Same syndromes, much less injury","Smaller Cr rise, lower AKI rate","Days–weeks"],["cd","D","Renal K and Mg wasting","Milder than deoxycholate","Weeks"]]],
+ ["Antifungal","Voriconazole / itraconazole",[["art","F","CNI interaction (CYP3A4)","Tacrolimus and ciclosporin levels rise into toxic range","Days"],["sys","N","Cyclodextrin vehicle","IV vehicle accumulates when eGFR < 50","Days–weeks"]]],
+ ["Antifungal","Echinocandins",[["sys","N","No renal toxicity","No dose change in CKD or dialysis","-"]]],
+ ["Antiviral","Tenofovir DF",[["pt","D","Proximal tubulopathy (Fanconi)","Normoglycemic glycosuria, phosphaturia, uricosuria, LMW proteinuria","Months–years"],["pt","B","Acute tubular injury","Cr rise with granular casts at higher exposure","Months"],["cd","D","Nephrogenic DI","Polyuria","Months"],["int","B","Chronic eGFR loss","Often incomplete recovery, osteomalacia","Years"]]],
+ ["Antiviral","Tenofovir alafenamide",[["pt","D","Much lower tubular exposure","Less phosphaturia, rare Fanconi still reported","Years"]]],
+ ["Antiviral","Acyclovir / ganciclovir",[["lum","B","Crystalline nephropathy","Birefringent needle crystals after rapid bolus, loin pain","24–48 h"],["int","B","AIN","Sterile pyuria with Cr rise","1–2 weeks"],["sys","N","Neurotoxicity when it accumulates","Confusion, myoclonus once AKI established","Days"]]],
+ ["Antiviral","Foscarnet",[["pt","B","ATN with crystal deposition","AKI up to a third, dose and hydration dependent","1–2 weeks"],["podo","B","Crystalline glomerulopathy","Foscarnet-calcium crystals in glomeruli, proteinuria","Weeks"],["cd","D","Nephrogenic DI","Polyuria, hypernatremia","Weeks"],["dct","D","dRTA with electrolyte wasting","HypoCa, hypoMg with seizures, hypoK","1–2 weeks"]]],
+ ["Antiviral","Cidofovir",[["pt","B","Proximal tubular injury","Dose-limiting AKI with proteinuria despite probenecid","After 1–2 doses"],["pt","D","Fanconi syndrome","Glycosuria, phosphaturia, acidosis","After 1–2 doses"]]],
+ ["Antiviral","Indinavir / atazanavir",[["uro","B","Drug crystal stones","Radiolucent stones invisible on non-contrast CT (indinavir)","Weeks–months"],["int","B","AIN with chronic interstitial nephritis","Sterile pyuria, slow eGFR loss","Months"]]],
+ ["Antiviral","Cobicistat / ritonavir / dolutegravir",[["sec","N","Pseudo-AKI","Cr up by OCT2/MATE block, cystatin C flat","First 4 weeks"],["pt","D","Boosting raises tenofovir exposure","Indirect rise in true tenofovir tubulopathy risk","Months"]]],
+ ["Analgesic","NSAIDs",[["art","F","Hemodynamic AKI","Afferent constriction, low urine Na, worst in triple whammy","Days"],["int","B","AIN","Sterile pyuria, often without fever, rash, eosinophilia","1–2 weeks"],["podo","D","Minimal change disease","Nephrotic proteinuria (often with AIN)","Weeks–months"],["podo","D","Membranous nephropathy","PLA2R negative, remits on stopping","Months"],["uro","B","Papillary necrosis","Loin pain, hematuria, sloughed papilla","Months–years"],["cd","D","Type 4 RTA","Hyporeninemic hypoaldosteronism, hyperK","1–2 weeks"]]],
+ ["Analgesic","COX-2 inhibitors",[["art","F","Hemodynamic AKI","COX-2 is constitutive in the kidney, risk not reduced","Days"],["cd","D","Hyperkalemia","Same hyporeninemic mechanism","First 2 weeks"]]],
+ ["Analgesic","Paracetamol",[["pt","B","ATN in overdose","AKI in up to a quarter of serious overdoses","Day 2–5"],["sys","N","Pyroglutamic acidosis","High AG acidosis with chronic use, malnourished women","Days"]]],
+ ["Other","Lithium",[["cd","D","Nephrogenic DI","Li enters via ENaC, GSK3β inhibition, AQP2 falls (amiloride treats)","Weeks–months"],["int","B","Chronic tubulointerstitial nephropathy","Slow eGFR loss with distal microcysts","Years"],["cd","D","Incomplete distal RTA","Urine pH > 5.5 on acid loading","Months–years"],["podo","D","MCD or FSGS","Nephrotic proteinuria","Months"],["sys","N","Hypercalcemia with raised PTH","Parathyroid set-point shift","Months–years"]]],
+ ["Other","Proton pump inhibitors",[["int","B","AIN, often silent","Non-oliguric AKI, sterile pyuria, no rash or fever","10–12 weeks"],["int","B","Chronic interstitial nephritis","Slow eGFR loss","Months–years"],["sys","N","Hypomagnesemia from gut","Low Mg with low urine Mg (FEMg < 2%)","Months–years"]]],
+ ["Other","RAS inhibitors",[["art","F","Efferent dilation with eGFR dip","Cr rise up to 30% expected, do not stop","First 2 weeks"],["cd","D","Hyperkalemia","Reduced aldosterone","First 2 weeks"],["art","F","AKI in bilateral RAS","Steep Cr rise","Days"]]],
+ ["Other","Loop / thiazide diuretics",[["tal","D","Loop: Bartter-like picture","HypoK, alkalosis, hypoMg, hypercalciuria","Days–weeks"],["dct","D","Thiazide: Gitelman-like picture","HypoK, alkalosis, hypoMg, hypocalciuria","Weeks"],["cd","D","Thiazide hyponatremia","Impaired free water excretion","First 2 weeks"],["int","B","AIN (sulfonamide)","Sterile pyuria with Cr rise","1–3 weeks"]]],
+ ["Other","SGLT2 inhibitors",[["art","F","Initial eGFR dip (TGF)","Fall of about 3–5 mL/min then stabilizes","First 2–4 weeks"],["art","F","Volume depletion","Prerenal AKI with diuretic or intercurrent illness","First weeks"],["sys","N","Euglycemic ketoacidosis","High AG acidosis, hold in acute illness","Any time"]]],
+ ["Other","Allopurinol",[["int","B","AIN","Risk rises when dose not adjusted for eGFR","2–6 weeks"],["sys","B","DRESS / SCAR","HLA-B*58:01 in Thai patients, genotype first","2–8 weeks"],["lum","B","Xanthine crystals and stones","Heavy purine load (TLS)","Days"]]],
+ ["Diagnostic","Iodinated contrast",[["art","B","Contrast-associated AKI","Cr rise then recovery, risk mainly at eGFR < 30","48–72 h"],["pt","D","Osmotic nephrosis","Vacuolated PT cells with high-osmolar agents","Days"]]],
+ ["Diagnostic","Gadolinium",[["sys","N","Nephrogenic systemic fibrosis","Linear chelates when eGFR < 30","Weeks–months"]]],
+ ["Diagnostic","Oral NaP / vitamin C / orlistat",[["lum","B","Acute phosphate nephropathy","CaP deposits, often irreversible CKD","Days–weeks"],["lum","B","Secondary oxalate nephropathy","CaOx crystals (vitamin C, orlistat)","Weeks"]]],
+ ["Other","Aristolochic acid (herbal)",[["int","B","Paucicellular interstitial fibrosis","Small kidneys, anemia out of proportion","Months–years"],["uro","D","Urothelial carcinoma","Upper tract tumors, lifelong surveillance","Years"]]],
+ ["Chemo","Cisplatin",[["pt","B","ATN of S3 segment (OCT2)","Non-oliguric AKI, granular casts, cumulative dose","Day 7–10 of a cycle"],["dct","D","Distal Mg wasting","High FEMg, may persist for years","Weeks, may be permanent"],["dct","D","Renal K wasting","Will not correct until Mg replaced","Weeks"],["cd","D","Salt wasting and NDI","Polyuria, high urine Na","Weeks"],["endo","B","TMA (uncommon)","MAHA with thrombocytopenia","Weeks"]]],
+ ["Chemo","Carboplatin / oxaliplatin",[["pt","B","Much less tubular toxicity","Mild Cr rise, dose by Calvert with accurate GFR","Variable"],["endo","B","Oxaliplatin immune TMA","MAHA, AKI on re-exposure, antibody mediated","On re-exposure"]]],
+ ["Chemo","Ifosfamide",[["pt","D","Fanconi syndrome (chloroacetaldehyde)","Glycosuria, phosphaturia, rickets in children","During therapy"],["pt","B","Acute tubular injury","Higher with cumulative dose > 60 g/m2","During therapy"],["cd","D","Distal RTA and NDI","Urine pH > 5.5, polyuria","Weeks"],["uro","B","Hemorrhagic cystitis","Acrolein, prevent with mesna","Days"]]],
+ ["Chemo","Cyclophosphamide",[["cd","D","SIADH-type hyponatremia","After high-dose infusion with forced hydration","Within 24 h"],["uro","B","Hemorrhagic cystitis","Acrolein, mesna and hydration","Days"]]],
+ ["Chemo","High-dose methotrexate",[["lum","B","Crystalline nephropathy","Precipitates in acid urine, alkalinize to pH ≥ 7 and hydrate","24–72 h"],["pt","B","Direct tubular toxicity","Non-oliguric AKI, granular casts","24–72 h"],["sys","N","Delayed clearance","Mucositis, marrow failure, use glucarpidase","Day 3 onward"]]],
+ ["Chemo","Pemetrexed",[["pt","B","Chronic proximal tubular injury","Slow eGFR loss, often irreversible","After several cycles"],["pt","D","Fanconi syndrome","Glycosuria, phosphaturia, acidosis","After several cycles"]]],
+ ["Chemo","Gemcitabine",[["endo","B","Drug-induced TMA (toxic)","New hypertension, MAHA, proteinuria, AKI, often renal-limited","After cumulative dose (median 6 months)"],["pt","B","Acute tubular injury","Granular casts","Any cycle"],["sys","F","Capillary leak","Edema, hypotension, prerenal AKI","Days"]]],
+ ["Chemo","Mitomycin C",[["endo","B","Dose-dependent TMA","Severe, poorly reversible, risk > 40–60 mg/m2","After cumulative dose"]]],
+ ["Chemo","Interferon α / β",[["podo","D","Collapsing FSGS (APOL1)","Nephrotic proteinuria, rapid eGFR loss","Weeks–months"],["podo","D","Minimal change disease","Remits on stopping","Weeks"],["endo","B","TMA","MAHA with hypertension and AKI","Months"]]],
+ ["Chemo","Immune checkpoint inhibitors",[["int","B","Acute interstitial nephritis","Non-oliguric AKI, sterile pyuria, needs steroids","10–14 weeks"],["podo","B","ICI glomerulonephritis","Pauci-immune, MCD, MN or C3 pattern","Weeks–months"],["sys","N","Endocrinopathy electrolytes","HypoNa (hypophysitis), hyperK (adrenalitis)","Weeks–months"],["endo","B","Kidney-limited TMA","Uncommon","Months"]]],
+ ["Chemo","Bevacizumab / aflibercept",[["endo","B","Glomerular TMA from VEGF blockade","Hypertension with proteinuria, often kidney-limited","Weeks–months"],["podo","D","Proteinuria without TMA","Dose-related, reversible","Weeks"],["art","F","Hypertension","Reduced NO, treat rather than stop","First weeks"]]],
+ ["Chemo","VEGFR tyrosine kinase inhibitors",[["art","F","Hypertension","Class effect, first sign","First weeks"],["podo","B","Proteinuria, MCD / collapsing FSGS","Can reach nephrotic range","Weeks"],["int","B","AIN","Sterile pyuria with Cr rise","Weeks"]]],
+ ["Chemo","Cetuximab / panitumumab",[["dct","D","Isolated renal Mg wasting (EGFR, TRPM6)","FEMg inappropriately high","2–4 weeks, cumulative"],["sys","N","Secondary hypoCa and hypoK","Will not correct until Mg replaced","Weeks"]]],
+ ["Chemo","CDK4/6 inhibitors",[["sec","N","Pseudo-AKI","Cr rises then plateaus, cystatin C flat","First 4 weeks"],["int","B","AIN (rare)","Continuing Cr rise with sterile pyuria, unlike pseudo-AKI","Weeks"]]],
+ ["Chemo","Proteasome inhibitors",[["endo","B","Carfilzomib TMA","Hypertension, MAHA, AKI in first cycles","First cycles"],["pt","D","Bortezomib proximal tubulopathy","Mild Fanconi","Weeks"]]],
+ ["Chemo","CAR-T / bispecific antibodies",[["art","F","Prerenal AKI from CRS","Fever, hypotension, capillary leak","Day 3–10"],["lum","B","Tumor lysis syndrome","HyperK, hyperphosphatemia, oliguric AKI","First days"]]],
+ ["Chemo","Bisphosphonates / denosumab",[["podo","D","Pamidronate collapsing FSGS","Nephrotic, rapid eGFR loss","Weeks–months"],["pt","B","Zoledronate ATN","Infuse over ≥ 15 min and hydrate","Days"],["sys","N","Denosumab hypocalcemia","Severe in advanced CKD and dialysis","Day 7–14"]]],
+ ["Immunosuppressive","Ciclosporin",[["art","F","Acute hemodynamic AKI","Afferent vasoconstriction, reversible on dose reduction","Days"],["int","B","Chronic CNI nephropathy","Arteriolar hyalinosis, striped fibrosis","Years"],["cd","D","Type 4 RTA","Hyperchloremic acidosis, hyperK","Weeks"],["endo","B","TMA","Kidney-limited, worse with mTORi","Weeks–months"]]],
+ ["Immunosuppressive","Tacrolimus",[["art","F","Acute hemodynamic AKI","Dose-related Cr rise","Days"],["dct","D","NCC activation (Gordon-like)","HyperK, acidosis, hypertension, thiazide-responsive","Days–weeks"],["dct","D","Hypomagnesemia","Renal Mg wasting","Weeks"],["endo","B","Kidney-limited TMA","Cr rise with proteinuria","Weeks–months"]]],
+ ["Immunosuppressive","Sirolimus / everolimus",[["podo","D","Podocyte injury with proteinuria","After conversion from CNI","Weeks"],["endo","B","TMA","Worse combined with CNI","Weeks"],["pt","B","Delayed tubular recovery","Prolonged DGF","First weeks"]]],
+ ["Immunosuppressive","IVIG (sucrose)",[["pt","B","Osmotic nephrosis","Oliguric AKI, vacuolated PT cells, use sucrose-free product","1–10 days"]]],
+ ["Immunosuppressive","Alemtuzumab",[["podo","B","Anti-GBM disease","RPGN, check urine monthly for 4 years","Months–years"],["podo","D","Membranous nephropathy","Secondary autoimmunity","Months–years"]]],
+ ["Other","Hydralazine",[["podo","B","ANCA GN or lupus–ANCA overlap","High-titer MPO ± PR3, antihistone, low C3/C4","Months–years"],["sys","N","Drug-induced lupus","Arthralgia, serositis, kidney rare","Months"]]],
+ ["Other","Propylthiouracil",[["podo","B","MPO-ANCA vasculitis","Skin, arthralgia, GN, alveolar hemorrhage","Months–years"]]]
+];
+
+/* ================= Nephron compartment map ================= */
+var SITE={art:"Arterioles (hemodynamic)",endo:"Glomerular endothelium (TMA)",podo:"Podocyte / GBM",pt:"Proximal tubule",sec:"Cr secretion (OAT/OCT2/MATE)",tal:"Thick ascending limb",dct:"Distal convoluted tubule",cd:"Collecting duct",lum:"Tubular lumen (crystals/casts)",int:"Interstitium",uro:"Urinary tract",sys:"Systemic / extrarenal"};
+var QCOL={B:C.red,F:C.gold,D:C.acc,N:C.faint};
+var KQ={hemo:"F",ati:"B",ain:"B",crys:"B",tma:"B",glom:"D",pseudo:"N",fanc:"D",mgw:"D",gmg:"N",kw:"D",drta:"D",t4:"D",ndi:"D",bart:"D",cys:"N",siadh:"D"};
+function drawMap(svg,marks,hi){
+  // marks: {site:[{n:label,q:quad,no:number}]}
+  svg.innerHTML="";
+  var g=function(t,a){ return SV(t,a,svg); };
+  g("rect",{x:8,y:8,width:744,height:414,rx:18,fill:C.canvas,stroke:marks.int?QCOL[marks.int[0].q]:C.line,"stroke-width":marks.int?2.5:1});
+  g("text",{x:22,y:30,"font-family":FONT,"font-size":12,fill:marks.int?QCOL[marks.int[0].q]:C.muted,"font-weight":marks.int?600:400,text:"Interstitium"});
+  function on(s){ return marks[s]?QCOL[marks[s][0].q]:null; }
+  var hc=function(s){ return hi===s; };
+  // arterioles
+  var ca=on("art")||"#c9a9ab";
+  g("path",{d:"M30 80 C70 84 95 98 112 112",stroke:ca,"stroke-width":on("art")?10:7,fill:"none","stroke-linecap":"round"});
+  g("path",{d:"M168 112 C188 96 210 84 250 78",stroke:ca,"stroke-width":on("art")?8:5,fill:"none","stroke-linecap":"round"});
+  g("text",{x:28,y:68,"font-family":FONT,"font-size":11.5,fill:on("art")||C.muted,text:"Afferent"});
+  g("text",{x:206,y:68,"font-family":FONT,"font-size":11.5,fill:on("art")||C.muted,text:"Efferent"});
+  // glomerulus
+  g("circle",{cx:140,cy:132,r:54,fill:"#fff",stroke:on("podo")||C.line2,"stroke-width":on("podo")?4:2});
+  g("circle",{cx:140,cy:132,r:36,fill:on("endo")?"rgba(180,35,42,.18)":"#FBEFEF",stroke:on("endo")||"#d9a7aa","stroke-width":on("endo")?3.5:1.5});
+  for(var i=0;i<6;i++){ var an=i*Math.PI/3; g("circle",{cx:140+18*Math.cos(an),cy:132+18*Math.sin(an),r:9,fill:"none",stroke:on("endo")||"#d9a7aa","stroke-width":1.2}); }
+  g("text",{x:140,y:206,"text-anchor":"middle","font-family":FONT,"font-size":11.5,fill:C.muted,text:"Glomerulus"});
+  // PT
+  var cp=on("pt");
+  g("path",{d:"M188 150 C230 160 250 120 290 128 C330 136 330 170 360 170",stroke:cp||"#cfd2e3","stroke-width":26,fill:"none","stroke-linecap":"round"});
+  g("path",{d:"M188 150 C230 160 250 120 290 128 C330 136 330 170 360 170",stroke:"#fff","stroke-width":12,fill:"none","stroke-linecap":"round",opacity:.85});
+  g("text",{x:262,y:104,"font-family":FONT,"font-size":12,fill:cp||C.ink,"font-weight":cp?600:500,text:"Proximal tubule"});
+  // secretion marker
+  var cs=on("sec");
+  g("circle",{cx:300,cy:160,r:9,fill:cs||"#fff",stroke:cs||C.line2,"stroke-width":2});
+  g("text",{x:300,y:186,"text-anchor":"middle","font-family":FONT,"font-size":11,fill:cs||C.muted,"font-weight":cs?600:400,text:"Cr secretion"});
+  g("text",{x:300,y:199,"text-anchor":"middle","font-family":FONT,"font-size":10,fill:cs||C.faint,text:"OAT / OCT2 / MATE"});
+  // loop
+  g("path",{d:"M372 172 L372 360",stroke:"#cfd2e3","stroke-width":10,fill:"none","stroke-linecap":"round"});
+  g("path",{d:"M372 360 C372 384 412 384 412 360",stroke:"#cfd2e3","stroke-width":10,fill:"none"});
+  var ct=on("tal");
+  g("path",{d:"M412 360 L412 190",stroke:ct||"#cfd2e3","stroke-width":ct?18:15,fill:"none","stroke-linecap":"round"});
+  g("text",{x:422,y:300,"font-family":FONT,"font-size":12,fill:ct||C.ink,"font-weight":ct?600:500,text:"TAL"});
+  // DCT
+  var cdct=on("dct");
+  g("path",{d:"M412 190 C430 150 470 150 520 160",stroke:cdct||"#cfd2e3","stroke-width":cdct?18:15,fill:"none","stroke-linecap":"round"});
+  g("text",{x:440,y:140,"font-family":FONT,"font-size":12,fill:cdct||C.ink,"font-weight":cdct?600:500,text:"DCT"});
+  // CD
+  var ccd=on("cd");
+  g("path",{d:"M520 160 C548 166 560 180 560 210 L560 372",stroke:ccd||"#cfd2e3","stroke-width":ccd?20:17,fill:"none","stroke-linecap":"round"});
+  g("text",{x:574,y:220,"font-family":FONT,"font-size":12,fill:ccd||C.ink,"font-weight":ccd?600:500,text:"Collecting duct"});
+  // lumen crystals
+  var cl2=on("lum");
+  g("path",{d:"M560 300 L560 368",stroke:cl2?"rgba(180,35,42,.25)":"#fff","stroke-width":8,fill:"none"});
+  for(i=0;i<4;i++){ g("path",{d:"M"+(556+((i%2)*6))+" "+(306+i*15)+" l4 -6 l4 6 l-4 6 z",fill:cl2||C.faint,opacity:cl2?1:.5}); }
+  g("text",{x:574,y:330,"font-family":FONT,"font-size":11.5,fill:cl2||C.muted,"font-weight":cl2?600:400,text:"Lumen: crystals, casts"});
+  // urinary tract
+  var cu=on("uro");
+  g("path",{d:"M560 384 C600 404 640 392 664 372",stroke:cu||C.line2,"stroke-width":5,fill:"none"});
+  g("ellipse",{cx:690,cy:356,rx:34,ry:26,fill:"#fff",stroke:cu||C.line2,"stroke-width":cu?3.5:2});
+  g("text",{x:690,y:398,"text-anchor":"middle","font-family":FONT,"font-size":11.5,fill:cu||C.muted,text:"Urinary tract"});
+  // systemic
+  var csy=on("sys");
+  g("rect",{x:592,y:40,width:146,height:46,rx:12,fill:"#fff",stroke:csy||C.line2,"stroke-width":csy?3:1.5});
+  g("text",{x:665,y:60,"text-anchor":"middle","font-family":FONT,"font-size":11.5,fill:csy||C.muted,text:"Systemic / other"});
+  g("text",{x:665,y:76,"text-anchor":"middle","font-family":FONT,"font-size":10.5,fill:C.faint,text:"DRESS, endocrine, GI"});
+  // badges
+  var POS={art:[70,96],endo:[140,132],podo:[188,92],pt:[220,152],sec:[300,160],tal:[412,250],dct:[470,160],cd:[560,260],lum:[560,340],int:[60,300],uro:[690,356],sys:[665,40]};
+  Object.keys(marks).forEach(function(s){
+    var p=POS[s]; if(!p) return; var L=marks[s];
+    L.forEach(function(m,ii){
+      var bx=p[0]+(ii%3)*20-(Math.min(L.length,3)-1)*10, by=p[1]-((ii/3)|0)*20;
+      var big=hc(s);
+      g("circle",{cx:bx,cy:by,r:big?11:9,fill:QCOL[m.q],stroke:"#fff","stroke-width":2});
+      g("text",{x:bx,y:by+4,"text-anchor":"middle","font-family":MONO,"font-size":big?11:10,fill:"#fff","font-weight":600,text:m.no});
+    });
+  });
+  // legend
+  var ly=412, lx=22;
+  [["B","Dysfunction + damage"],["F","Dysfunction only"],["D","Damage only"],["N","Neither / extrarenal"]].forEach(function(q,ii){
+    var x=lx+ii*150; g("circle",{cx:x,cy:ly-4,r:5,fill:QCOL[q[0]]}); g("text",{x:x+10,y:ly,"font-family":FONT,"font-size":11,fill:C.muted,text:q[1]});
+  });
+}
+function drawQuad(svg,qs){
+  svg.innerHTML=""; var g=function(t,a){return SV(t,a,svg);};
+  var x0=70,y0=40,w=110,h=90;
+  g("text",{x:x0+w,y:20,"text-anchor":"middle","font-family":FONT,"font-size":12,"font-weight":600,fill:C.ink,text:"Damage marker"});
+  g("text",{x:x0+w/2,y:34,"text-anchor":"middle","font-family":FONT,"font-size":11,fill:C.muted,text:"(−)"});
+  g("text",{x:x0+w*1.5,y:34,"text-anchor":"middle","font-family":FONT,"font-size":11,fill:C.muted,text:"(+)"});
+  g("text",{x:14,y:y0+h,"font-family":FONT,"font-size":12,"font-weight":600,fill:C.ink,transform:"rotate(-90 22 "+(y0+h)+")",text:"Function marker"});
+  g("text",{x:52,y:y0+h/2+4,"text-anchor":"middle","font-family":FONT,"font-size":11,fill:C.muted,text:"(−)"});
+  g("text",{x:52,y:y0+h*1.5+4,"text-anchor":"middle","font-family":FONT,"font-size":11,fill:C.muted,text:"(+)"});
+  var cells=[["N",0,0,"Neither","Pseudo-AKI"],["D",1,0,"Damage only","Subclinical"],["F",0,1,"Dysfunction only","Hemodynamic"],["B",1,1,"Both","Classic DI-AKI"]];
+  cells.forEach(function(c){ var x=x0+c[1]*w, y=y0+c[2]*h, onq=qs.indexOf(c[0])>=0;
+    g("rect",{x:x+2,y:y+2,width:w-4,height:h-4,rx:10,fill:onq?QCOL[c[0]]:"#fff",stroke:onq?QCOL[c[0]]:C.line2,"stroke-width":1.5});
+    g("text",{x:x+w/2,y:y+h/2-2,"text-anchor":"middle","font-family":FONT,"font-size":12,"font-weight":600,fill:onq?"#fff":C.ink,text:c[3]});
+    g("text",{x:x+w/2,y:y+h/2+14,"text-anchor":"middle","font-family":FONT,"font-size":10.5,fill:onq?"#fff":C.muted,text:c[4]}); });
+}
+
+/* ================= Atlas ================= */
+var clsS=document.getElementById("clsS"), drugS=document.getElementById("drugS"), HI=null;
+var CLS=uniq(AT.map(function(a){return a[0];}));
+clsS.appendChild(Sim.h("option",{value:"",text:"ทั้งหมด"})); CLS.forEach(function(c){ clsS.appendChild(Sim.h("option",{value:c,text:c})); });
+function fillDrugs(){ var c=clsS.value, keep=drugS.value; drugS.innerHTML=""; AT.forEach(function(a,i){ if(c&&a[0]!==c) return; drugS.appendChild(Sim.h("option",{value:String(i),text:a[1]})); }); if([].some.call(drugS.options,function(o){return o.value===keep;})) drugS.value=keep; }
+clsS.addEventListener("change",function(){ fillDrugs(); HI=null; drawAtlas(); });
+drugS.addEventListener("change",function(){ HI=null; drawAtlas(); });
+function drawAtlas(){
+  var a=AT[+drugS.value]; if(!a) return;
+  var marks={}, qs=[];
+  a[2].forEach(function(r,i){ marks[r[0]]=marks[r[0]]||[]; marks[r[0]].push({q:r[1],no:i+1}); if(qs.indexOf(r[1])<0) qs.push(r[1]); });
+  drawMap(document.getElementById("mapA"),marks,HI!=null?a[2][HI][0]:null);
+  drawQuad(document.getElementById("quadA"),qs);
+  var T=document.getElementById("synT"); T.innerHTML="";
+  T.appendChild(Sim.h("tr",{},[Sim.h("th",{text:"#"}),Sim.h("th",{text:"Syndrome"}),Sim.h("th",{text:"Manifestation"}),Sim.h("th",{text:"Onset"})]));
+  a[2].forEach(function(r,i){
+    var tr=Sim.h("tr",{class:HI===i?"on":"",on:{click:function(){ HI=(HI===i?null:i); drawAtlas(); }}},[
+      Sim.h("td",{class:"n",text:String(i+1)}),
+      Sim.h("td",{},[Sim.h("span",{class:"q",style:"background:"+QCOL[r[1]]}),r[2],Sim.h("div",{style:"font-size:12px;color:var(--muted)",text:SITE[r[0]]})]),
+      Sim.h("td",{text:r[3]}),Sim.h("td",{text:r[4]})]);
+    T.appendChild(tr);
+  });
+  var sites=uniq(a[2].map(function(r){return r[0];}));
+  var both=a[2].filter(function(r){return r[1]==="B";}).length;
+  document.getElementById("tkA").innerHTML="<b>"+a[1]+"</b> ทำได้ <span class=\"num\">"+a[2].length+"</span> syndrome ใน <span class=\"num\">"+sites.length+"</span> ตำแหน่ง ("+sites.map(function(s){return SITE[s].split(" (")[0];}).join(", ")+")"+(both?" มี "+both+" แบบที่เป็นทั้ง dysfunction และ damage":" ไม่มีแบบที่ทำให้ GFR ลดพร้อม damage");
+  roSet("ro1",a[2].length+" syndrome ใน "+sites.length+" ตำแหน่ง","ขอบเขตของพิษจากยานี้",null);
+  roSet("ro2",a[2][0][4],"Onset ของ syndrome แรก",null);
+  roSet("ro3",a[2].some(function(r){return r[1]==="N"&&r[0]==="sec";})?"มี":"ไม่มี","Pseudo-AKI (secretion block)",null);
+}
+
+/* ================= references ================= */
+var REFS=[
+ "Mehta RL, et al. Phenotype standardization for drug-induced kidney disease. Kidney Int 2015, 88(2): 226-34",
+ "Perazella MA. Pharmacology behind common drug nephrotoxicities. Clin J Am Soc Nephrol 2018, 13: 1897-908",
+ "Perazella MA, Rosner MH. Drug-induced acute kidney injury. Clin J Am Soc Nephrol 2022, 17(8): 1220-33",
+ "KDIGO 2026 Clinical Practice Guideline for AKI and AKD, public review draft (March 2026)",
+ "Vanhoutte T, Sprangers B. Pseudo-AKI associated with targeted anti-cancer agents. Clin Kidney J 2023, 16(4): 603-10",
+ "Miano TA, et al. Vancomycin-piperacillin/tazobactam and cystatin C. Intensive Care Med 2022, 48: 1144-55",
+ "Qian ET, et al. Cefepime vs piperacillin-tazobactam (ACORN). JAMA 2023, 330: 1557-67",
+ "Lapi F, et al. Diuretics, ACE inhibitors or ARBs with NSAIDs and risk of AKI. BMJ 2013, 346: e8525",
+ "Ivanyuk A, et al. Renal drug transporters and drug interactions. Clin Pharmacokinet 2017, 56: 825-92",
+ "Hall AM, Bass P, Unwin RJ. Drug-induced renal Fanconi syndrome. QJM 2014, 107: 261-9",
+ "Velazquez H, et al. Renal mechanism of trimethoprim-induced hyperkalemia. Ann Intern Med 1993, 119: 296-301",
+ "Priyadarshi M, et al. Drug-induced Bartter-like syndrome: systematic review. J Antimicrob Chemother 2025, 80: 1784-91",
+ "Hoorn EJ, et al. The calcineurin inhibitor tacrolimus activates the NCC. Nat Med 2011, 17: 1304-9",
+ "Muriithi AK, et al. Clinical characteristics, causes and outcomes of acute interstitial nephritis. Am J Kidney Dis 2014, 64: 558-66",
+ "Gonzalez E, et al. Early steroid treatment improves renal recovery in drug-induced AIN. Kidney Int 2008, 73: 940-6",
+ "Cortazar FB, et al. Clinical features and outcomes of immune checkpoint inhibitor-associated AKI. J Am Soc Nephrol 2020, 31: 435-46",
+ "Perazella MA, Herlitz LC. The crystalline nephropathies. Kidney Int Rep 2021, 6: 2942-57",
+ "Ramsey LB, et al. Consensus guideline for glucarpidase use. Oncologist 2018, 23: 52-61",
+ "Mulay SR, Anders HJ. Crystal nephropathies: mechanisms of crystal-induced kidney injury. Nat Rev Nephrol 2017, 13: 226-40",
+ "Mazzierli T, et al. Drug-induced thrombotic microangiopathy. Front Pharmacol 2023, 13: 1088031",
+ "Al-Nouri ZL, et al. Drug-induced thrombotic microangiopathy: systematic review. Blood 2015, 125: 616-8",
+ "Eremina V, et al. VEGF inhibition and renal thrombotic microangiopathy. N Engl J Med 2008, 358: 1129-36",
+ "Daviet F, et al. Thrombotic microangiopathy associated with gemcitabine. Br J Clin Pharmacol 2019, 85: 403-12",
+ "Markowitz GS, et al. Collapsing FSGS following treatment with pamidronate. J Am Soc Nephrol 2001, 12: 1164-72",
+ "Santoriello D, et al. Hydralazine-associated glomerulonephritis. Kidney Int 2021, 100: 440-6",
+ "Walsh TJ, et al. Liposomal amphotericin B for empirical therapy. N Engl J Med 1999, 340: 764-71",
+ "Nankivell BJ, et al. The natural history of chronic allograft nephropathy. N Engl J Med 2003, 349: 2326-33"
+];
+/* ================= scenario wiring ================= */
+var ORDER=[], S={};
+function buildScenarios(){
+  Object.keys(SC).forEach(function(k){
+    var sc=SC[k];
+    S[k]={name:sc.name,rows:sc.rows,take:sc.take,key:k};
+    ORDER.push(k);
+  });
+  S.atlas={name:"Drug atlas: ยาทีละตัว",mode:"atlas",
+    rows:[["วิธีใช้","เลือกกลุ่มยาและยา เพื่อดูทุก syndrome ที่ยานั้นทำได้ วางบนตำแหน่งในไต"],
+      ["สี","แดง = dysfunction + damage, ทอง = dysfunction อย่างเดียว, ม่วง = damage อย่างเดียว, เทา = pseudo หรือนอกไต"],
+      ["ตาราง","แตะแถวเพื่อเน้นตำแหน่งในภาพ"]],
+    take:["ยาตัวเดียวทำได้หลาย phenotype ในหลายตำแหน่ง ให้คิดตาม compartment",
+      "Phenotype ที่เข้ากับ latency คือหลักฐานหลักของ causality",
+      "Pseudo-AKI ไม่ใช่ injury อย่าหยุดยาที่จำเป็นเพราะ Cr อย่างเดียว"]};
+  ORDER.push("atlas");
+}
+
+var P=null, CURK=null, svg=document.getElementById("vis");
+var chipBox=document.getElementById("dchips"), noteEl=document.getElementById("dnote"), ctlBox=document.getElementById("ctls");
+
+function redraw(){
+  var sc=SC[CURK]; if(!sc) return;
+  svg.innerHTML="";
+  Array.prototype.forEach.call(chipBox.children,function(b){
+    var k=b.getAttribute("data-k");
+    b.setAttribute("aria-pressed", sc.multi ? (P.sel[k]?"true":"false") : (P.sel===k?"true":"false"));
+  });
+  noteEl.textContent = sc.noteF ? sc.noteF(P) : (sc.note||"");
+  noteEl.hidden = !noteEl.textContent;
+  var r=sc.draw(svg,P)||{ro:[],tk:""};
+  (r.ro||[]).forEach(function(x,i){ roSet("ro"+(i+1),x[0],x[1],x[2]); });
+  for(var i=(r.ro||[]).length;i<3;i++){ roSet("ro"+(i+1),"-","",null); }
+  document.getElementById("tk").innerHTML=r.tk||"";
+}
+
+function buildScene(k){
+  var sc=SC[k]; CURK=k;
+  P=JSON.parse(JSON.stringify(sc.init||{}));
+  chipBox.innerHTML=""; ctlBox.innerHTML="";
+  (sc.drugs||[]).forEach(function(d){
+    chipBox.appendChild(Sim.h("button",{type:"button","data-k":d[0],"aria-pressed":"false",text:d[1],on:{click:function(){
+      if(sc.multi){ P.sel[d[0]]=!P.sel[d[0]]; } else { P.sel=d[0]; if(sc.onPick) sc.onPick(P); }
+      redraw();
+    }}}));
+  });
+  if(sc.ctls) sc.ctls(P).forEach(function(e){ ctlBox.appendChild(e); });
+  document.getElementById("h2L").textContent=sc.h2;
+  document.getElementById("h2R").textContent=sc.h2R||"เลือกยาและปรับ";
+  redraw();
+}
+
+function setMode(atlas){
+  document.getElementById("mechView").hidden=atlas;
+  document.getElementById("atlasView").hidden=!atlas;
+  document.getElementById("mechCtl").hidden=atlas;
+  document.getElementById("atlasCtl").hidden=!atlas;
+  if(atlas){ document.getElementById("h2L").textContent="ยาตัวนี้ทำอะไรกับไตได้บ้าง และที่ตำแหน่งไหน";
+    document.getElementById("h2R").textContent="เลือกยา"; }
+}
+
+buildScenarios();
+fillDrugs(); drugS.value=String(AT.findIndex(function(a){return a[1]==="Cisplatin";}));
+Sim.mount({
+  code:"AKI-13", title:"Drug-Induced Kidney Disease: Mechanism by Phenotype",
+  lead:"เลือก phenotype แล้วเลือกยา ปรับตัวแปร แล้วดูว่ากลไกในไตเปลี่ยนอย่างไร",
+  scenarios:S, order:ORDER, initial:ORDER[0],
+  onChange:function(k,s){ if(s.mode==="atlas"){ setMode(true); drawAtlas(); } else { setMode(false); buildScene(k); } },
+  refs:REFS,
+  note:"ภาพและตัวเลขเป็น model เชิงสอนที่ปรับให้ตรงกับทิศทางและลำดับความแรงในเอกสารอ้างอิง ไม่ใช่ prediction model ของผู้ป่วยรายบุคคล"
+});
+})();
+</script>
+</body>
+</html>

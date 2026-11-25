@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[MX-12] Nephron Mass and Hyperfiltration</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.25fr 1fr}}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:8px}
+.sub{font-size:12.5px;color:var(--muted);margin:12px 0 4px}
+.gap{height:8px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:12px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .ro{padding:5px 12px}
+body.present .ro b{font-size:16px}
+body.present .ctls{gap:0}
+body.present .ctl{font-size:12.5px}
+body.present .tog{padding:3px 8px;font-size:11.5px}
+body.present .tools{margin-top:3px;gap:4px}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+body.present .sub{margin:4px 0 1px}
+body.present .svgwrap svg{max-height:200px}
+body.present .gap{height:2px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Nephron ที่เหลือและ single-nephron GFR</h2>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 640 220" role="img" aria-label="Remaining nephrons, glomerular size and glomerular pressure"></svg></div>
+      <div class="gap"></div>
+      <div id="chart"></div>
+      <p class="hint no-present">ภาพบน: จุด 100 จุดแทน nephron ตั้งต้นของคนปกติ (ราว 1.8 ล้าน) จุดทึบคือ nephron ที่ยังเหลือ ขนาดจุดตาม glomerular size แถบขวาคือ single-nephron GFR และความดันใน glomerulus เทียบปกติ กราฟล่าง: GFR ตามอายุของผู้ป่วยเทียบคนที่ nephron ปกติและมีไตสองข้าง</p>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วย</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="sub">ปัจจัยและการรักษา</div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roN"><b>-</b><span>Nephron ทั้งหมด (ล้าน)</span></div>
+        <div class="ro" id="roSn"><b>-</b><span>SNGFR (nL/min)</span></div>
+        <div class="ro" id="roG"><b>-</b><span>GFR ตอนนี้</span></div>
+        <div class="ro" id="roP"><b>-</b><span>Glomerular pressure</span></div>
+        <div class="ro" id="roG80"><b>-</b><span>GFR ที่อายุ 80</span></div>
+        <div class="ro" id="roA60"><b>-</b><span>อายุที่ GFR &lt; 60</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script>
+(function(){
+"use strict";
+function SV(t,a,p){ var b={}; for(var k in a) if(a[k]!==null&&a[k]!==undefined) b[k]=a[k]; return Sim.svg(t,b,p); }
+function P(o){ var d={n0:0.9,age:40,don:35,loss:0,rx:[]}; for(var k in o) d[k]=o[k]; return d; }
+var TG={donor:"ไตเดียว (บริจาคหรือผ่าตัด)",obese:"Obesity",dm:"Diabetes",prot:"กินโปรตีนสูง",raas:"RAASi",sglt:"SGLT2i"};
+var S={
+  norm:{name:"ผู้ใหญ่ปกติ", p:P({}),
+    rows:[["Nephron","ราว 0.9 ล้านต่อไต"],["SNGFR","ราว 65–80 nL/min"],["อายุ","nephron ลดราว 0.65% ต่อปีหลังอายุ 25"]],
+    take:["GFR = จำนวน nephron x single-nephron GFR","Nephron ลดตามอายุต่อเนื่อง GFR จึงลดราว 0.7–1 mL/min/ปี หลังอายุ 40","Nephron ที่หายไปไม่สร้างใหม่ ที่เหลือชดเชยด้วยการเพิ่ม SNGFR"]},
+  lbw:{name:"Low nephron endowment", p:P({n0:0.45,age:45}),
+    rows:[["ภาวะ","น้ำหนักแรกเกิดน้อย คลอดก่อนกำหนด"],["Nephron","ราวครึ่งหนึ่งของปกติ"],["ผล","SNGFR สูงตั้งแต่ต้น เสี่ยง HT และ CKD"]],
+    take:["จำนวน nephron กำหนดตั้งแต่เกิดและแตกต่างกันได้ถึง 10 เท่าระหว่างบุคคล","Low birth weight และ preterm มี nephron น้อย เป็นปัจจัยเสี่ยง HT, proteinuria, CKD (Brenner hypothesis)","Glomerulus ใหญ่ (glomerulomegaly) สะท้อน hyperfiltration ใน nephron ที่เหลือ"]},
+  donor:{name:"Living donor อายุ 35", p:P({age:60,don:35,rx:["donor"]}),
+    rows:[["เหตุการณ์","บริจาคไตที่อายุ 35"],["ทันที","GFR เหลือราว 70–75% จาก compensatory hyperfiltration"],["ระยะยาว","ความเสี่ยง ESKD ตลอดชีวิตสูงกว่าคนปกติเล็กน้อย แต่ยังต่ำโดยสัมบูรณ์"]],
+    take:["หลังผ่าตัดไตหนึ่งข้าง GFR ไม่ลดครึ่ง เพราะไตที่เหลือเพิ่ม SNGFR ราว 40%","ผู้บริจาคอายุน้อยมีช่วงชีวิตที่เหลือยาว ความเสี่ยงสะสมตลอดชีวิตจึงสำคัญ","ติดตาม BP, albuminuria, น้ำหนัก ตลอดชีวิตหลังบริจาค"]},
+  obese:{name:"ไตเดียว + obesity + DM", p:P({age:50,don:30,rx:["donor","obese","dm"]}),
+    rows:[["ภาวะ","ไตเดียวตั้งแต่อายุ 30 BMI 35 DM"],["SNGFR","สูงกว่าปกติราว 2 เท่า"],["ผล","GFR ลดเร็ว เสี่ยง secondary FSGS"]],
+    take:["Obesity และ DM เพิ่ม SNGFR และความดันใน glomerulus ซ้อนทับกับการมี nephron น้อย","Hyperfiltration ระยะยาวทำให้ podocyte หลุดและเกิด adaptive FSGS (perihilar) ดู GN-07","ลดน้ำหนัก RAASi และ SGLT2i ลด glomerular pressure"]},
+  old:{name:"อายุ 80", p:P({age:80}),
+    rows:[["อายุ","80"],["Nephron","เหลือราว 60%"],["GFR","ราว 65–70 เป็นการลดตามอายุ"]],
+    take:["Nephrosclerosis จากอายุทำให้ nephron ลดลง glomerulus ที่เหลือโตขึ้นเล็กน้อย","eGFR 45–59 ในผู้สูงอายุที่ไม่มี albuminuria มักเป็นการลดตามอายุ พยากรณ์ดี","ผู้สูงอายุมี reserve น้อย เกิด AKI จากยาและ volume ได้ง่าย"]},
+  ckd:{name:"CKD สูญเสีย 60% + รักษา", p:P({age:45,loss:60,rx:["raas","sglt"]}),
+    rows:[["ภาวะ","โรคไตทำให้ nephron หาย 60% ที่อายุ 30"],["การรักษา","RAASi + SGLT2i ลด SNGFR และ glomerular pressure"],["เทียบ","ปิดยาเพื่อดู GFR ลดเร็วขึ้น"]],
+    take:["เมื่อ nephron เหลือน้อย hyperfiltration ที่เคยเป็นการชดเชยกลายเป็นตัวทำลายไตต่อ (remnant kidney)","RAASi ขยาย efferent ส่วน SGLT2i ฟื้น TGF ทำให้ afferent หด ทั้งคู่ลดความดันใน glomerulus","Acute eGFR dip หลังเริ่มยาเป็นผลจาก hemodynamic ที่คาดไว้ (ดู AKI-02)"]}
+};
+var ORDER=["norm","lbw","donor","obese","old","ckd"];
+var box=document.getElementById("ctls"), C={};
+function sl(k,o){ o.id="s"+k; o.onInput=function(){ update(); }; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("n0",{label:"Nephron ต่อไตตอนเกิด (ล้าน)",min:0.25,max:1.6,step:0.05,value:0.9,unit:"",fmt:function(v){ return v.toFixed(2); }});
+sl("age",{label:"อายุตอนนี้",min:20,max:90,step:1,value:40,unit:"ปี"});
+sl("don",{label:"อายุที่เหลือไตเดียว",min:18,max:70,step:1,value:35,unit:"ปี"});
+sl("loss",{label:"Nephron ที่หายจากโรคที่อายุ 30 (%)",min:0,max:85,step:5,value:0,unit:"%"});
+var T={}, tb=document.getElementById("tools");
+Object.keys(TG).forEach(function(k){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:TG[k]}); b.addEventListener("click",function(){ b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); tb.appendChild(b); T[k]=b; });
+function on(k){ return T[k].getAttribute("aria-pressed")==="true"; }
+var BASE=120/1.8; /* nL/min at 1.8 million nephrons */
+function sim(o){
+  var St=o.n0*2, Ag=1, out=[], at={};
+  for(var a=20;a<=90;a+=0.5){
+    if(o.donor&&Math.abs(a-o.don)<0.25) St*=0.5;
+    if(o.loss&&Math.abs(a-30)<0.25) St*=(1-o.loss/100);
+    var N=St*Ag, demand=(o.obese?1.25:1)*(o.dm?1.2:1)*(o.prot?1.1:1), rel=Math.pow(1.8/St,0.6)*demand;
+    var sn=BASE*rel*(o.raas?0.88:1)*(o.sglt?0.9:1);
+    var pr=Math.pow(rel,0.55)*(o.raas?0.86:1)*(o.sglt?0.92:1);
+    var gfr=N*sn;
+    out.push([a,gfr]); if(Math.abs(a-o.age)<0.25) at={N:N,sn:sn,gfr:gfr,pr:pr};
+    /* ageing loss (not compensated) and hyperfiltration injury (compensated by remaining nephrons) */
+    if(a>=25) Ag*=Math.pow(1-0.0065,0.5);
+    St*=Math.pow(Math.max(0.5,1-Math.max(0,(pr-1.2))*0.05),0.5); if(St<0.01) St=0.01;   /* bound loss per step so very low nephron mass cannot go negative (NaN) */
+  }
+  return {series:out,at:at};
+}
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?235:250,aria:"GFR by age",
+  x:{min:20,max:90,step:10,label:"Age (years)"},y:{min:0,max:150,step:30,label:"GFR (mL/min)"},
+  series:[{id:"ref",name:"Normal nephron number, two kidneys",color:A.muted,data:[],width:1.6,dash:[6,4]},{id:"pt",name:"This patient",color:A.accent,data:[],width:2.6}],
+  hlines:[{y:60,label:"60",color:A.gold,dash:[4,4]},{y:15,label:"Kidney failure",color:A.red,dash:[4,4]}],legend:true});
+var svg=document.getElementById("vis"), INK="#0B0B1F", MUT="#5E6075", ACC="#5B4BFF", RED="#B4232A", FT="IBM Plex Sans Thai, sans-serif";
+function tx(x,y,s,o){ o=o||{}; return SV("text",{x:x,y:y,"text-anchor":o.a||"middle","font-family":o.mono?"Geist Mono, monospace":FT,"font-size":o.fs||12,"font-weight":o.fw||400,fill:o.fill||INK,text:s},svg); }
+function draw(at){
+  svg.innerHTML="";
+  var frac=Math.max(0,Math.min(1,at.N/1.8)), alive=Math.round(frac*100), rr=Math.min(9.5,4.6*Math.pow(at.sn/BASE,0.5));
+  tx(20,18,"Nephron pool (100 dots = 1.8 million)",{a:"start",fs:12.5,fw:600});
+  for(var i=0;i<100;i++){ var x=34+(i%20)*19, y=40+Math.floor(i/20)*34;
+    if(i<alive) SV("circle",{cx:x,cy:y,r:rr,fill:at.sn/BASE>1.5?RED:INK,opacity:0.85},svg);
+    else SV("circle",{cx:x,cy:y,r:3,fill:"none",stroke:"#D3D5E2","stroke-width":1.2},svg); }
+  tx(20,212,alive+" of 100 remain, glomerular size x"+Math.pow(at.sn/BASE,0.8).toFixed(2),{a:"start",fs:11.5,fill:MUT});
+  /* bars */
+  [["SNGFR",at.sn/BASE,ACC],["Glomerular pressure",at.pr,RED]].forEach(function(b,j){ var x=440+j*96, h=150, v=Math.min(3,b[1]), y0=190;
+    SV("rect",{x:x,y:y0-h,width:44,height:h,rx:10,fill:"#F4F5F9"},svg);
+    SV("rect",{x:x,y:y0-h*v/3,width:44,height:h*v/3,rx:10,fill:b[2],opacity:0.85},svg);
+    SV("line",{x1:x-6,y1:y0-h/3,x2:x+50,y2:y0-h/3,stroke:INK,"stroke-dasharray":"3 3"},svg);
+    tx(x+22,y0+18,b[0]==="SNGFR"?"SNGFR":"P glom",{fs:11.5,fw:600});
+    tx(x+22,y0-h*v/3-6,"x"+b[1].toFixed(2),{fs:11.5,mono:true}); });
+  tx(612,190-150/3+4,"Normal",{a:"end",fs:10.5,fill:MUT});
+}
+function update(){
+  var o={n0:C.n0.get(),age:C.age.get(),don:C.don.get(),loss:C.loss.get()}; Object.keys(TG).forEach(function(k){ o[k]=on(k); });
+  C.don.el.style.opacity=o.donor?1:0.4;
+  var R=sim(o), ref=sim({n0:0.9,age:o.age,don:0,loss:0});
+  chart.setSeries("ref",ref.series); chart.setSeries("pt",R.series);
+  var vl=[{x:o.age,label:"Now"}]; if(o.donor) vl.push({x:o.don,label:"Single kidney"}); if(o.loss) vl.push({x:30,label:"Disease"});
+  chart.update({vlines:vl});
+  var at=R.at; draw(at);
+  var g80=R.series.filter(function(p){ return p[0]===80; })[0][1], a60=null; R.series.forEach(function(p){ if(a60===null&&p[1]<60) a60=p[0]; });
+  Sim.ro("roN",at.N.toFixed(2),at.N<1?"flag":null);
+  Sim.ro("roSn",at.sn.toFixed(0),at.sn/BASE>1.5?"flag":"ok");
+  Sim.ro("roG",at.gfr.toFixed(0),at.gfr<60?"flag":"ok");
+  Sim.ro("roP","x"+at.pr.toFixed(2),at.pr>1.25?"flag":"ok");
+  Sim.ro("roG80",g80.toFixed(0),g80<45?"flag":null);
+  Sim.ro("roA60",a60===null?"> 90":a60.toFixed(0),a60!==null&&a60<70?"flag":"ok");
+  var m,bad=at.pr>1.25;
+  if(at.pr>1.25&&!(o.raas&&o.sglt)) m="<b>Glomerular hypertension</b> เริ่ม RAASi และ SGLT2i ลดน้ำหนัก ลดโปรตีนเหลือ 0.8 g/kg/วัน คุม BP ตรวจ UACR ทุกปี";
+  else if(at.pr>1.25) m="<b>ได้ RAASi + SGLT2i แล้ว</b> ความดันใน glomerulus ยังสูง เพิ่ม finerenone ใน DKD ที่มี albuminuria ลดน้ำหนักและเกลือ";
+  else if(o.donor) m="<b>ไตเดียว</b> ติดตาม BP, eGFR, UACR อย่างน้อยปีละครั้ง เลี่ยง NSAID และน้ำหนักเกิน";
+  else if(at.N<1.2) m="<b>Nephron น้อย</b> คัดกรอง BP และ UACR เป็นระยะ หลีกเลี่ยง nephrotoxin ระวังการเป็น living donor";
+  else m="<b>Nephron mass ปกติ</b> GFR ลดตามอายุ ไม่ต้องรักษาเฉพาะ ลองเปิดไตเดียวหรือ obesity เพื่อดู SNGFR";
+  var a=document.getElementById("act"); a.innerHTML="<b>Next step:</b> "+m; a.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"MX-12", title:"Nephron Mass and Hyperfiltration", lead:"ปรับจำนวน nephron ตอนเกิด อายุ การมีไตเดียว โรคที่ทำให้ nephron หาย และปัจจัยอย่าง obesity, DM, protein ดู single-nephron GFR, ความดันใน glomerulus และ GFR ตลอดชีวิต พร้อมผลของ RAASi และ SGLT2i",
+  scenarios:S, order:ORDER, captureMs:600,
+  onChange:function(k,s){ ["n0","age","don","loss"].forEach(function(x){ C[x].set(s.p[x]); }); Object.keys(T).forEach(function(x){ T[x].setAttribute("aria-pressed",s.p.rx.indexOf(x)>=0?"true":"false"); }); update(); },
+  refs:["Brenner BM, Garcia DL, Anderson S. Glomeruli and blood pressure: less of one, more the other? Am J Hypertens 1988, 1(4 Pt 1): 335-347",
+        "Bertram JF, Douglas-Denton RN, Diouf B, et al. Human nephron number: implications for health and disease. Pediatr Nephrol 2011, 26(9): 1529-1533",
+        "Denic A, Lieske JC, Chakkera HA, et al. The substantial loss of nephrons in healthy human kidneys with aging. J Am Soc Nephrol 2017, 28(1): 313-320",
+        "Denic A, Mathew J, Lerman LO, et al. Single-nephron glomerular filtration rate in healthy adults. N Engl J Med 2017, 376(24): 2349-2357",
+        "Lentine KL, Kasiske BL, Levey AS, et al. KDIGO clinical practice guideline on the evaluation and care of living kidney donors. Transplantation 2017, 101(8S Suppl 1): S1-S109",
+        "Muzaale AD, Massie AB, Wang MC, et al. Risk of end-stage renal disease following live kidney donation. JAMA 2014, 311(6): 579-586",
+        "Helal I, Fick-Brosnahan GM, Reed-Gitomer B, Schrier RW. Glomerular hyperfiltration: definitions, mechanisms and clinical implications. Nat Rev Nephrol 2012, 8(5): 293-300"],
+  note:"Model เพื่อการสอน: SNGFR = 67 nL/min x (1.8/nephron ล้าน)^0.6 x ปัจจัย (obesity 1.25, DM 1.2, protein 1.1, RAASi 0.88, SGLT2i 0.9) GFR = nephron x SNGFR (ไตเดียวได้ GFR ราว 76% ของเดิม) nephron ลด 0.65% ต่อปีหลังอายุ 25 (ไม่ชดเชยด้วย SNGFR) และลดเพิ่ม 5% ต่อปีต่อทุก 1 เท่าของความดันใน glomerulus ที่เกิน 1.2 ไม่ใช่ prediction model สำหรับผู้ป่วยรายบุคคล"
+});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[CKD-01] eGFR Equation Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(110px,150px) 1fr 92px}
+.sel{display:grid;grid-template-columns:minmax(110px,150px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:10px}
+body.present .bench{grid-template-columns:1.25fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .steps,body.present #stepT{display:none}
+body.present .card{padding:14px 18px}
+body.present .ro{padding:7px 12px}
+body.present .ro b{font-size:20px}
+body.present .ctls{gap:4px}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+body.present .svgwrap svg{max-height:330px;width:auto;margin:0 auto}
+body.present .readout{margin-top:8px}
+body.present .ctls{gap:1px}
+body.present .ctl{font-size:13px}
+body.present .tools{margin-top:6px}
+body.present .ro b{font-size:18px}
+body.present .take li{font-size:14px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Measured GFR เทียบกับสมการแต่ละตัว</h2>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 640 380" role="img" aria-label="Measured GFR compared with eGFR equations"></svg></div>
+      <p class="hint no-present">ภาพนี้สร้าง Cr และ cystatin C ที่ผู้ป่วยคนนี้ "ควรมี" จาก measured GFR จริง แล้วให้สมการคำนวณย้อนกลับ ส่วนต่างระหว่างแท่งกับเส้นประคือ error จาก non-GFR determinants (กล้ามเนื้อ, อาหาร, tubular secretion, inflammation, steroid)</p>
+      <h3 id="stepT" class="secondary">Worked steps</h3>
+      <div id="steps" class="secondary"></div>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วยและ non-GFR determinants</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roCr"><b>-</b><span>Serum Cr (mg/dL)</span></div>
+        <div class="ro" id="roCy"><b>-</b><span>Cystatin C (mg/L)</span></div>
+        <div class="ro" id="roE1"><b>-</b><span>eGFRcr</span></div>
+        <div class="ro" id="roE2"><b>-</b><span>eGFRcys</span></div>
+        <div class="ro" id="roE3"><b>-</b><span>eGFRcr-cys</span></div>
+        <div class="ro" id="roDi"><b>-</b><span>Discordance cys vs cr</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/calc.js"></script>
+<script>
+(function(){
+"use strict";
+function P(o){ var d={sex:"M",age:55,w:70,h:170,g:60,musc:1,cys:1,block:false}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  avg:{name:"ผู้ใหญ่ทั่วไป", p:P({}),
+    rows:[["ผู้ป่วย","ชาย 55 ปี 70 kg กล้ามเนื้อปกติ mGFR 60"],["ผล","สมการทุกตัวใกล้ measured GFR ต่างกันไม่เกินราว 10%"],["ใช้","eGFRcr เพียงพอสำหรับการคัดกรองและจัด stage"]],
+    take:["เมื่อกล้ามเนื้อและอาหารปกติ eGFRcr ให้ค่าใกล้ measured GFR พอสำหรับจัด G stage","สมการทุกตัวต้องการ steady state ใช้ไม่ได้ระหว่าง AKI","Cockcroft-Gault ให้ CrCl หน่วย mL/min ไม่ได้ index ตาม BSA ใช้ปรับขนาดยาเท่านั้น"]},
+  body:{name:"Bodybuilder กิน creatine", p:P({age:28,w:95,h:180,g:100,musc:1.65}),
+    rows:[["ผู้ป่วย","ชาย 28 ปี 95 kg กล้ามเนื้อมาก กิน creatine และโปรตีนสูง"],["Cr","1.45 mg/dL ทำให้ eGFRcr ตกอยู่ใน G2–G3a"],["Cystatin C","ปกติ eGFRcys ใกล้ measured GFR"]],
+    take:["Creatinine generation สูง (กล้ามเนื้อ, creatine, เนื้อปรุงสุก) ทำให้ eGFRcr ต่ำกว่าจริงและวินิจฉัย CKD เกิน","ยืนยันด้วย cystatin C ก่อนติดป้าย CKD ถ้าไม่มี albuminuria หรือความผิดปกติอื่น","หยุด creatine แล้ววัดซ้ำได้ แต่ cystatin C เร็วกว่า"]},
+  amp:{name:"Amputee", p:P({age:65,w:55,h:172,g:45,musc:0.6}),
+    rows:[["ผู้ป่วย","ชาย 65 ปี bilateral BKA จาก DM น้ำหนัก 55 kg"],["Cr","0.95 mg/dL ดูปกติ"],["ผล","eGFRcr สูงเกินจริง ยาที่ขับทางไตได้ขนาดเกิน"]],
+    take:["มวลกล้ามเนื้อน้อย (amputation, paraplegia, sarcopenia) ทำให้ eGFRcr สูงเกินจริง","ใช้ eGFRcr-cys เมื่อ eGFRcr ไม่น่าเชื่อถือ และ measured GFR เมื่อการตัดสินใจต้องแม่น","ยาช่วงรักษาแคบควรคำนวณจาก eGFR ที่ไม่ index (mL/min) หรือ mGFR"]},
+  cirr:{name:"Cirrhosis", p:P({sex:"F",age:60,w:50,h:155,g:35,musc:0.5}),
+    rows:[["ผู้ป่วย","หญิง 60 ปี Child-Pugh C ascites กล้ามเนื้อลีบ"],["Cr","0.75 mg/dL ทั้งที่ measured GFR 35"],["เหตุ","creatine จากตับลดลง + sarcopenia + ascites dilute"]],
+    take:["Cirrhosis ลดการสร้าง creatine และมวลกล้ามเนื้อ eGFRcr สูงเกินจริงได้มาก","Cystatin C ได้รับผลจากกล้ามเนื้อน้อยกว่า ช่วยประเมินก่อนใช้ยาและก่อนส่ง transplant","AKI ใน cirrhosis ใช้การเปลี่ยนแปลง Cr จาก baseline ไม่ใช่ค่าสัมบูรณ์"]},
+  ster:{name:"Steroid ขนาดสูง", p:P({age:50,w:72,g:70,cys:1.35}),
+    rows:[["ผู้ป่วย","ชาย 50 ปี ได้ prednisolone 60 mg/วัน"],["Cystatin C","สูงจาก non-GFR effect ของ glucocorticoid"],["ผล","eGFRcys ต่ำกว่าจริง eGFRcr ใกล้ mGFR"]],
+    take:["Cystatin C ก็มี non-GFR determinants: glucocorticoid, hyperthyroidism, inflammation, obesity, การสูบบุหรี่ทำให้สูง","Hypothyroidism ทำให้ cystatin C ต่ำ eGFRcys สูงเกินจริง","ไม่มี marker ไหนสมบูรณ์ ใช้บริบททางคลินิกตัดสินว่าเชื่อตัวใด"]},
+  tmp:{name:"Trimethoprim บล็อก secretion", p:P({age:70,w:65,g:40,block:true}),
+    rows:[["ผู้ป่วย","ชาย 70 ปี CKD G3b เริ่ม TMP-SMX"],["Cr","ขึ้นราว 15–20% ในไม่กี่วัน"],["GFR จริง","ไม่เปลี่ยน cystatin C คงเดิม"]],
+    take:["Trimethoprim, cimetidine, dolutegravir, cobicistat, ยา PARP inhibitor บางตัวบล็อก OCT2/MATE ทำให้ Cr ขึ้นโดย GFR ไม่ลด","Cr ขึ้นเล็กน้อยคงที่ ไม่มี albuminuria หรือ sediment ใหม่ และ cystatin C ไม่ขึ้น บ่งชี้ secretion block","Secretion มีสัดส่วนมากขึ้นเมื่อ GFR ต่ำ ผลต่อ Cr จึงชัดกว่าใน CKD"]},
+  frail:{name:"ผู้สูงอายุ frail กับขนาดยา", p:P({sex:"F",age:86,w:42,h:150,g:28,musc:0.65}),
+    rows:[["ผู้ป่วย","หญิง 86 ปี 42 kg AF จะเริ่ม DOAC"],["eGFRcr","สูงกว่า mGFR จากกล้ามเนื้อน้อย"],["CrCl","Cockcroft-Gault ต่ำกว่าเพราะคิดน้ำหนักและอายุ"]],
+    take:["ผู้สูงอายุตัวเล็กกล้ามเนื้อน้อย eGFRcr ประเมิน GFR สูงเกิน","การปรับขนาดยาที่ label อิง CrCl Cockcroft-Gault ให้ใช้ CrCl ตาม label","eGFR หน่วย mL/min/1.73 m² ต้องแปลงเป็น mL/min ตาม BSA จริงก่อนใช้กับยา"]}
+};
+var ORDER=["avg","body","amp","cirr","ster","tmp","frail"];
+var box=document.getElementById("ctls"), C={};
+var sx=Sim.h("select",{id:"sex"},[Sim.h("option",{value:"M",text:"ชาย"}),Sim.h("option",{value:"F",text:"หญิง"})]);
+sx.addEventListener("change",function(){ update(); });
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"sex",text:"เพศ"}),sx]));
+function sl(k,o){ o.id="s"+k; o.onInput=function(){ update(); }; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("g",{label:"Measured GFR",min:8,max:130,step:1,value:60,unit:"mL/min"});
+sl("age",{label:"อายุ",min:18,max:95,step:1,value:55,unit:"ปี"});
+sl("w",{label:"น้ำหนัก",min:35,max:130,step:1,value:70,unit:"kg"});
+sl("h",{label:"ส่วนสูง",min:140,max:200,step:1,value:170,unit:"cm"});
+sl("musc",{label:"Cr generation",min:0.4,max:1.8,step:0.05,value:1,unit:"x",fmt:function(v){ return v.toFixed(2); }});
+sl("cys",{label:"CysC non-GFR",min:0.7,max:1.6,step:0.05,value:1,unit:"x",fmt:function(v){ return v.toFixed(2); }});
+var tb=document.getElementById("tools");
+var BLK=false, bBlock=Sim.toggle("Secretion blocker (TMP, cimetidine)",function(on){ BLK=on; update(); },false); tb.appendChild(bBlock);
+function v(k){ return C[k].get(); }
+function invert(fn,target){ var lo=0.05,hi=25; for(var i=0;i<60;i++){ var m=(lo+hi)/2; if(fn(m)>target) lo=m; else hi=m; } return (lo+hi)/2; }
+function model(){
+  var sex=sx.value, age=v("age"), g=v("g"), W=v("w"), H=v("h");
+  var crRef=invert(function(c){ return Calc.ckdEpiCr({sex:sex,age:age,cr:c}).value; },g);
+  var cyRef=invert(function(c){ return Calc.ckdEpiCys({sex:sex,age:age,cys:c}).value; },g);
+  var secFrac=Sim.clamp(0.10+0.28*(1-g/120),0.10,0.38);
+  var blockF=BLK?1/(1-0.6*secFrac):1;
+  var cr=crRef*v("musc")*blockF, cy=cyRef*v("cys");
+  var e1=Calc.ckdEpiCr({sex:sex,age:age,cr:cr}), e2=Calc.ckdEpiCys({sex:sex,age:age,cys:cy}), e3=Calc.ckdEpiCrCys({sex:sex,age:age,cr:cr,cys:cy});
+  var bsa=0.007184*Math.pow(W,0.425)*Math.pow(H,0.725);
+  var cg=Calc.cockcroftGault({age:age,w:W,cr:cr,sex:sex});
+  return {sex:sex,age:age,g:g,W:W,H:H,cr:cr,cy:cy,e1:e1,e2:e2,e3:e3,bsa:bsa,cg:cg,mAbs:g*bsa/1.73,secFrac:secFrac,blockF:blockF};
+}
+var NS="http://www.w3.org/2000/svg", svg=document.getElementById("vis");
+function draw(M){
+  svg.innerHTML="";
+  var x0=200,x1=610,max=140; function X(val){ return x0+(x1-x0)*Math.min(val,max)/max; }
+  var bands=[[0,15,"G5"],[15,30,"G4"],[30,45,"G3b"],[45,60,"G3a"],[60,90,"G2"],[90,140,"G1"]];
+  bands.forEach(function(b,i){ Sim.svg("rect",{x:X(b[0]),y:30,width:X(b[1])-X(b[0]),height:300,fill:i%2?"#F4F5F9":"#FAFAFC"},svg);
+    Sim.svg("text",{x:(X(b[0])+X(b[1]))/2,y:22,"text-anchor":"middle","font-size":12,fill:"#5E6075","font-family":"Geist Mono, monospace",text:b[2]},svg); });
+  [0,15,30,45,60,90,120].forEach(function(t){ Sim.svg("text",{x:X(t),y:350,"text-anchor":"middle","font-size":11,fill:"#9A9CB2","font-family":"Geist Mono, monospace",text:t},svg); });
+  Sim.svg("text",{x:(x0+x1)/2,y:372,"text-anchor":"middle","font-size":12,fill:"#5E6075",text:"mL/min/1.73 m² (CrCl in mL/min)"},svg);
+  var rows=[["Measured GFR",M.g,"#0B0B1F","Reference standard"],["eGFRcr (2021)",M.e1.value,"#5B4BFF","Cr "+M.cr.toFixed(2)+" mg/dL"],["eGFRcys (2012)",M.e2.value,"#19C8E6","CysC "+M.cy.toFixed(2)+" mg/L"],["eGFRcr-cys (2021)",M.e3.value,"#1F7A72","Combined"],["CrCl Cockcroft-Gault",M.cg.value,"#A8842C","mL/min, not indexed"]];
+  rows.forEach(function(r,i){ var y=48+i*58, err=(r[1]-M.g)/M.g*100;
+    Sim.svg("text",{x:12,y:y+16,"font-size":14,"font-weight":600,fill:"#0B0B1F",text:r[0]},svg);
+    Sim.svg("text",{x:12,y:y+34,"font-size":11.5,fill:"#5E6075",text:r[3]},svg);
+    Sim.svg("rect",{x:x0,y:y+6,width:Math.max(2,X(r[1])-x0),height:26,rx:6,fill:r[2],opacity:i===0?0.92:0.85},svg);
+    var lbl=Math.round(r[1])+(i>0?"  ("+(err>=0?"+":"")+err.toFixed(0)+"%)":"");
+    var inside=X(r[1])-x0>150;
+    Sim.svg("text",{x:inside?X(r[1])-8:X(r[1])+8,y:y+24,"text-anchor":inside?"end":"start","font-size":13,"font-family":"Geist Mono, monospace",fill:inside?"#fff":(Math.abs(err)>30&&i>0?"#B4232A":"#0B0B1F"),text:lbl},svg);
+  });
+  Sim.svg("line",{x1:X(M.g),x2:X(M.g),y1:30,y2:330,stroke:"#0B0B1F","stroke-dasharray":"4 4","stroke-width":1.2},svg);
+}
+function update(){
+  var M=model();
+  draw(M);
+  Sim.ro("roCr",M.cr.toFixed(2)); Sim.ro("roCy",M.cy.toFixed(2));
+  function fl(e){ var r=Math.abs(e-M.g)/M.g; return r>0.3?"flag":r<0.1?"ok":null; }
+  Sim.ro("roE1",Math.round(M.e1.value)+" "+M.e1.stage,fl(M.e1.value)); Sim.ro("roE2",Math.round(M.e2.value)+" "+M.e2.stage,fl(M.e2.value)); Sim.ro("roE3",Math.round(M.e3.value)+" "+M.e3.stage,fl(M.e3.value));
+  var dis=(M.e2.value-M.e1.value)/M.e1.value*100;
+  Sim.ro("roDi",(dis>=0?"+":"")+dis.toFixed(0)+"%",Math.abs(dis)>30?"flag":null);
+  var st=document.getElementById("steps"); st.innerHTML="";
+  Calc.renderSteps(st,M.e3,{title:"eGFRcr-cys"});
+  var m,bad=false;
+  if(Math.abs(dis)>30){ bad=true;
+    if(M.e1.value>M.e2.value) m="<b>eGFRcys ต่ำกว่า eGFRcr เกิน 30%</b> ถ้าสงสัยกล้ามเนื้อน้อย (amputee, cirrhosis, frail) เชื่อ eGFRcr-cys หรือ eGFRcys มากกว่า ถ้ามี steroid, hyperthyroid, inflammation อาจเป็น cystatin C สูงปลอม ใช้ measured GFR เมื่อต้องตัดสินใจสำคัญ (ยาช่วงแคบ, เกณฑ์ KT, living donor)";
+    else m="<b>eGFRcr ต่ำกว่า eGFRcys เกิน 30%</b> สงสัย Cr generation สูง (กล้ามเนื้อมาก, creatine, เนื้อ) หรือ secretion block ใช้ eGFRcr-cys เป็นค่ารายงาน และยืนยันด้วย measured GFR ถ้าผลต่อการวินิจฉัย CKD หรือการใช้ยา";
+  } else if(BLK){ bad=true; m="<b>Cr ขึ้นจาก secretion block</b> GFR จริงไม่เปลี่ยน ไม่ต้องหยุดยาถ้าจำเป็น ยืนยันด้วย cystatin C และติดตามว่า Cr คงที่ ไม่ใช่ AKI"; }
+  else if(M.age>=75&&M.cg.value<M.e1.value*M.bsa/1.73*0.8){ m="<b>ขนาดยา</b> CrCl "+Math.round(M.cg.value)+" mL/min ต่ำกว่า eGFR ที่แปลงเป็น mL/min ("+Math.round(M.e1.value*M.bsa/1.73)+") ยาที่ label อิง Cockcroft-Gault ให้ใช้ CrCl"; }
+  else m="<b>สมการสอดคล้องกัน</b> ใช้ eGFRcr สำหรับจัด stage ร่วมกับ UACR ส่วนยาให้แปลง eGFR เป็น mL/min ด้วย BSA "+M.bsa.toFixed(2)+" m² ได้ "+Math.round(M.e1.value*M.bsa/1.73)+" mL/min";
+  var a=document.getElementById("act"); a.innerHTML="<b>Next step:</b> "+m; a.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"CKD-01", title:"eGFR Equation Lab", lead:"ตั้ง measured GFR ของผู้ป่วย แล้วปรับมวลกล้ามเนื้อ, ปัจจัยที่ไม่ใช่ GFR ของ cystatin C และยาที่บล็อก creatinine secretion ดูว่าสมการแต่ละตัวพลาดไปทางไหนและควรเชื่อค่าใด",
+  scenarios:S, order:ORDER, captureMs:800,
+  onChange:function(k,s){ sx.value=s.p.sex; Object.keys(C).forEach(function(x){ if(s.p[x]!==undefined) C[x].set(s.p[x]); }); BLK=!!s.p.block; bBlock.setState(BLK); update(); },
+  refs:["Inker LA, Eneanya ND, Coresh J, et al. New creatinine- and cystatin C-based equations to estimate GFR without race. N Engl J Med 2021, 385(19): 1737-1749",
+        "Inker LA, Schmid CH, Tighiouart H, et al. Estimating glomerular filtration rate from serum creatinine and cystatin C. N Engl J Med 2012, 367(1): 20-29",
+        "KDIGO 2024 Clinical Practice Guideline for the Evaluation and Management of CKD. Kidney Int 2024, 105(4S): S117-S314",
+        "Stevens LA, Levey AS. Measured GFR as a confirmatory test for estimated GFR. J Am Soc Nephrol 2009, 20(11): 2305-2313",
+        "Delanaye P, Mariat C, Cavalier E, et al. Trimethoprim, creatinine and creatinine-based equations. Nephron Clin Pract 2011, 119(3): c187-c193",
+        "Knight EL, Verhave JC, Spiegelman D, et al. Factors influencing serum cystatin C levels other than renal function. Kidney Int 2004, 65(4): 1416-1421",
+        "Cockcroft DW, Gault MH. Prediction of creatinine clearance from serum creatinine. Nephron 1976, 16(1): 31-41"],
+  note:"Model เพื่อการสอน: หา Cr และ cystatin C อ้างอิงที่ทำให้สมการ CKD-EPI ได้ค่าเท่ากับ measured GFR (bisection) แล้วคูณด้วย Cr generation factor และ CysC non-GFR factor ส่วน secretion block เพิ่ม Cr ตามสัดส่วน secretion ที่สูงขึ้นเมื่อ GFR ต่ำ (10–38%) ตัดออก 60% BSA ใช้ Du Bois"
+});
+})();
+</script>
+</body>
+</html>

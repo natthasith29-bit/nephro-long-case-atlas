@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[GN-12] Nephrotic Syndrome: Edema and Complications</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.2fr 1fr}}
+.sel{display:grid;grid-template-columns:minmax(90px,120px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px;margin:6px 0}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.readout{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:520px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.readout .ro b{font-size:clamp(17px,2vw,23px)}
+#roMech b{font-size:17px}
+.act{margin-top:10px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act ul{margin:6px 0 0;padding-left:18px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .act{display:none}
+body.present .card{padding:14px 18px}
+body.present .ctls{grid-template-columns:1fr 1fr;column-gap:22px}
+body.present #star{max-height:250px;width:auto!important;margin:0 auto}
+body.present #comp{max-height:195px;width:auto!important;margin:0 auto}
+body.present .readout .ro{padding:6px 10px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Starling forces และการคั่ง Na</h2>
+      <div class="svgwrap"><svg id="star" viewBox="0 0 640 260" role="img" aria-label="Starling forces and sodium retention"></svg></div>
+      <div class="svgwrap" style="margin-top:10px"><svg id="comp" viewBox="0 0 640 230" role="img" aria-label="Complication risk"></svg></div>
+      <p class="hint no-present">ภาพบน: แรงดันใน capillary กับ oncotic pressure ใน plasma และ interstitium ถ้า filtration เกินความสามารถของ lymphatic จะบวม ส่วน plasmin ในปัสสาวะกระตุ้น ENaC ให้คั่ง Na โดยตรง (overfill) ภาพล่างคือความเสี่ยงของภาวะแทรกซ้อนแต่ละด้าน</p>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วยและการรักษา</h2>
+      <div class="sel"><label for="sDz">โรค</label><select id="sDz">
+        <option value="mn">Membranous</option><option value="mcd">MCD (เด็ก)</option><option value="fsgs">FSGS</option><option value="dkd">Diabetic kidney disease</option><option value="amy">AL amyloid</option></select></div>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools"></div>
+      <div class="readout" style="margin-top:10px">
+        <div class="ro" id="roMech"><b>-</b><span>Volume state</span></div>
+        <div class="ro" id="roNet"><b>-</b><span>Net filtration</span></div>
+        <div class="ro" id="roNa"><b>-</b><span>Na balance (mmol/d)</span></div>
+        <div class="ro" id="roLdl"><b>-</b><span>LDL (mg/dL)</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script>
+(function(){
+"use strict";
+/* Teaching model
+   Plasma oncotic pressure (mmHg) = 5.5 x albumin (g/dL) + 5. Interstitial oncotic pressure falls with it (0.4 x plasma) as a safety factor.
+   Capillary pressure 24 + 6 x overfill. Net filtration = Pc - Pi - 0.9 x (pi_c - pi_i), oedema when net filtration > lymphatic reserve (about 9 mmHg).
+   Underfill score rises with very low albumin, preserved GFR and young age; overfill with low GFR, high BP and heavy proteinuria (plasmin activates ENaC).
+   Na balance = intake 120 + 0.5 x ENaC drive - loop natriuresis - 50 (other excretion). Loop natriuresis = 180 x dose factor x (GFR/90)^0.6 / (1 + 0.06 x proteinuria) / (albumin < 2 ? 1.4 : 1); thiazide x1.5, amiloride adds ENaC block.
+   VTE: membranous albumin < 2.0 high, 2.0-2.5 moderate, other diseases scaled down. LDL = 100 + 45 x (4 - albumin) + 6 x proteinuria (statin x0.55). */
+var DZ = {mn:{vte:1, name:"MN"}, mcd:{vte:0.5, name:"MCD"}, fsgs:{vte:0.6, name:"FSGS"}, dkd:{vte:0.4, name:"DKD"}, amy:{vte:0.8, name:"AL"}};
+var S = {
+  mn:{name:"MN albumin 1.8", p:{dz:"mn", alb:1.8, up:9, egfr:80, sbp:132, age:55, loop:40}, t:{acei:1, statin:0, anticoag:0, thz:0, amil:0, albinf:0, bleed:0},
+    rows:[["Clinical","ชาย 55 ปี บวม proteinuria 9 g/d albumin 1.8 eGFR 80"],["Issue","เสี่ยง VTE สูง (renal vein thrombosis, PE)"],["Plan","Anticoagulation ถ้า bleeding risk ต่ำ + diuretic + statin"]],
+    take:["MN ที่ albumin < 2.0 g/dL เสี่ยง VTE สูงที่สุดในกลุ่ม nephrotic","Prophylactic anticoagulation ชั่งกับ bleeding risk","Hypercoagulability มาจากการเสีย antithrombin และการสร้าง fibrinogen เพิ่ม"]},
+  mcd:{name:"MCD เด็ก underfill", p:{dz:"mcd", alb:1.2, up:6, egfr:120, sbp:92, age:5, loop:20}, t:{acei:0, statin:0, anticoag:0, thz:0, amil:0, albinf:0, bleed:0},
+    rows:[["Clinical","เด็กชาย 5 ปี บวมมาก ปวดท้อง BP 92/56 ชีพจรเร็ว"],["Lab","Hct สูง, urine Na < 10, FENa < 0.2%"],["Issue","Underfill ร่วมกับเสี่ยง peritonitis และ AKI"]],
+    take:["Underfill พบในเด็ก MCD ที่ albumin ต่ำมากและ GFR ดี","Diuretic ขนาดสูงใน underfill ทำให้ AKI และ thrombosis","ปวดท้องและไข้ให้คิด spontaneous bacterial peritonitis (pneumococcus)"]},
+  fsgs:{name:"FSGS overfill", p:{dz:"fsgs", alb:2.6, up:7, egfr:45, sbp:158, age:48, loop:40}, t:{acei:1, statin:1, anticoag:0, thz:0, amil:0, albinf:0, bleed:0},
+    rows:[["Clinical","หญิง 48 ปี BP 158/96 eGFR 45 บวมกดบุ๋ม"],["Lab","Renin ต่ำ urine Na ต่ำ"],["Issue","Overfill จาก ENaC activation และ GFR ลด"]],
+    take:["Overfill พบบ่อยในผู้ใหญ่ที่ GFR ลดและความดันสูง","Plasmin ในปัสสาวะตัดและกระตุ้น ENaC ทำให้คั่ง Na","Amiloride ช่วยเมื่อ loop diuretic ไม่พอ"]},
+  res:{name:"Diuretic resistance", p:{dz:"mn", alb:1.6, up:14, egfr:55, sbp:140, age:62, loop:40}, t:{acei:1, statin:1, anticoag:1, thz:0, amil:0, albinf:0, bleed:0},
+    rows:[["Clinical","ชาย 62 ปี บวมไม่ลดทั้งที่ได้ furosemide 40 mg"],["Lab","Proteinuria 14 g/d albumin 1.6"],["Issue","Loop diuretic ถูก albumin ในปัสสาวะจับและกระจายตัวมาก"]],
+    take:["เพิ่ม loop diuretic เป็นขนาดสูงวันละ 2 ครั้ง","ใช้ sequential nephron blockade (thiazide หรือ amiloride)","Albumin ร่วม furosemide เฉพาะรายที่ดื้อยาและ albumin ต่ำมาก"]},
+  dkd:{name:"DKD nephrotic", p:{dz:"dkd", alb:2.8, up:6, egfr:35, sbp:150, age:65, loop:80}, t:{acei:1, statin:1, anticoag:0, thz:1, amil:0, albinf:0, bleed:1},
+    rows:[["Clinical","ชาย 65 ปี เบาหวาน 20 ปี proteinuria 6 g/d eGFR 35"],["Issue","Overfill + CKD ความเสี่ยง VTE ต่ำกว่า MN"],["Plan","Loop + thiazide, RAASi, SGLT2i, statin"]],
+    take:["Nephrotic จาก DKD เสี่ยง VTE ต่ำกว่า MN ที่ albumin เท่ากัน","ใน CKD ต้องใช้ loop diuretic ขนาดสูงขึ้น","Statin ลด CV risk ในผู้ป่วยกลุ่มนี้"]}
+};
+var box = document.getElementById("ctls"), C = {};
+function add(k, o){ o.onInput = update; C[k] = Sim.slider(o); box.appendChild(C[k].el); }
+add("alb", {id:"sA", label:"Serum albumin", min:0.8, max:4.5, step:0.1, value:2.0, unit:"g/dL"});
+add("up", {id:"sU", label:"Proteinuria", min:1, max:20, step:0.5, value:8, unit:"g/d"});
+add("egfr", {id:"sG", label:"eGFR", min:10, max:130, step:1, value:80, unit:""});
+add("sbp", {id:"sB", label:"SBP", min:80, max:190, step:2, value:130, unit:"mmHg"});
+add("age", {id:"sAg", label:"Age", min:2, max:85, step:1, value:50, unit:"y"});
+add("loop", {id:"sL", label:"Furosemide IV", min:0, max:200, step:10, value:40, unit:"mg"});
+var T = {}, TB = {};
+[["acei","ACEi/ARB"],["statin","Statin"],["anticoag","Anticoagulation"],["thz","Thiazide"],["amil","Amiloride"],["albinf","Albumin + furosemide"],["bleed","Bleeding risk สูง"]].forEach(function(x){
+  TB[x[0]] = Sim.toggle(x[1], function(on){ T[x[0]] = on; update(); }, false); document.getElementById("tools").appendChild(TB[x[0]]); });
+var sDz = document.getElementById("sDz"); sDz.addEventListener("change", update);
+var star = document.getElementById("star"), comp = document.getElementById("comp");
+var FT = "IBM Plex Sans Thai, sans-serif", MO = "Geist Mono, monospace";
+function model(p){
+  var under = Math.max(0, (2.0 - p.alb) * 0.9) + Math.max(0, (p.egfr - 80) / 80) + (p.age < 16 ? 0.4 : 0) - Math.max(0, (p.sbp - 125) / 50);
+  var over = Math.max(0, (70 - p.egfr) / 50) + Math.max(0, (p.sbp - 130) / 40) + p.up / 25;
+  var state = under > over + 0.2 ? "Underfill" : over > under + 0.2 ? "Overfill" : "Mixed";
+  var pic = 5.5 * p.alb + 5, pii = 0.4 * pic, pc = 24 + 6 * Math.min(1.5, over), pi = -1;
+  var net = pc - pi - 0.9 * (pic - pii);
+  var dose = p.loop / 40, eff = p.loop ? 180 * Math.min(2.2, Math.pow(dose, 0.6)) * Math.pow(Math.max(10, p.egfr) / 90, 0.6) / (1 + 0.06 * p.up) / (p.alb < 2 ? 1.4 : 1) : 0;
+  if(T.albinf && p.alb < 2.2) eff *= 1.25;
+  if(T.thz) eff *= 1.5;
+  var enac = 30 + 4 * p.up; if(T.amil) enac *= 0.25;
+  var naBal = Math.round(120 + enac * 0.5 - eff - 50);
+  var vte = (p.alb < 2.0 ? 75 : p.alb < 2.5 ? 50 : p.alb < 3.0 ? 30 : 10) * DZ[p.dz].vte; if(T.anticoag) vte *= 0.3;
+  var inf = Math.min(100, 15 + p.up * 2.5 + (p.alb < 1.5 ? 25 : 0) + (p.age < 16 ? 15 : 0) + (p.age > 65 ? 10 : 0));
+  var ldl = (100 + 45 * (4 - p.alb) + 6 * p.up) * (T.statin ? 0.55 : 1);
+  var aki = Math.min(100, 10 + (state === "Underfill" ? 30 : 0) + (p.loop > 80 && state === "Underfill" ? 20 : 0) + (T.acei && state === "Underfill" ? 15 : 0) + (p.age > 65 ? 10 : 0) + Math.max(0, (60 - p.egfr) / 3));
+  var bleed = 10 + (T.anticoag ? 25 : 0) + (T.bleed ? 30 : 0) + (p.egfr < 30 ? 10 : 0);
+  return {state:state, pic:pic, pii:pii, pc:pc, pi:pi, net:net, eff:eff, enac:enac, naBal:naBal, vte:vte, inf:inf, ldl:ldl, aki:aki, bleed:bleed, under:under, over:over};
+}
+function arrow(x1, y1, x2, y2, w, col, lab, lx, ly){
+  var a = Math.atan2(y2 - y1, x2 - x1);
+  Sim.svg("line", {x1:x1, y1:y1, x2:x2 - Math.cos(a) * 8, y2:y2 - Math.sin(a) * 8, stroke:col, "stroke-width":w, "stroke-linecap":"round"}, star);
+  Sim.svg("path", {d:"M" + x2 + "," + y2 + " l" + (-Math.cos(a - 0.5) * 11) + "," + (-Math.sin(a - 0.5) * 11) + " l" + (Math.cos(a - 0.5) * 11 - Math.cos(a + 0.5) * 11) + "," + (Math.sin(a - 0.5) * 11 - Math.sin(a + 0.5) * 11) + "Z", fill:col}, star);
+  if(lab) Sim.svg("text", {x:lx, y:ly, "text-anchor":"middle", "font-family":MO, "font-size":11, fill:col, text:lab}, star);
+}
+function drawStar(m, p){
+  star.innerHTML = "";
+  Sim.svg("rect", {x:20, y:30, width:300, height:70, rx:14, fill:"#FDEDEF", stroke:"#E0A3AE"}, star);
+  Sim.svg("text", {x:30, y:50, "font-family":FT, "font-size":12, fill:"#8A3A4E", text:"Capillary"}, star);
+  for(var i = 0; i < Math.round(p.alb * 3); i++) Sim.svg("circle", {cx:120 + (i % 6) * 28, cy:62 + Math.floor(i / 6) * 14, r:5, fill:"#5B4BFF"}, star);
+  Sim.svg("text", {x:315, y:96, "text-anchor":"end", "font-family":FT, "font-size":10.5, fill:"#5B4BFF", text:"Albumin " + p.alb.toFixed(1) + " g/dL"}, star);
+  var oed = Math.max(0, Math.min(1, (m.net - 9) / 10));
+  Sim.svg("rect", {x:20, y:150, width:300, height:90, rx:14, fill:oed > 0 ? "rgba(25,200,230," + (0.12 + oed * 0.35).toFixed(2) + ")" : "#F4F5F9", stroke:"#C9D9E6"}, star);
+  Sim.svg("text", {x:30, y:170, "font-family":FT, "font-size":12, fill:"#2F6FA3", text:oed > 0 ? "Interstitium: edema" : "Interstitium"}, star);
+  arrow(90, 104, 90, 146, 2 + m.pc / 6, "#B4232A", "Pc " + m.pc.toFixed(0), 62, 128);
+  arrow(170, 146, 170, 104, 2 + m.pic / 6, "#5B4BFF", "πc " + m.pic.toFixed(0), 200, 128);
+  arrow(250, 104, 250, 146, 2 + Math.max(0, m.net) / 3, m.net > 9 ? "#B4232A" : "#1F7A72", "Net " + m.net.toFixed(1), 282, 128);
+  Sim.svg("text", {x:30, y:230, "font-family":MO, "font-size":11, fill:"#5E6075", text:"πi " + m.pii.toFixed(0) + "  Lymph reserve about 9"}, star);
+  // kidney ENaC
+  Sim.svg("rect", {x:360, y:30, width:260, height:210, rx:14, fill:"#FFFFFF", stroke:"#D3D5E2"}, star);
+  Sim.svg("text", {x:372, y:50, "font-family":FT, "font-size":12, "font-weight":600, fill:"#0B0B1F", text:"Collecting duct cell"}, star);
+  Sim.svg("rect", {x:440, y:70, width:110, height:120, rx:12, fill:"#EEF2FB", stroke:"#9FB3D9"}, star);
+  Sim.svg("text", {x:372, y:168, "font-family":FT, "font-size":11, fill:"#5E6075", text:"Lumen"}, star);
+  Sim.svg("text", {x:568, y:168, "font-family":FT, "font-size":11, fill:"#5E6075", text:"Blood"}, star);
+  var en = Math.min(1, m.enac / 90);
+  Sim.svg("rect", {x:432, y:100, width:16, height:30, rx:6, fill:T.amil ? "#D3D5E2" : "#1F7A72"}, star);
+  Sim.svg("text", {x:440, y:146, "text-anchor":"middle", "font-family":MO, "font-size":10, fill:"#1F7A72", text:"ENaC"}, star);
+  if(T.amil) Sim.svg("text", {x:440, y:94, "text-anchor":"middle", "font-family":FT, "font-size":15, "font-weight":700, fill:"#B4232A", text:"✕"}, star);
+  arrow(380, 115, 430, 115, 1.5 + en * 7, "#1F7A72", "Na", 400, 108);
+  arrow(555, 115, 600, 115, 1.5 + en * 7, "#1F7A72", "", 0, 0);
+  Sim.svg("text", {x:372, y:205, "font-family":FT, "font-size":11, fill:"#5E6075", text:"Urinary plasmin cleaves ENaC: " + (p.up >= 3.5 ? "high" : "low")}, star);
+  Sim.svg("text", {x:372, y:224, "font-family":FT, "font-size":11, fill:"#5E6075", text:"Loop delivery to lumen: " + (m.eff > 100 ? "adequate" : m.eff > 50 ? "reduced" : "poor")}, star);
+}
+function bar(y, label, v, txt, col){
+  var x0 = 230, w = 330;
+  Sim.svg("text", {x:x0 - 12, y:y + 15, "text-anchor":"end", "font-family":FT, "font-size":12.5, fill:"#0B0B1F", text:label}, comp);
+  Sim.svg("rect", {x:x0, y:y + 2, width:w, height:18, rx:6, fill:"#F4F5F9"}, comp);
+  Sim.svg("rect", {x:x0, y:y + 2, width:Math.max(3, w * Math.min(100, v) / 100), height:18, rx:6, fill:col}, comp);
+  Sim.svg("text", {x:x0 + w + 8, y:y + 15, "font-family":MO, "font-size":11.5, fill:"#5E6075", text:txt}, comp);
+}
+function lvl(v){ return v >= 60 ? "high" : v >= 35 ? "moderate" : "low"; }
+function col(v){ return v >= 60 ? "#B4232A" : v >= 35 ? "#D9731A" : "#1F7A72"; }
+function update(){
+  var p = {dz:sDz.value}; Object.keys(C).forEach(function(k){ p[k] = C[k].get(); });
+  var m = model(p);
+  drawStar(m, p);
+  comp.innerHTML = "";
+  bar(8, "Venous thromboembolism", m.vte, lvl(m.vte), col(m.vte));
+  bar(40, "Bleeding (if anticoagulated)", m.bleed, lvl(m.bleed), col(m.bleed));
+  bar(72, "Infection", m.inf, lvl(m.inf), col(m.inf));
+  bar(104, "Acute kidney injury", m.aki, lvl(m.aki), col(m.aki));
+  var dr = Math.max(0, Math.min(100, 100 - m.eff / 1.8));
+  bar(136, "Diuretic resistance", dr, lvl(dr), col(dr));
+  bar(168, "Hyperlipidemia", Math.min(100, (m.ldl - 70) / 2.5), Math.round(m.ldl) + " mg/dL", col(Math.min(100, (m.ldl - 70) / 2.5)));
+  Sim.svg("text", {x:16, y:222, "font-family":FT, "font-size":10.5, fill:"#9A9CB2", text:"Qualitative teaching scores. VTE is highest in membranous nephropathy with albumin below 2.0 g/dL."}, comp);
+  Sim.ro("roMech", m.state, m.state === "Underfill" ? "flag" : true);
+  Sim.ro("roNet", m.net.toFixed(1), m.net > 9 ? "flag" : "ok");
+  Sim.ro("roNa", (m.naBal > 0 ? "+" : "") + m.naBal, m.naBal > 20 ? "flag" : m.naBal < -150 && m.state === "Underfill" ? "flag" : "ok");
+  Sim.ro("roLdl", Math.round(m.ldl), m.ldl > 160 ? "flag" : "ok");
+  var li = [];
+  if(m.state === "Underfill") li.push("Underfill: ระวัง diuretic ขนาดสูง ตรวจ postural BP, Hct, urine Na ถ้ามีอาการ hypovolemia ให้ albumin 20–25% ก่อน furosemide หลีกเลี่ยง ACEi และ NSAID ช่วงนี้");
+  else if(m.naBal > 20){ var sg = []; if(p.loop < 80) sg.push("เพิ่ม loop diuretic เป็นขนาดสูงวันละ 2 ครั้ง"); if(!T.thz) sg.push("เพิ่ม thiazide"); if(!T.amil) sg.push("เพิ่ม amiloride (block ENaC ที่ plasmin กระตุ้น)"); if(!T.albinf && p.alb < 2) sg.push("พิจารณา albumin ร่วม furosemide ถ้ายังดื้อ"); sg.push("จำกัดเกลือ < 2 g Na/วัน"); li.push("ยังคั่ง Na: " + sg.join(", ")); }
+  else if(m.naBal > -20) li.push("Na balance ใกล้ศูนย์: บวมคงที่แต่ไม่ลด เพิ่ม diuretic ทีละขั้นหรือเพิ่ม thiazide/amiloride");
+  else li.push("Na balance ติดลบ: ลดน้ำหนักได้ ราว 0.5–1 kg/วัน ติดตาม Cr และ K");
+  if(m.vte >= 50 && !T.anticoag) li.push(T.bleed ? "VTE สูงแต่ bleeding risk สูง: พิจารณา aspirin หรือ prophylactic LMWH" : "VTE สูง: ให้ therapeutic anticoagulation (warfarin หรือ LMWH) จน albumin > 2.5–3.0");
+  if(m.inf >= 50) li.push("Infection: ฉีด pneumococcal และ influenza vaccine ระวัง cellulitis และ peritonitis ตรวจ IgG ถ้าติดเชื้อซ้ำ");
+  if(m.ldl > 160 && !T.statin) li.push("ไขมันสูง: ให้ statin ถ้า nephrotic นานหรือมี CV risk");
+  if(!T.acei && m.state !== "Underfill") li.push("เริ่ม ACEi/ARB เมื่อ volume คงที่เพื่อลด proteinuria");
+  document.getElementById("act").innerHTML = "<b>Next step:</b><ul>" + li.map(function(x){ return "<li>" + x + "</li>"; }).join("") + "</ul>";
+}
+Sim.mount({code:"GN-12", title:"Nephrotic Syndrome: Edema and Complications",
+  lead:"ปรับ albumin, proteinuria, eGFR และความดัน ดูว่าบวมเพราะ underfill หรือ overfill การรักษาด้วย diuretic ได้ผลแค่ไหน และความเสี่ยง VTE, infection, AKI และไขมันเปลี่ยนอย่างไร",
+  scenarios:S, order:["mn","mcd","fsgs","res","dkd"], captureMs:900,
+  onChange:function(k, s){ sDz.value = s.p.dz; ["alb","up","egfr","sbp","age","loop"].forEach(function(n){ C[n].set(s.p[n]); }); Object.keys(TB).forEach(function(n){ T[n] = !!s.t[n]; TB[n].setState(T[n]); }); update(); },
+  refs:["Hull RP, Goldsmith DJA. Nephrotic syndrome in adults. BMJ 2008, 336(7654): 1185-1189",
+        "Siddall EC, Radhakrishnan J. The pathophysiology of edema formation in the nephrotic syndrome. Kidney Int 2012, 82(6): 635-642",
+        "Svenningsen P, Bistrup C, Friis UG, et al. Plasmin in nephrotic urine activates the epithelial sodium channel. J Am Soc Nephrol 2009, 20(2): 299-310",
+        "Barbano B, Gigante A, Amoroso A, Cianci R. Thrombosis in nephrotic syndrome. Semin Thromb Hemost 2013, 39(5): 469-476",
+        "Lionaki S, Derebail VK, Hogan SL, et al. Venous thromboembolism in patients with membranous nephropathy. Clin J Am Soc Nephrol 2012, 7(1): 43-51",
+        "Ellison DH. Treatment of disorders of sodium balance in chronic kidney disease. Adv Chronic Kidney Dis 2017, 24(5): 332-341",
+        "KDIGO 2021 Clinical Practice Guideline for the Management of Glomerular Diseases. Kidney Int 2021, 100(4S): S1-S276"],
+  note:"ตัวเลข Starling และ natriuresis เป็นค่าประมาณเพื่อแสดงทิศทาง การตัดสินใจ anticoagulation จริงควรใช้ risk tool (เช่น GN-VTE) ร่วมกับ bleeding risk"
+});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[PD-02] Peritoneal Equilibration Test (PET)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(120px,160px) 1fr 100px}
+.sel{display:grid;grid-template-columns:minmax(120px,160px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:760px){.pair{grid-template-columns:1fr}}
+.pair h3{margin:0 0 4px;font-size:13.5px;font-weight:600}
+.readout{grid-template-columns:repeat(3,1fr)}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,1fr)}}
+table.lab{width:100%;border-collapse:collapse;font-size:13px;margin-top:12px}
+table.lab th,table.lab td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
+table.lab th{font-weight:500;color:var(--muted);font-size:12px}
+table.lab td:first-child,table.lab th:first-child{text-align:left;color:var(--muted)}
+table.lab td{font-family:var(--mono)}
+.labwrap{overflow-x:auto}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+body.present .bench{grid-template-columns:1.35fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present #steps,body.present .labwrap{display:none}
+body.present .card{padding:16px 20px}
+body.present .ctls{gap:2px}
+body.present .ro{padding:8px 12px}
+body.present table.lab td,body.present table.lab th{padding:4px 8px}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>PET curves เทียบเกณฑ์ Twardowski</h2>
+      <div class="pair">
+        <div><h3>D/P creatinine</h3><div id="chCr"></div></div>
+        <div><h3>D/D0 glucose</h3><div id="chG"></div></div>
+      </div>
+      <div id="chUF"></div>
+      <p class="hint no-present">เส้นประคือขอบเขต category (D/P Cr 4 ชม. 0.50, 0.65, 0.82 ตัวเลขท้ายเส้นคือค่าที่ 4 ชม.) เส้นทึบคือผู้ป่วย creatinine ยิ่งขึ้นเร็วและ glucose ยิ่งลดเร็ว แปลว่า transport เร็ว กราฟล่างคือ net UF และ Na ในน้ำยา</p>
+      <div id="steps" class="no-present"></div>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วยและวิธีทำ PET</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roCr"><b>-</b><span>D/P Cr 4 ชม.</span></div>
+        <div class="ro" id="roG"><b>-</b><span>D/D0 glucose 4 ชม.</span></div>
+        <div class="ro" id="roCat"><b>-</b><span>Transport category</span></div>
+        <div class="ro" id="roUF"><b>-</b><span>Net UF 4 ชม. (ml)</span></div>
+        <div class="ro" id="roDip"><b>-</b><span>Na dip 60 นาที (mmol/L)</span></div>
+        <div class="ro" id="roType"><b>-</b><span>UF failure</span></div>
+      </div>
+      <div class="labwrap"><table class="lab" id="lab" aria-label="PET laboratory sheet"></table></div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/calc.js"></script>
+<script src="../core/pd.js"></script>
+<script>
+(function(){
+"use strict";
+function P(o){ var d={fluid:"g25",area:1.1,aqp:100,L:0.3,lps:1,pcr:9,pglu:110}; for(var k in o) d[k]=o[k]; return d; }
+var S = {
+  fastAvg:{name:"Fast-average (ค่ากลาง)", p:P({}),
+    rows:[["วิธีทำ","standard PET: drain ค้างคืน เติม 2.5% 2 L เก็บน้ำยาที่ 0, 2, 4 ชม. และเลือดที่ 2 ชม."],["ผล","D/P Cr 4 ชม. ราว 0.68 D/D0 glucose ราว 0.4"],["ความหมาย","ทำได้ทั้ง CAPD และ APD ปรับตาม UF และ clearance"]],
+    take:["D/P Cr 4 ชม. แบ่ง slow < 0.50, slow-average 0.50–0.64, fast-average 0.65–0.81, fast ≥ 0.82","D/D0 glucose ไปทางตรงข้ามกับ D/P Cr: glucose ถูกดูดเร็ว = transport เร็ว","PET ครั้งแรกควรทำหลังเริ่ม PD ราว 4–6 สัปดาห์ เมื่อ membrane คงที่"]},
+  fast:{name:"Fast transporter", p:P({area:1.95}),
+    rows:[["ผล","D/P Cr 4 ชม. ราว 0.84 D/D0 glucose ต่ำ"],["ปัญหา","clearance ของ small solute ดี แต่ glucose gradient หายเร็ว UF ต่ำ และ albumin รั่วมาก"],["แนวทาง","dwell สั้น (APD) และ icodextrin สำหรับ long dwell"]],
+    take:["Fast transport สัมพันธ์กับ survival ที่แย่ลงถ้าไม่ปรับ prescription ให้คุมน้ำได้","ปัญหาหลักคือ UF ไม่ใช่ clearance","พบได้ตั้งแต่เริ่ม PD (inflammation, comorbidity) หรือเกิดขึ้นเมื่อ vintage นาน"]},
+  slow:{name:"Slow transporter", p:P({area:0.55}),
+    rows:[["ผล","D/P Cr 4 ชม. ราว 0.48 glucose เหลือมาก"],["ข้อดี","UF ดีแม้ใช้ long dwell"],["ข้อจำกัด","small solute clearance ต่ำ ต้องใช้ fill volume มากและ dwell ยาว"]],
+    take:["Slow transporter ได้ประโยชน์จาก dwell ยาว (CAPD) และ fill volume มาก","APD ที่ dwell สั้นมากทำให้ clearance ไม่พอ","เมื่อ residual kidney function หมด อาจ dialysis ไม่พอในคนตัวใหญ่"]},
+  mod:{name:"Modified PET 4.25%", p:P({fluid:"g425",area:1.0}),
+    rows:[["วิธีทำ","ใช้ 4.25% (3.86%) แทน 2.5% เก็บน้ำยาที่ 60 นาทีเพิ่มเพื่อดู Na dip"],["ผล","D/P Cr ใกล้เคียงกับ 2.5% แต่ได้ net UF ประเมิน UF capacity และ Na dip ประเมิน free water"],["เกณฑ์","net UF 4 ชม. < 400 ml = UF insufficiency Na dip < 5 mmol/L = osmotic conductance ต่ำ"]],
+    take:["ใช้ 4.25% ได้ทั้ง solute transport และ UF capacity ในการทดสอบเดียว","ต้องเก็บ drain volume จริงทั้งหมด (ชั่งถุง) และ drain ให้หมด","Na dip ใช้ได้กับ 4.25% เท่านั้น"]},
+  type2:{name:"UF failure + Na dip น้อย", p:P({fluid:"g425",area:1.35,aqp:15,lps:0.6}),
+    rows:[["ประวัติ","PD 7 ปี ตัวบวมขึ้นเรื่อยๆ ต้องใช้ 4.25% บ่อย"],["ผล","D/P Cr fast-average net UF < 400 ml Na dip < 5 mmol/L"],["ความหมาย","osmotic conductance ต่ำ (aquaporin/fibrosis) ไม่ได้มาจาก fast transport อย่างเดียว"]],
+    take:["UF failure แยกชนิดด้วย D/P Cr และ Na dip","Fast transport + Na dip ปกติ = type I, Na dip น้อย = type II, transport และ dip ปกติ = absorption สูงหรือปัญหา mechanical","Type II ใน long vintage ต้องคิดถึง EPS"]},
+  peri:{name:"PET ระหว่าง peritonitis", p:P({area:2.2,L:1.0}),
+    rows:[["บริบท","ทำ PET ระหว่างหรือหลัง peritonitis ไม่นาน"],["ผล","D/P Cr สูงเกินจริงเพราะ inflammation เพิ่ม vascular surface area"],["แนวทาง","รอให้หายอย่างน้อย 4 สัปดาห์แล้วค่อยทำ PET ซ้ำ"]],
+    take:["Peritonitis ทำให้ transport เร็วชั่วคราวและ UF ลดลง","ไม่ควรตัดสิน prescription ระยะยาวจาก PET ช่วงนี้","ปรับ prescription ชั่วคราว (dwell สั้น, icodextrin) ระหว่างรักษา"]}
+};
+var ORDER=["fastAvg","fast","slow","mod","type2","peri"];
+
+var box=document.getElementById("ctls"), C={};
+var flSel=Sim.h("select",{id:"sFl"},[["g25","Standard PET 2.5% (2.27%)"],["g425","Modified PET 4.25% (3.86%)"]].map(function(x){ return Sim.h("option",{value:x[0],text:x[1]}); }));
+flSel.addEventListener("change",update);
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"sFl",text:"PET"}),flSel]));
+function sl(k,o){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); box.appendChild(C[k].el); return C[k]; }
+sl("area",{label:"Surface area",min:0.4,max:2.4,step:0.05,value:1.1,fmt:function(v){ return "×"+v.toFixed(2); }});
+sl("aqp",{label:"Aquaporin function",min:0,max:150,step:5,value:100,unit:"%"});
+sl("L",{label:"Lymphatic flow",min:0.1,max:3,step:0.1,value:0.3,unit:"ml/min"});
+sl("lps",{label:"Osmotic conductance",min:0.3,max:1.3,step:0.05,value:1,fmt:function(v){ return "×"+v.toFixed(2); }}).el.classList.add("secondary");
+sl("pcr",{label:"Plasma Cr",min:3,max:16,step:0.5,value:9,unit:"mg/dL"}).el.classList.add("secondary");
+
+var A=Plot.colors;
+function run(p,area){ return PD.dwell({fluid:p.fluid,dwellMin:240,area:area,aqp:p.aqp/100,L:p.L,lps:p.lps,cr:p.pcr,pGlu:6}); }
+/* boundary areas: หา area ที่ให้ D/P Cr 4 ชม. = 0.50, 0.65, 0.82 */
+function areaFor(thr,fluid){ var lo=0.2,hi=3.5; for(var i=0;i<22;i++){ var m=(lo+hi)/2, r=PD.dwell({fluid:fluid,dwellMin:240,area:m}); if(r.dpCr[240]<thr) lo=m; else hi=m; } return (lo+hi)/2; }
+var BOUND={}, CAT=[["Slow",0.50],["Slow-avg",0.65],["Fast-avg",0.82]];
+function bounds(fluid){
+  if(BOUND[fluid]) return BOUND[fluid];
+  var out=CAT.map(function(c){ var r=PD.dwell({fluid:fluid,dwellMin:240,area:areaFor(c[1],fluid)}); return {cr:PD.series(r,"dpCr",{every:10,hours:true}),g:PD.series(r,"dd0",{every:10,hours:true}),cr4:r.dpCr[240],g4:r.dd0[240]}; });
+  BOUND[fluid]=out; return out;
+}
+function base(el,ylab,ymax,aria){
+  return Plot.chart(document.getElementById(el),{height:Sim.present?190:210,aria:aria,x:{min:0,max:4,step:1,label:"h"},y:{min:0,max:ymax,step:0.2,label:ylab},
+    series:[{id:"b0",color:A.muted,data:[],width:1,dash:[4,4],hover:false},{id:"b1",color:A.muted,data:[],width:1,dash:[4,4],hover:false},{id:"b2",color:A.muted,data:[],width:1,dash:[4,4],hover:false},
+            {id:"pt",name:"Patient",color:A.accent,data:[],width:2.8}]});
+}
+var chCr=base("chCr","D/P Cr",1,"D over P creatinine versus time"), chG=base("chG","D/D0",1,"D over D0 glucose versus time");
+var chUF=Plot.chart(document.getElementById("chUF"),{height:Sim.present?200:180,aria:"Net ultrafiltration and dialysate sodium during PET",x:{min:0,max:4,step:1,label:"h"},y:{min:-200,max:1000,label:"Net UF (ml)"},y2:{min:110,max:140,step:10,label:"Na"},
+  series:[{id:"uf",name:"Net UF",color:A.ink,data:[],width:2.4},{id:"na",name:"Na dialysate",color:A.accent2,data:[],width:1.8,axis:"y2"}],legend:true});
+
+function params(){ return {fluid:flSel.value,area:C.area.get(),aqp:C.aqp.get(),L:C.L.get(),lps:C.lps.get(),pcr:C.pcr.get()}; }
+function update(){
+  var p=params(), R=run(p,p.area), B=bounds(p.fluid);
+  ["b0","b1","b2"].forEach(function(id,i){ chCr.setSeries(id,B[i].cr); chG.setSeries(id,B[i].g); });
+  var pts=[0,60,120,180,240];
+  chCr.setSeries("pt",PD.series(R,"dpCr",{every:10,hours:true}));
+  chG.setSeries("pt",PD.series(R,"dd0",{every:10,hours:true}));
+  var a4p=R.at(240);
+  chCr.update({marks:B.map(function(b){ return {x:4,y:b.cr4,label:b.cr4.toFixed(2),color:A.muted,below:true}; })});
+  chG.update({marks:B.map(function(b){ return {x:4,y:b.g4,label:b.g4.toFixed(2),color:A.muted}; })});
+  var uf=PD.series(R,"uf",{every:5,hours:true}), ufv=uf.map(function(d){ return d[1]; });
+  var lo=Math.min(-100,Math.min.apply(null,ufv)), hi=Math.max(400,Math.max.apply(null,ufv)), st=Plot.niceStep(hi-lo,4);
+  chUF.update({y:{min:Math.floor(lo/st)*st,max:Math.ceil(hi/st)*st,step:st,label:"Net UF (ml)"},hlines:p.fluid==="g425"?[{y:400,label:"400 ml",color:A.red,dash:[4,4]}]:[]});
+  chUF.setSeries("uf",uf); chUF.setSeries("na",PD.series(R,"na",{every:5,hours:true}));
+  var a=R.at(240), a60=R.at(60), dip=a60.naDip, is4=p.fluid==="g425";
+  var drain=Math.round(a.V-R.p.residualMl+R.p.residualMl*0.0); /* drain ทั้งหมด (สมมติ residual เท่าเดิม) */
+  var pet=Calc.pet(is4?{dpCr4:+a.dpCr.toFixed(2),dd0Glu:+a.dd0.toFixed(2),na0:Math.round(R.na0),na60:Math.round(R.na[60]),uf:Math.round(a.uf)}:{dpCr4:+a.dpCr.toFixed(2),dd0Glu:+a.dd0.toFixed(2)});
+  Sim.ro("roCr",a.dpCr.toFixed(2),a.dpCr>=0.82?"flag":false);
+  Sim.ro("roG",a.dd0.toFixed(2));
+  Sim.ro("roCat",PD.category(a.dpCr).replace("-average","-avg"),a.dpCr>=0.82||a.dpCr<0.5?"flag":"ok");
+  Sim.ro("roUF",Sim.fmt(a.uf,0),is4?(a.uf<400?"flag":"ok"):false);
+  Sim.ro("roDip",is4?String(Math.round(R.na0)-Math.round(R.na[60])):"-",is4?(dip<5?"flag":"ok"):false);
+  Sim.ro("roType",is4?(pet.ufFailure?pet.ufType.split(" (")[0]:"ไม่มี"):"-",is4?(pet.ufFailure?"flag":"ok"):false);
+  /* lab sheet */
+  var tb=document.getElementById("lab"); tb.innerHTML="";
+  var times=is4?[0,60,120,240]:[0,120,240];
+  var head=Sim.h("tr",{},[Sim.h("th",{text:"เวลา (ชม.)"})].concat(times.map(function(t){ return Sim.h("th",{text:String(t/60)}); })));
+  tb.appendChild(head);
+  function row(lbl,f){ tb.appendChild(Sim.h("tr",{},[Sim.h("td",{text:lbl})].concat(times.map(function(t){ return Sim.h("td",{text:f(t)}); })))); }
+  row("Dialysate Cr (mg/dL)",function(t){ return (R.dpCr[t]*p.pcr).toFixed(2); });
+  row("Dialysate glucose (mg/dL)",function(t){ return Math.round(R.glu[t]*18); });
+  if(is4) row("Dialysate Na",function(t){ return Math.round(R.na[t]); });
+  row("Plasma",function(t){ return t===120?"Cr "+p.pcr.toFixed(1)+"  Glu 110":""; });
+  row("Volume ในท้อง (ml)",function(t){ return t===240?Math.round(R.V[t]):(t===0?Math.round(R.V0):""); });
+  Calc.renderSteps("steps",pet,{title:"แปลผล PET (worked steps)"});
+  var act=document.getElementById("act"), m, bad=false;
+  if(p.area>2.05) { m="<b>D/P Cr สูงมาก</b> ถ้าเพิ่งมี peritonitis ให้รักษาให้หายและทำ PET ซ้ำหลัง 4 สัปดาห์ ระหว่างนี้ใช้ dwell สั้นหรือ icodextrin"; bad=true; }
+  else if(is4 && pet.ufFailure){ bad=true; m="<b>"+pet.ufType+"</b> "+(a.dpCr>=0.82?"ใช้ APD dwell สั้นและ icodextrin long dwell":dip<5?"ประเมิน EPS risk ลด glucose exposure และวางแผนเปลี่ยนเป็น HD":"ตรวจ catheter, drain ไม่หมด, leak และ fluid absorption"); }
+  else if(a.dpCr>=0.82){ bad=true; m="<b>Fast transporter</b> UF จะเป็นปัญหาใน long dwell ใช้ APD และ icodextrin ติดตาม volume และ albumin"; }
+  else if(a.dpCr<0.5) m="<b>Slow transporter</b> ใช้ CAPD dwell ยาวและ fill volume มาก ตรวจ weekly Kt/V และ CCr โดยเฉพาะเมื่อ RKF ลดลง";
+  else m="<b>"+PD.category(a.dpCr)+"</b> เลือก CAPD หรือ APD ตามไลฟ์สไตล์ ทำ PET ซ้ำเมื่อ UF หรือ clearance เปลี่ยน หรือหลัง peritonitis";
+  act.innerHTML="<b>Next step:</b> "+m; act.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"PD-02", title:"Peritoneal Equilibration Test (PET)", lead:"ปรับ membrane ของผู้ป่วย เลือก standard หรือ modified PET แล้วอ่าน D/P Cr, D/D0 glucose, net UF และ Na dip จาก lab sheet เหมือนในข้อสอบ",
+  scenarios:S, order:ORDER, captureMs:1800,
+  onChange:function(k,s){ var p=s.p; flSel.value=p.fluid; ["area","aqp","L","lps","pcr"].forEach(function(x){ C[x].set(p[x]); }); update(); },
+  refs:["Twardowski ZJ, Nolph KD, Khanna R, et al. Peritoneal equilibration test. Perit Dial Bull 1987, 7(3): 138-147",
+        "Morelle J, Stachowska-Pietka J, Öberg C, et al. ISPD recommendations for the evaluation of peritoneal membrane dysfunction in adults: classification, measurement, interpretation and rationale for intervention. Perit Dial Int 2021, 41(4): 352-372",
+        "La Milia V, Di Filippo S, Crepaldi M, et al. Mini-peritoneal equilibration test: a simple and fast method to assess free water and small solute transport across the peritoneal membrane. Kidney Int 2005, 68(2): 840-846",
+        "Brimble KS, Walker M, Margetts PJ, et al. Meta-analysis: peritoneal membrane transport, mortality, and technique failure in peritoneal dialysis. J Am Soc Nephrol 2006, 17(9): 2591-2598",
+        "Mujais S, Nolph K, Gokal R, et al. Evaluation and management of ultrafiltration problems in peritoneal dialysis. Perit Dial Int 2000, 20 Suppl 4: S5-S21"],
+  note:"Model เพื่อการสอน (core/pd.js) ขอบ category คำนวณจาก effective surface area ที่ให้ D/P Cr 4 ชม. = 0.50, 0.65 และ 0.82 ค่า Cr ในน้ำยาสมมติว่าแก้ glucose interference แล้ว ในการตรวจจริงต้องใช้ correction factor ของห้องปฏิบัติการ"
+});
+})();
+</script>
+</body>
+</html>

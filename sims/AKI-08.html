@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[AKI-08] Acute Interstitial Nephritis, TINU and ICI-AIN Timeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.sel{display:grid;grid-template-columns:minmax(80px,170px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:12px}
+.feat{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.feat span{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:3px 10px;color:var(--faint)}
+.feat span.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:14px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .ro{padding:6px 12px}
+body.present .ro b{font-size:19px}
+body.present .ctls{gap:2px}
+body.present .ctl{font-size:13px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .tools{margin-top:4px;gap:5px}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Cr และการอักเสบของ interstitium</h2>
+      <div id="chart"></div>
+      <div id="live"></div>
+      <div class="feat" id="feat"></div>
+      <p class="hint no-present">เส้นม่วงคือ Cr เส้นเขียวคือระดับการอักเสบใน interstitium (แกนขวา) พื้นที่ใต้เส้นอักเสบที่ยาวนานกลายเป็น fibrosis ซึ่งทำให้ Cr ไม่กลับ baseline หยุดยาเร็วและให้ steroid เร็วจึงลด fibrosis</p>
+    </div>
+    <div class="card">
+      <h2>สาเหตุและการรักษา</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roLat"><b>-</b><span>Latency หลังเริ่มยา</span></div>
+        <div class="ro" id="roPk"><b>-</b><span>Cr สูงสุด</span></div>
+        <div class="ro" id="roEnd"><b>-</b><span>Cr ท้ายช่วง (L + 120 วัน)</span></div>
+        <div class="ro" id="roFib"><b>-</b><span>Fibrosis index</span></div>
+        <div class="ro" id="roStop"><b>-</b><span>หยุดยา → steroid</span></div>
+        <div class="ro" id="roRec"><b>-</b><span>Recovery</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/live.js"></script>
+<script>
+(function(){
+"use strict";
+/* lat: days to injury, sev: peak inflammation, feat: features, refr: steroid refractory tendency */
+var CAU={
+  blac:{n:"β-lactam (methicillin, ampicillin)",lat:10,sev:1.0,feat:["Fever","Rash","Eosinophilia","Eosinophiluria","Sterile pyuria","WBC casts"],refr:0,drug:true},
+  nsaid:{n:"NSAID",lat:120,sev:0.8,feat:["Sterile pyuria","Nephrotic proteinuria"],refr:0.1,drug:true},
+  ppi:{n:"PPI",lat:70,sev:0.7,feat:["Sterile pyuria","WBC casts"],refr:0.1,drug:true},
+  ici:{n:"Immune checkpoint inhibitor",lat:60,sev:0.9,feat:["Sterile pyuria","Other irAE","Low-grade proteinuria"],refr:0.3,drug:true},
+  iciR:{n:"ICI steroid-refractory",lat:60,sev:1.0,feat:["Sterile pyuria","Other irAE"],refr:0.9,drug:true},
+  tinu:{n:"TINU (ไม่มียา)",lat:20,sev:0.8,feat:["Anterior uveitis","Sterile pyuria","Glycosuria","β2-microglobulinuria","Raised ESR"],refr:0.15,drug:false},
+  rechal:{n:"β-lactam rechallenge",lat:2,sev:1.1,feat:["Fever","Rash","Eosinophilia","Sterile pyuria"],refr:0,drug:true}
+};
+var FEATS=["Fever","Rash","Eosinophilia","Eosinophiluria","Sterile pyuria","WBC casts","Nephrotic proteinuria","Other irAE","Anterior uveitis","Glycosuria"];
+function P(o){ var d={c:"blac",cr0:0.9,stopDelay:3,stDelay:3,rx:["stop","ster"]}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  blac:{name:"β-lactam AIN หยุดยาเร็ว", p:P({c:"blac",stopDelay:2,stDelay:2}),
+    rows:[["ผู้ป่วย","ได้ cloxacillin วันที่ 10 มีไข้ ผื่น eosinophil 9%"],["ผล","Cr ขึ้น sterile pyuria WBC casts"],["รักษา","เปลี่ยนยา + prednisone ภายในไม่กี่วัน"]],
+    take:["Classic triad (fever, rash, eosinophilia) พบไม่ถึง 10% ไม่มีก็ไม่ตัด AIN","β-lactam AIN มักเกิดใน 7–14 วัน rechallenge เกิดเร็วภายในวัน","หยุดยาเป็นการรักษาสำคัญที่สุด"]},
+  late:{name:"หยุดยาช้า ไม่ให้ steroid", p:P({c:"ppi",stopDelay:30,stDelay:0,rx:["stop"]}),
+    rows:[["ผู้ป่วย","ผู้สูงอายุได้ omeprazole หลายเดือน Cr ค่อย ๆ ขึ้น"],["ผล","วินิจฉัยช้า 1 เดือน"],["ระยะยาว","fibrosis ทำให้ Cr ไม่กลับ baseline"]],
+    take:["PPI AIN มักเกิดช้า ไม่มีอาการ allergy วินิจฉัยช้า","ระยะเวลาที่อักเสบนานเป็นตัวกำหนด fibrosis และ CKD ถาวร","Interstitial fibrosis บน biopsy ทำนายการฟื้นที่ไม่ดี"]},
+  early:{name:"PPI: steroid เร็ว", p:P({c:"ppi",stopDelay:5,stDelay:3}),
+    rows:[["ผู้ป่วย","Cr ขึ้นจาก 0.9 เป็น 2.6 ได้ PPI 3 เดือน"],["รักษา","หยุด PPI biopsy ยืนยัน prednisone 0.5–1 mg/kg"],["ผล","ฟื้นตัวเกือบครบ"]],
+    take:["Steroid ช่วยมากที่สุดเมื่อเริ่มภายใน 7 วันหลังหยุดยา (หลักฐานจาก observational)","ถ้าหยุดยาแล้ว 3–5 วันไม่ดีขึ้นหรือ AKI รุนแรง พิจารณา biopsy และ steroid","Prednisone 0.5–1 mg/kg/วัน แล้ว taper ใน 4–6 สัปดาห์"]},
+  ici:{name:"ICI-AIN", p:P({c:"ici",stopDelay:3,stDelay:1}),
+    rows:[["ผู้ป่วย","lung cancer ได้ pembrolizumab + PPI เดือนที่ 2"],["รักษา","hold ICI, หยุด PPI, prednisone 1 mg/kg"],["ผล","ตอบสนองดี พิจารณา rechallenge ICI"]],
+    take:["ICI-AIN เกิดช้ากว่า drug AIN ทั่วไป มักสัมพันธ์กับ PPI หรือ NSAID ร่วม","ส่วนใหญ่ตอบสนองต่อ steroid และหลายรายกลับไปใช้ ICI ได้","Rechallenge ทำร่วมกับทีม oncology และติดตาม Cr ใกล้ชิด"]},
+  iciR:{name:"ICI-AIN steroid-refractory", p:P({c:"iciR",stopDelay:3,stDelay:1,rx:["stop","ster"]}),
+    rows:[["ผู้ป่วย","Cr ไม่ลดหลัง prednisone 1 mg/kg 1 สัปดาห์"],["ต่อ","เพิ่ม second-line: infliximab หรือ MMF"],["ระยะยาว","อาจไม่ rechallenge ICI"]],
+    take:["ICI-AIN ที่ไม่ตอบสนองต่อ steroid ให้ biopsy ยืนยันก่อน แล้วเพิ่ม infliximab หรือ MMF","แยกจาก ICI-associated GN, TMA หรือ ATN จากสาเหตุอื่น","การตัดสินใจ rechallenge ชั่งระหว่างมะเร็งและไต"]},
+  tinu:{name:"TINU", p:P({c:"tinu",stopDelay:0,stDelay:4,rx:["ster"]}),
+    rows:[["ผู้ป่วย","หญิงวัยรุ่น ตาแดงเคืองตา Cr 2.1 glycosuria"],["Lab","β2-microglobulin ปัสสาวะสูง ESR สูง"],["ต่อ","ส่ง ophthalmology ตรวจ uveitis แม้ไม่มีอาการ"]],
+    take:["TINU: AIN + anterior uveitis พบในวัยรุ่นและหญิงมากกว่า uveitis เกิดก่อน พร้อม หรือหลัง AIN ได้","Urine β2-microglobulin สูงช่วยสนับสนุน","Steroid ได้ผลดีกับไต แต่ uveitis กลับเป็นซ้ำบ่อย ต้องติดตามตาระยะยาว"]},
+  rechal:{name:"Rechallenge", p:P({c:"rechal",stopDelay:1,stDelay:1}),
+    rows:[["ผู้ป่วย","เคยแพ้ ampicillin ได้ยาซ้ำ"],["ผล","Cr ขึ้นภายใน 2–3 วัน รุนแรงกว่าเดิม"],["ต่อ","ลงบันทึกแพ้ยาให้ชัดเจน"]],
+    take:["Rechallenge ทำให้ AIN เกิดเร็วกว่าเดิมเพราะเป็น memory response","บันทึก drug allergy ทุกครั้งที่วินิจฉัย drug-induced AIN","ระวัง cross-reactivity ในกลุ่มยาเดียวกัน"]}
+};
+var ORDER=["blac","late","early","ici","iciR","tinu","rechal"];
+var box=document.getElementById("ctls"), C={};
+var cs=Sim.h("select",{id:"cau"},Object.keys(CAU).map(function(k){ return Sim.h("option",{value:k,text:CAU[k].n}); })); cs.addEventListener("change",function(){ update(); });
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"cau",text:"สาเหตุ"}),cs]));
+function sl(k,o){ o.id="s"+k; o.onInput=function(){ update(true); }; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("cr0",{label:"Baseline Cr",min:0.5,max:2.5,step:0.1,value:0.9,unit:" mg/dL",fmt:function(v){ return v.toFixed(1); }});
+sl("stopDelay",{label:"หยุดยาหลัง Cr ขึ้น",min:0,max:45,step:1,value:3,unit:" วัน"});
+sl("stDelay",{label:"Steroid หลังหยุดยา",min:0,max:30,step:1,value:3,unit:" วัน"});
+var RX={stop:"หยุดยาที่สงสัย",ster:"Prednisone 0.5–1 mg/kg",second:"Infliximab/MMF"};
+var T={}, tb=document.getElementById("tools");
+Object.keys(RX).forEach(function(k){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:RX[k]}); b.addEventListener("click",function(){ b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); tb.appendChild(b); T[k]=b; });
+function on(k){ return T[k].getAttribute("aria-pressed")==="true"; }
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?270:290,aria:"Creatinine and interstitial inflammation over time",
+  x:{min:0,max:200,step:20,label:"Days after drug start"},y:{min:0,max:5,label:"Creatinine (mg/dL)"},y2:{min:0,max:1.2,step:0.2,label:"Inflammation index"},
+  series:[{id:"inf",name:"Inflammation",color:A.teal,data:[],width:1.4,fill:true,axis:"y2"},{id:"cr",name:"Cr",color:A.accent,data:[],width:2.8}],legend:true});
+var live=Live.player(chart,{mount:"live"}), LAST=null;
+function model(){
+  var c=CAU[cs.value], cr0=C.cr0.get(), sd=C.stopDelay.get(), std=C.stDelay.get();
+  var stop=on("stop")&&c.drug, ster=on("ster"), sec=on("second");
+  var L=c.lat, tEnd=Math.max(120,L+120), dt=0.25;
+  var tRise=L+4, tStop=stop?tRise+sd:null, tSter=ster?((stop?tStop:tRise+sd)+std):null, tSec=null;
+  var I=0, F=0, Cr=[], IN=[], cr=cr0, g0=100, ev=[], peak=cr0, tp=0;
+  var W=70, G=20*W*(cr0>1.5?0.9:1), V=420; var gBase=G/(cr0*14.4);
+  for(var n=0;n<=tEnd/dt;n++){
+    var t=n*dt, drive=(t>=L&&(!c.drug||!stop||t<tStop))?c.sev:0;
+    if(!c.drug&&t>L+20) drive=c.sev*Math.exp(-(t-L-20)/25);
+    var tau=10;
+    if(tSter!==null&&t>=tSter){ var eff=1-c.refr; tau=10-6*eff; drive*=1-0.85*eff;
+      if(c.refr>0.5&&tSec===null&&t>=tSter+7&&sec){ tSec=t; }
+      if(tSec!==null&&t>=tSec){ tau=4; drive*=0.15; } }
+    I+=((drive-I)/(drive>I?3:tau))*dt; I=Math.max(0,I);
+    F+=0.011*I*dt*(t>L+21?2:1);
+    var gfr=gBase*Math.max(0.06,(1-0.85*Math.min(1,I))*(1-Math.min(0.8,F)));
+    cr+=((G/(gfr*14.4))-cr)*dt/Math.max(0.5,V/(gfr*1.44*10)*1.2);
+    if(n%4===0){ Cr.push([t,cr]); IN.push([t,I]); }
+    if(cr>peak){ peak=cr; tp=t; }
+  }
+  var end=Cr[Cr.length-1][1], rec=(end-cr0)/(peak-cr0+1e-6);
+  ev.push({t:0,kind:"phys",text:c.drug?"เริ่มยา "+c.n:"อาการนำ ไม่มียาที่สงสัย"});
+  ev.push({t:L,kind:"warn",text:"เริ่มการอักเสบใน interstitium (latency "+L+" วัน)"});
+  ev.push({t:tRise,kind:"warn",text:"Cr เริ่มขึ้น urine: "+c.feat.slice(0,3).join(", ")});
+  if(cs.value==="tinu") ev.push({t:Math.max(0,L-10),kind:"warn",text:"ตาแดง ปวดตา กลัวแสง (anterior uveitis)"});
+  if(tStop!==null) ev.push({t:tStop,kind:"rx",text:"หยุด "+c.n});
+  if(c.drug&&!stop) ev.push({t:tRise+3,kind:"warn",text:"ยังไม่หยุดยา การอักเสบดำเนินต่อ"});
+  if(tSter!==null) ev.push({t:tSter,kind:"rx",text:"เริ่ม prednisone 0.5–1 mg/kg/วัน taper 4–6 สัปดาห์"});
+  if(tSter!==null&&c.refr>0.5) ev.push({t:tSter+7,kind:"warn",text:"สัปดาห์ที่ 1 Cr ไม่ลด = steroid-refractory"+(sec?"":" (ยังไม่ได้ second-line)")});
+  if(tSec!==null) ev.push({t:tSec,kind:"rx",text:"เพิ่ม infliximab หรือ MMF"});
+  ev.push({t:tp,kind:"phys",text:"Cr สูงสุด "+peak.toFixed(1)});
+  ev.push({t:tEnd,kind:rec<0.25?"ok":"warn",text:"วันที่ "+tEnd+": Cr "+end.toFixed(1)+" fibrosis index "+(F*100).toFixed(0)});
+  return {c:c,Cr:Cr,IN:IN,ev:ev,peak:peak,end:end,F:F,cr0:cr0,L:L,tEnd:tEnd,stop:stop,ster:ster,sd:sd,std:std,rec:rec,tSec:tSec,sec:sec,tSter:tSter};
+}
+function feats(c,show){ var el=document.getElementById("feat"); el.innerHTML=""; FEATS.forEach(function(f){ el.appendChild(Sim.h("span",{class:(show&&c.feat.indexOf(f)>=0)?"on":"",text:f})); }); }
+function onFrame(t,done){
+  var M=LAST; feats(M.c,t>=M.L);
+  Sim.ro("roLat",M.L+" วัน"); Sim.ro("roPk",t>=M.L+8||done?M.peak.toFixed(1):"…","flag");
+  Sim.ro("roEnd",done?M.end.toFixed(1):"…",done?(M.rec<0.25?"ok":"flag"):null);
+  Sim.ro("roFib",done?(M.F*100).toFixed(0):"…",done?(M.F>0.25?"flag":"ok"):null);
+  Sim.ro("roStop",(M.stop?M.sd+" วัน":M.c.drug?"ไม่หยุด":"-")+" / "+(M.ster?M.std+" วัน":"ไม่ให้"));
+  Sim.ro("roRec",done?(M.rec<0.15?"complete":M.rec<0.5?"partial":"poor"):"…",done?(M.rec<0.15?"ok":"flag"):null);
+  var a=document.getElementById("act");
+  if(done){ a.innerHTML=M.act; a.className=M.actCls; } else { a.innerHTML="<b>กำลังจำลอง</b> วันที่ "+t.toFixed(0)+" Cr "+Live.valueAt(M.Cr,t).toFixed(2); a.className="act"; }
+}
+function update(deb){
+  var M=model();
+  chart.update({x:{min:0,max:M.tEnd,step:M.tEnd>150?30:20,label:M.c.drug?"Days after drug start":"Days after symptom onset"},y:{min:0,max:Math.max(3,Math.ceil(M.peak*1.15)),label:"Creatinine (mg/dL)"},
+    hlines:[{y:M.cr0,label:"Baseline",color:A.muted,dash:[2,3]}]});
+  chart.setSeries("cr",M.Cr); chart.setSeries("inf",M.IN);
+  var m, bad=M.rec>=0.25;
+  if(M.c.drug&&!M.stop) m="<b>หยุดยาที่สงสัยทันที</b> เป็นการรักษาหลัก ดู urine sediment, ตรวจ eosinophil และพิจารณา biopsy";
+  else if(M.c.refr>0.5&&!M.sec) m="<b>Steroid-refractory</b> ยืนยันด้วย biopsy แล้วเพิ่ม infliximab หรือ MMF ปรึกษา oncology เรื่อง ICI";
+  else if(!M.ster&&M.rec>=0.25) m="<b>ฟื้นไม่ครบ</b> ถ้ายังอยู่ในระยะอักเสบ (biopsy มี infiltrate มากกว่า fibrosis) ให้ prednisone 0.5–1 mg/kg ไม่ควรรอเกิน 7 วันหลังหยุดยา";
+  else if(M.ster&&M.std>7&&M.rec>=0.25) m="<b>Steroid ช้าเกิน</b> fibrosis เกิดแล้ว ติดตาม eGFR และ albuminuria เหมือน CKD บันทึก drug allergy";
+  else if(cs.value==="tinu") m="<b>TINU</b> ส่ง ophthalmology ทุกราย steroid taper ช้า ติดตามตาและไตเพราะ uveitis กลับเป็นซ้ำได้";
+  else if(cs.value==="ici"||cs.value==="iciR") m="<b>ตอบสนอง</b> taper steroid อย่างน้อย 4–6 สัปดาห์ หยุด PPI ถาวร พิจารณา rechallenge ICI ร่วมกับ oncology เมื่อ Cr stable";
+  else { bad=M.rec>=0.25; m="<b>"+(M.rec<0.15?"ฟื้นตัวครบ":"ฟื้นตัวบางส่วน")+"</b> taper steroid 4–6 สัปดาห์ บันทึก drug allergy และหลีกเลี่ยงยากลุ่มเดียวกัน"; }
+  M.act="<b>Next step:</b> "+m; M.actCls="act"+(bad?" bad":"");
+  LAST=M;
+  live.load({tMax:M.tEnd,unit:"วัน",ms:8000,debounce:deb===true,num:function(x){ return x.toFixed(0); },events:M.ev.sort(function(a,b){ return a.t-b.t; }),onFrame:onFrame,
+    cursorLabel:function(t){ return "Cr "+Live.valueAt(M.Cr,t).toFixed(1); }});
+}
+Sim.mount({code:"AKI-08", title:"Acute Interstitial Nephritis, TINU and ICI-AIN Timeline", lead:"เลือกสาเหตุของ AIN ปรับจำนวนวันก่อนหยุดยาและก่อนเริ่ม steroid ดูว่า latency, ลักษณะทางคลินิก และระยะเวลาที่อักเสบกำหนด Cr สูงสุดและ fibrosis ที่เหลืออย่างไร",
+  scenarios:S, order:ORDER, captureMs:1000,
+  onChange:function(k,s){ cs.value=s.p.c; C.cr0.set(s.p.cr0); C.stopDelay.set(s.p.stopDelay); C.stDelay.set(s.p.stDelay); Object.keys(T).forEach(function(x){ T[x].setAttribute("aria-pressed",s.p.rx.indexOf(x)>=0||(x==="second"&&s.p.c==="iciR")?"true":"false"); }); update(); },
+  refs:["Perazella MA, Markowitz GS. Drug-induced acute interstitial nephritis. Nat Rev Nephrol 2010, 6(8): 461-470",
+        "Moledina DG, Perazella MA. Drug-induced acute interstitial nephritis. Clin J Am Soc Nephrol 2017, 12(12): 2046-2049",
+        "González E, Gutiérrez E, Galeano C, et al. Early steroid treatment improves the recovery of renal function in patients with drug-induced acute interstitial nephritis. Kidney Int 2008, 73(8): 940-946",
+        "Cortazar FB, Kibbelaar ZA, Glezerman IG, et al. Clinical features and outcomes of immune checkpoint inhibitor-associated AKI: a multicenter study. J Am Soc Nephrol 2020, 31(2): 435-446",
+        "Gupta S, Short SAP, Sise ME, et al. Acute kidney injury in patients treated with immune checkpoint inhibitors. J Immunother Cancer 2021, 9(10): e003467",
+        "Mandeville JT, Levinson RD, Holland GN. The tubulointerstitial nephritis and uveitis syndrome. Surv Ophthalmol 2001, 46(3): 195-208",
+        "Moledina DG, Wilson FP, Pober JS, et al. Urine TNF-α and IL-9 for clinical diagnosis of acute interstitial nephritis. JCI Insight 2019, 4(10): e127456"],
+  note:"Model เพื่อการสอน: inflammation index เพิ่มเมื่อยังได้ยา (τ ขึ้น 3 วัน) ลดหลังหยุดยา τ 10 วัน steroid ลด τ เหลือ 4 วันตามความไวต่อ steroid fibrosis สะสมตามพื้นที่ใต้เส้นอักเสบ (เร็วขึ้นหลัง 3 สัปดาห์) GFR = baseline x (1 − 0.85 x inflammation) x (1 − fibrosis) latency ตั้งตามค่าทั่วไปของแต่ละสาเหตุ"
+});
+})();
+</script>
+</body>
+</html>

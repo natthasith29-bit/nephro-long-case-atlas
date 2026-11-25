@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[GN-15] Infection-Related Glomerulonephritis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.2fr 1fr}}
+.trio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
+.trio figure{margin:0}.trio figcaption{font:600 11px var(--mono);letter-spacing:.06em;color:var(--muted);margin:0 0 4px}
+.sel{display:grid;grid-template-columns:minmax(90px,120px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px;margin:6px 0}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+table.cmp{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:10px}
+table.cmp td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+table.cmp td:first-child{color:var(--muted);width:32%}
+.act{margin-top:10px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .act{display:none}
+body.present .card{padding:14px 18px}
+body.present #tl{max-height:200px;width:auto!important;margin:0 auto}
+body.present .trio svg{max-height:180px}
+body.present table.cmp td{padding:3px 8px;font-size:12.5px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>เวลาของการติดเชื้อกับ GN และภาพ biopsy</h2>
+      <div class="svgwrap"><svg id="tl" viewBox="0 0 640 200" role="img" aria-label="Timeline of infection and glomerulonephritis"></svg></div>
+      <div class="trio">
+        <figure><figcaption>LM</figcaption><div class="svgwrap"><svg id="lm"></svg></div></figure>
+        <figure><figcaption>IF DOMINANT</figcaption><div class="svgwrap"><svg id="if1"></svg></div></figure>
+        <figure><figcaption>IF C3</figcaption><div class="svgwrap"><svg id="if2"></svg></div></figure>
+      </div>
+      <p class="hint no-present">แถบบนคือช่วงติดเชื้อ (ส้ม) เทียบกับช่วงที่ GN เกิด (ม่วง) post-streptococcal มีระยะ latent ส่วน Staphylococcus, endocarditis และ shunt เกิดขณะยังติดเชื้ออยู่ ภาพล่างคือ LM และ IF ที่พบบ่อย</p>
+    </div>
+    <div class="card">
+      <h2>เชื้อและผู้ป่วย</h2>
+      <div class="sel"><label for="sOrg">การติดเชื้อ</label><select id="sOrg">
+        <option value="psgn_t">Strep pharyngitis (เด็ก)</option><option value="psgn_s">Strep impetigo (เด็ก)</option><option value="staph">Staphylococcus (ผู้ใหญ่ เบาหวาน)</option>
+        <option value="endo">Infective endocarditis</option><option value="shunt">VA shunt nephritis</option><option value="hcv">Hepatitis C (cryoglobulin)</option><option value="hbv">Hepatitis B</option></select></div>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools"></div>
+      <table class="cmp" id="tab"></table>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/patho.js"></script>
+<script>
+(function(){
+"use strict";
+var O = {
+  psgn_t:{inf:[0,7], lat:[10,21], label:"Pharyngitis", gn:"PSGN 1–3 สัปดาห์หลังคออักเสบ", lm:{endocap:1, neutrophils:0.8, hyper:0.6}, if1:["coarse-cap",1.2,"IgG"], c3:3, comp:"C3 ต่ำ C4 ปกติ กลับปกติใน 8–12 สัปดาห์", sero:"ASO, anti-DNase B", em:"Subepithelial humps", px:"เด็กหายเกือบทั้งหมด", tx:"Supportive: จำกัดเกลือและน้ำ, loop diuretic, ยาลดความดัน ให้ penicillin เพื่อกำจัดเชื้อในผู้ป่วยและผู้สัมผัส ไม่ใช้ steroid"},
+  psgn_s:{inf:[0,10], lat:[21,42], label:"Impetigo", gn:"PSGN 3–6 สัปดาห์หลังติดเชื้อผิวหนัง", lm:{endocap:1, neutrophils:0.7, hyper:0.6}, if1:["coarse-cap",1.2,"IgG"], c3:3, comp:"C3 ต่ำ C4 ปกติ", sero:"Anti-DNase B (ASO มักไม่ขึ้นจากผิวหนัง)", em:"Subepithelial humps", px:"เด็กหายเกือบทั้งหมด", tx:"Supportive care รักษา impetigo ไม่ใช้ steroid"},
+  staph:{inf:[0,42], lat:[14,42], label:"Active Staph infection", gn:"เกิดขณะยังติดเชื้อ (osteomyelitis, cellulitis, pneumonia, bacteremia)", lm:{endocap:0.7, neutrophils:0.5, hyper:0.6, crescent:"cellular", crescentFrac:0.25}, if1:["mes-cap",2.5,"IgA"], c3:3, comp:"C3 ต่ำราวครึ่งหนึ่ง", sero:"Blood culture, MRSA/MSSA", em:"Mesangial + subendothelial ± humps", px:"ผู้สูงอายุเบาหวานไตฟื้นไม่สมบูรณ์บ่อย ราวหนึ่งในสามเป็น ESKD", tx:"รักษาการติดเชื้อให้หาย (source control, antibiotic) ไม่ใช้ steroid เป็น routine เพราะมีการติดเชื้ออยู่"},
+  endo:{inf:[0,42], lat:[7,42], label:"Endocarditis", gn:"Focal หรือ diffuse proliferative GN ขณะมี bacteremia", lm:{endocap:0.6, hyper:0.5, crescent:"cellular", crescentFrac:0.3, necrosis:0.2}, if1:["mes-cap",1.5,"IgG"], c3:3, comp:"C3 ต่ำบ่อย", sero:"Blood culture หลายชุด, echocardiogram, PR3-ANCA บวกได้", em:"Subendothelial + mesangial", px:"ไตดีขึ้นเมื่อคุมเชื้อได้", tx:"Antibiotic ตาม culture และผ่าตัดลิ้นถ้ามีข้อบ่งชี้ ระวังให้ immunosuppression เพราะ ANCA บวกอาจทำให้วินิจฉัยผิดเป็น AAV"},
+  shunt:{inf:[0,42], lat:[14,42], label:"Infected VA shunt", gn:"MPGN pattern ขณะ shunt ติดเชื้อเรื้อรัง (CoNS, Cutibacterium)", lm:{lobular:true, hyper:0.9, doubleContour:true, endocap:0.4}, if1:["mes-cap",2.5,"IgM"], c3:3, comp:"C3 และ C4 ต่ำ", sero:"Culture จาก shunt และเลือด, cryoglobulin", em:"Subendothelial + mesangial", px:"หายเมื่อเอา shunt ออก", tx:"เอา shunt ที่ติดเชื้อออกร่วม antibiotic"},
+  hcv:{inf:[-120,42], lat:[-60,42], label:"Chronic HCV", gn:"Cryoglobulinemic MPGN ใน HCV เรื้อรัง", lm:{lobular:true, hyper:1, doubleContour:true, endocap:0.5, thrombi:0.15, thrombusType:"hyaline"}, if1:["mes-cap",3,"IgM"], c3:2, comp:"C4 ต่ำมาก C3 ต่ำ", sero:"HCV RNA, cryoglobulin type II, RF", em:"Subendothelial, microtubular substructure ได้", px:"ขึ้นกับการคุม HCV และ cryoglobulin", tx:"DAA รักษา HCV ถ้า GN รุนแรงหรือ RPGN ให้ rituximab ± plasma exchange ร่วม"},
+  hbv:{inf:[-120,42], lat:[-60,42], label:"Chronic HBV", gn:"Membranous (เด็กพบมาก) หรือ MPGN, PAN", lm:{thick:0.5, spikes:true, mesExpand:0.3, hyper:0.3}, if1:["granular-cap",3,"IgG"], c3:2, comp:"C3 ต่ำได้", sero:"HBsAg, HBeAg, HBV DNA, PLA2R ลบ", em:"Subepithelial + mesangial deposits", px:"เด็กหายเองบ่อยเมื่อ HBeAg seroconversion", tx:"Antiviral (entecavir หรือ tenofovir) ห้าม immunosuppression โดยไม่มี antiviral"}
+};
+var S = {
+  phar:{name:"PSGN หลังคออักเสบ", p:{org:"psgn_t", age:8, dm:false}, rows:[["Clinical","เด็กชาย 8 ปี ตาบวม ปัสสาวะสีโคล่า BP สูง 2 สัปดาห์หลังเจ็บคอ"],["Lab","C3 ต่ำ ASO สูง"],["Biopsy","ไม่จำเป็นถ้า course เป็นไปตามคาด"]], take:["PSGN มีระยะ latent หลังติดเชื้อ ต่างจาก IgA nephropathy ที่ hematuria พร้อมไข้","C3 ต่ำแต่กลับปกติใน 8–12 สัปดาห์","Biopsy เมื่อ course ผิดปกติ (C3 ต่ำนาน, RPGN, proteinuria มากต่อเนื่อง)"]},
+  skin:{name:"PSGN หลัง impetigo", p:{org:"psgn_s", age:6, dm:false}, rows:[["Clinical","เด็กหญิง 6 ปี แผลพุพอง 4 สัปดาห์ก่อน บวม hematuria"],["Lab","Anti-DNase B สูง ASO ปกติ"],["Key","ระยะ latent ยาวกว่า pharyngitis"]], take:["หลังติดเชื้อผิวหนัง latent 3–6 สัปดาห์","ASO มักไม่ขึ้นใน impetigo ใช้ anti-DNase B","การรักษาเหมือน PSGN จากคออักเสบ"]},
+  staph:{name:"IgA-dominant Staph", p:{org:"staph", age:68, dm:true}, rows:[["Clinical","ชาย 68 ปี เบาหวาน แผลเท้า MRSA osteomyelitis AKI hematuria"],["Biopsy","IgA dominant + C3 endocapillary proliferation"],["Key","เกิดขณะยังติดเชื้อ"]], take:["IgA-dominant IRGN ในผู้สูงอายุเบาหวานกับ Staph ต่างจาก IgA nephropathy","เกิดขณะยังติดเชื้อ ไม่มีระยะ latent","รักษาการติดเชื้อ ไม่ใช่ steroid"]},
+  endo:{name:"Endocarditis + ANCA", p:{org:"endo", age:45, dm:false}, rows:[["Clinical","ชาย 45 ปี ไข้ 3 สัปดาห์ murmur ใหม่ AKI"],["Lab","C3 ต่ำ, PR3-ANCA บวก, blood culture Strep viridans"],["Biopsy","Proliferative GN มี immune deposit"]], take:["Endocarditis ทำให้ ANCA บวกและ C3 ต่ำได้","Immune deposit บน biopsy แยกจาก pauci-immune AAV","Antibiotic คือการรักษาหลัก"]},
+  hcv:{name:"HCV cryoglobulinemia", p:{org:"hcv", age:55, dm:false}, rows:[["Clinical","ชาย 55 ปี purpura ขา ปวดข้อ neuropathy proteinuria 3 g"],["Lab","C4 ต่ำมาก cryo type II HCV RNA บวก"],["Biopsy","MPGN pattern hyaline thrombi"]], take:["HCV เป็นสาเหตุหลักของ cryoglobulinemic GN","C4 ต่ำมากกว่า C3","DAA รักษาที่ต้นเหตุ"]},
+  hbv:{name:"HBV membranous", p:{org:"hbv", age:9, dm:false}, rows:[["Clinical","เด็กชาย 9 ปี nephrotic HBsAg บวก"],["Biopsy","MN + mesangial deposit, HBeAg ใน deposit"],["Lab","PLA2R ลบ"]], take:["HBV-MN พบมากในเด็กในพื้นที่ระบาด","เด็กหายเองบ่อยเมื่อ HBeAg seroconversion","ผู้ใหญ่ให้ antiviral ห้าม immunosuppression เดี่ยว"]}
+};
+var box = document.getElementById("ctls"), C = {};
+C.age = Sim.slider({id:"sA", label:"Age", min:2, max:85, step:1, value:30, unit:"y", onInput:update}); box.appendChild(C.age.el);
+var dm = false, tDm = Sim.toggle("Diabetes", function(on){ dm = on; update(); }, false); document.getElementById("tools").appendChild(tDm);
+var sOrg = document.getElementById("sOrg"); sOrg.addEventListener("change", update);
+var tl = document.getElementById("tl"), lm = Patho.glom("lm", {}), if1 = Patho.ifStain("if1", {}), if2 = Patho.ifStain("if2", {});
+var FT = "IBM Plex Sans Thai, sans-serif", MO = "Geist Mono, monospace";
+function drawTL(o){
+  tl.innerHTML = "";
+  var x0 = 40, x1 = 610, t0 = -60, t1 = 60, X = function(d){ return x0 + (Math.max(t0, Math.min(t1, d)) - t0) / (t1 - t0) * (x1 - x0); };
+  Sim.svg("line", {x1:x0, y1:150, x2:x1, y2:150, stroke:"#9A9CB2"}, tl);
+  for(var d = -60; d <= 60; d += 15){ Sim.svg("line", {x1:X(d), y1:146, x2:X(d), y2:154, stroke:"#9A9CB2"}, tl); Sim.svg("text", {x:X(d), y:170, "text-anchor":"middle", "font-family":MO, "font-size":10.5, fill:"#5E6075", text:d}, tl); }
+  Sim.svg("text", {x:(x0 + x1) / 2, y:192, "text-anchor":"middle", "font-family":FT, "font-size":11.5, fill:"#0B0B1F", text:"Days from onset of infection"}, tl);
+  Sim.svg("rect", {x:X(o.inf[0]), y:50, width:X(o.inf[1]) - X(o.inf[0]), height:30, rx:8, fill:"#F6C892"}, tl);
+  Sim.svg("text", {x:X(o.inf[0]) + 8, y:70, "font-family":FT, "font-size":12, fill:"#7A4A12", text:o.label + (o.inf[0] < t0 ? " (chronic)" : "")}, tl);
+  Sim.svg("rect", {x:X(o.lat[0]), y:94, width:X(o.lat[1]) - X(o.lat[0]), height:30, rx:8, fill:"#5B4BFF"}, tl);
+  Sim.svg("text", {x:X(o.lat[0]) + 8, y:114, "font-family":FT, "font-size":12, fill:"#FFFFFF", text:"Glomerulonephritis"}, tl);
+  var latent = o.lat[0] > o.inf[1];
+  Sim.svg("text", {x:x1, y:30, "text-anchor":"end", "font-family":FT, "font-size":12, "font-weight":600, fill:latent ? "#1F7A72" : "#B4232A", text:latent ? "Latent period: post-infectious" : "Concurrent: infection still active"}, tl);
+  Sim.svg("line", {x1:X(0), y1:40, x2:X(0), y2:150, stroke:"#0B0B1F", "stroke-dasharray":"4 4"}, tl);
+}
+function update(){
+  var k = sOrg.value, o = O[k], age = C.age.get();
+  drawTL(o);
+  var lmo = {hyper:0, endocap:0, neutrophils:0, mesExpand:0, thick:0, crescent:"none", crescentFrac:0, necrosis:0, lobular:false, doubleContour:false, spikes:false, thrombi:0, thrombusType:"fibrin"}; Object.keys(o.lm).forEach(function(n){ lmo[n] = o.lm[n]; }); lmo.stain = k === "hbv" ? "silver" : "PAS"; lm.update(lmo);
+  if1.update({pattern:o.if1[0], intensity:o.if1[1], label:o.if1[2]});
+  if2.update({pattern:k === "psgn_t" || k === "psgn_s" ? "coarse-cap" : o.if1[0], intensity:o.c3, label:"C3"});
+  var tab = document.getElementById("tab"); tab.innerHTML = "";
+  [["เวลา",o.gn],["Complement",o.comp],["Serology / test",o.sero],["EM",o.em],["Prognosis",o.px + (age > 60 && (k === "psgn_t" || k === "psgn_s") ? " (ผู้ใหญ่และผู้สูงอายุ prognosis แย่กว่าเด็ก)" : "") + (dm && k === "staph" ? " เบาหวานเพิ่มความเสี่ยง CKD" : "")]].forEach(function(r){ tab.appendChild(Sim.h("tr", {}, [Sim.h("td", {text:r[0]}), Sim.h("td", {text:r[1]})])); });
+  var warn = "";
+  if(k === "staph" && !dm && age < 40) warn = " Staph IRGN พบบ่อยในผู้สูงอายุ เบาหวาน หรือ IV drug use";
+  if((k === "psgn_t" || k === "psgn_s") && age > 60) warn = " ผู้สูงอายุที่มี GN หลังติดเชื้อมักเป็น Staph มากกว่า Strep และต้องแยก C3G";
+  document.getElementById("act").innerHTML = "<b>Next step:</b> " + o.tx + (warn ? "<br><span class='flag-txt'>" + warn + "</span>" : "");
+}
+Sim.mount({code:"GN-15", title:"Infection-Related Glomerulonephritis",
+  lead:"เลือกชนิดการติดเชื้อ อายุ และเบาหวาน ดูว่า GN เกิดหลังติดเชื้อหรือขณะยังติดเชื้อ IF ตัวไหนเด่น complement เป็นอย่างไร และต้องรักษาที่การติดเชื้อหรือที่ภูมิคุ้มกัน",
+  scenarios:S, order:["phar","skin","staph","endo","hcv","hbv"], captureMs:800,
+  onChange:function(k, s){ sOrg.value = s.p.org; C.age.set(s.p.age); dm = s.p.dm; tDm.setState(dm); update(); },
+  refs:["Nasr SH, Radhakrishnan J, D'Agati VD. Bacterial infection-related glomerulonephritis in adults. Kidney Int 2013, 83(5): 792-803",
+        "Satoskar AA, Parikh SV, Nadasdy T. Epidemiology, pathogenesis, treatment and outcomes of infection-associated glomerulonephritis. Nat Rev Nephrol 2020, 16(1): 32-50",
+        "Rodriguez-Iturbe B, Haas M. Post-streptococcal glomerulonephritis. In: Ferretti JJ, Stevens DL, Fischetti VA, eds. Streptococcus pyogenes: Basic Biology to Clinical Manifestations. University of Oklahoma Health Sciences Center 2016",
+        "Boils CL, Nasr SH, Walker PD, Couser WG, Larsen CP. Update on endocarditis-associated glomerulonephritis. Kidney Int 2015, 87(6): 1241-1249",
+        "Roccatello D, Saadoun D, Ramos-Casals M, et al. Cryoglobulinaemia. Nat Rev Dis Primers 2018, 4(1): 11",
+        "KDIGO 2021 Clinical Practice Guideline for the Management of Glomerular Diseases. Kidney Int 2021, 100(4S): S1-S276"],
+  note:"ช่วงเวลาและ pattern เป็นภาพรวมที่พบบ่อย ผู้ป่วยแต่ละรายแปรผันได้"
+});
+})();
+</script>
+</body>
+</html>

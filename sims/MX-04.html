@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[MX-04] ADPKD: Mayo Imaging Class, Prognosis and Tolvaptan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.25fr 1fr}}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:8px}
+.sub{font-size:12.5px;color:var(--muted);margin:12px 0 4px}
+.gap{height:10px}
+.pei{margin-top:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;font-size:13.5px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:12px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .ro{padding:5px 12px}
+body.present .ro b{font-size:17px}
+body.present .ctls{gap:0}
+body.present .ctl{font-size:12.5px}
+body.present .tog{padding:3px 8px;font-size:11.5px}
+body.present .tools{margin-top:3px;gap:4px}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+body.present .sub{margin:4px 0 1px}
+body.present .pei{margin-top:5px;padding:5px 10px;font-size:12px}
+body.present .gap{height:2px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Mayo imaging classification</h2>
+      <div id="mayo"></div>
+      <div class="gap"></div>
+      <div id="egfr"></div>
+      <p class="hint no-present">กราฟบน: htTKV (log) ตามอายุ เส้นแบ่ง class คำนวณจากอัตราโตต่อปีโดยสมมติ htTKV แรกเกิด 150 mL/m (1A &lt; 1.5%, 1B 1.5–3%, 1C 3–4.5%, 1D 4.5–6%, 1E &gt; 6%) จุดคือผู้ป่วย เส้นประคือ trajectory ที่คาด กราฟล่าง: eGFR ที่คาดตาม class เทียบกับและไม่มี tolvaptan</p>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วย</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="sub">ลักษณะและการรักษา</div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roHt"><b>-</b><span>htTKV (mL/m)</span></div>
+        <div class="ro" id="roCls"><b>-</b><span>Mayo class</span></div>
+        <div class="ro" id="roGr"><b>-</b><span>TKV โตต่อปี</span></div>
+        <div class="ro" id="roSl"><b>-</b><span>eGFR slope (mL/min/ปี)</span></div>
+        <div class="ro" id="roK"><b>-</b><span>อายุที่ eGFR &lt; 15</span></div>
+        <div class="ro" id="roTv"><b>-</b><span>Tolvaptan</span></div>
+      </div>
+      <div class="act" id="act"></div>
+      <div class="sub">วินิจฉัยด้วย ultrasound ในผู้มีประวัติครอบครัว (unified criteria)</div>
+      <div class="ctls" id="ctls2"></div>
+      <div class="pei" id="pei"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script>
+(function(){
+"use strict";
+function P(o){ var d={age:35,ht:170,tkv:1100,egfr:85,cR:12,cL:10,rx:["fh"]}; for(var k in o) d[k]=o[k]; return d; }
+var TG={fh:"มีประวัติครอบครัว ADPKD",tol:"ให้ tolvaptan",atyp:"Atypical (class 2)",pkd2:"PKD2 variant"};
+var S={
+  c1c:{name:"Class 1C อายุ 35", p:P({}),
+    rows:[["ผู้ป่วย","ชาย 35 ปี สูง 170 cm TKV 1,100 mL eGFR 85"],["Class","htTKV 647 mL/m → 1C"],["ต่อ","rapid progression เข้าเกณฑ์ tolvaptan"]],
+    take:["Mayo class ใช้ htTKV เทียบอายุ บอกความเร็วของโรคดีกว่า eGFR ในระยะแรก","Class 1C–1E คือ rapid progressor ที่ได้ประโยชน์จาก tolvaptan","eGFR อาจยังปกติในขณะที่ไตโตเร็ว (hyperfiltration ชดเชย)"]},
+  c1a:{name:"Class 1A อายุ 45", p:P({age:45,tkv:520,egfr:92}),
+    rows:[["ผู้ป่วย","หญิง 45 ปี TKV 520 mL"],["Class","1A slow progression"],["ต่อ","ไม่ต้อง tolvaptan ดูแล BP น้ำ เกลือ"]],
+    take:["Class 1A–1B ส่วนใหญ่ไม่ถึง kidney failure หรือถึงช้ามาก","ไม่ให้ tolvaptan ใน slow progressor เพราะ aquaresis และพิษต่อตับไม่คุ้ม","ทุกรายควบคุม BP (เป้าเข้มในอายุน้อยที่ eGFR ดี) ดื่มน้ำ และลดเกลือ"]},
+  c1e:{name:"Class 1E อายุ 28 + tolvaptan", p:P({age:28,tkv:1500,egfr:95,rx:["fh","tol"]}),
+    rows:[["ผู้ป่วย","ชาย 28 ปี TKV 1,500 mL"],["Class","1E"],["Tolvaptan","ชะลอทั้ง TKV และ eGFR decline"]],
+    take:["Tolvaptan (V2 receptor antagonist) ลด cAMP ใน cyst epithelium ชะลอการโตของ cyst","เริ่มเร็วในคนอายุน้อยที่ class สูงได้ประโยชน์สะสมมากที่สุด","ต้องตรวจ liver function ทุกเดือนใน 18 เดือนแรก แล้วทุก 3 เดือน และดื่มน้ำตาม polyuria"]},
+  late:{name:"Class 1D อายุ 52 eGFR 30", p:P({age:52,tkv:2400,egfr:30}),
+    rows:[["ผู้ป่วย","อายุ 52 TKV 2,400 mL eGFR 30"],["Class","1D"],["ต่อ","ยังพิจารณา tolvaptan ได้ เตรียม KRT และ KT"]],
+    take:["ยังมีประโยชน์ใน eGFR 25–44 แต่ผลสัมบูรณ์น้อยลงเมื่อเริ่มช้า","วางแผน pre-emptive KT และคัดกรองญาติที่จะเป็น donor ด้วย imaging หรือ genetic","Nephrectomy พิจารณาเมื่อไตใหญ่จนกดเบียดหรือไม่มีที่วางไตใหม่"]},
+  atyp:{name:"Atypical class 2", p:P({age:50,tkv:900,egfr:70,rx:["fh","atyp"]}),
+    rows:[["Imaging","cyst ข้างเดียวหรือเฉพาะส่วน หรือไตข้างหนึ่งฝ่อ"],["Class","2 ใช้ Mayo 1A–1E ไม่ได้"],["ต่อ","ประเมินด้วย eGFR slope และพิจารณา genetic"]],
+    take:["Mayo class ใช้เฉพาะ typical (class 1) ที่ cyst กระจายทั่วไตสองข้าง","Class 2 (unilateral, segmental, asymmetric, lopsided, atrophic) มักโรคช้ากว่า","ตรวจ genetic เมื่อภาพไม่ตรง ไม่มีประวัติครอบครัว หรือต้องประเมิน donor"]},
+  pei:{name:"Unified criteria ในญาติอายุ 25", p:P({age:25,tkv:340,egfr:105,cR:2,cL:0}),
+    rows:[["ผู้ป่วย","ลูกของผู้ป่วย ADPKD อายุ 25 อยากบริจาคไต"],["Ultrasound","cyst 2 ก้อนข้างขวา"],["ผล","ยังไม่เข้าเกณฑ์ และ ultrasound ตัดโรคไม่ได้ในอายุนี้ ใช้ MRI หรือ genetic"]],
+    take:["อายุ 15–39 ต้องมี cyst ≥ 3 ก้อน (ข้างเดียวหรือสองข้าง) อายุ 40–59 ≥ 2 ก้อนในแต่ละข้าง อายุ ≥ 60 ≥ 4 ก้อนในแต่ละข้าง","ultrasound ตัดโรคได้ยากในคนอายุน้อย ใช้ MRI (< 5 cyst ทั้งหมดตัดโรค, > 10 cyst วินิจฉัย ในอายุ 16–40) หรือ genetic","ญาติที่ประเมินเป็น living donor ต้องตัดโรคให้ได้ก่อน"]},
+  pkd2:{name:"PKD2 อายุ 60", p:P({age:60,tkv:900,egfr:55,rx:["fh","pkd2"]}),
+    rows:[["ผู้ป่วย","อายุ 60 PKD2 variant TKV 900 mL"],["Class","1B"],["ต่อ","slow progression คาดว่าไม่ถึง KF เร็ว"]],
+    take:["PKD2 โรคช้ากว่า PKD1 kidney failure ช้ากว่าราว 15–20 ปี","PKD1 truncating รุนแรงที่สุด ใช้ร่วมกับ imaging class ในการพยากรณ์","อายุมากที่ eGFR ยังดีและ class ต่ำ ไม่ต้องรักษาเฉพาะ"]}
+};
+var ORDER=["c1c","c1a","c1e","late","atyp","pei","pkd2"];
+var box=document.getElementById("ctls"), box2=document.getElementById("ctls2"), C={};
+function sl(k,o,b){ o.id="s"+k; o.onInput=function(){ update(); }; C[k]=Sim.slider(o); (b||box).appendChild(C[k].el); }
+sl("age",{label:"อายุ",min:15,max:80,step:1,value:35,unit:" ปี"});
+sl("ht",{label:"ส่วนสูง",min:145,max:195,step:1,value:170,unit:" cm"});
+sl("tkv",{label:"Total kidney volume",min:200,max:4000,step:20,value:1100,unit:" mL"});
+sl("egfr",{label:"eGFR ปัจจุบัน",min:10,max:130,step:1,value:85,unit:""});
+sl("cR",{label:"Cyst ไตขวา",min:0,max:15,step:1,value:12,unit:"",fmt:function(v){ return v>=15?"≥ 15":String(v); }},box2);
+sl("cL",{label:"Cyst ไตซ้าย",min:0,max:15,step:1,value:10,unit:"",fmt:function(v){ return v>=15?"≥ 15":String(v); }},box2);
+var T={}, tb=document.getElementById("tools");
+Object.keys(TG).forEach(function(k){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:TG[k]}); b.addEventListener("click",function(){ b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); tb.appendChild(b); T[k]=b; });
+function on(k){ return T[k].getAttribute("aria-pressed")==="true"; }
+var A=Plot.colors, BND=[1.5,3,4.5,6], CLS=["1A","1B","1C","1D","1E"], SLOPE={"1A":-0.25,"1B":-1.3,"1C":-2.6,"1D":-3.5,"1E":-4.8};
+var mayo=Plot.chart(document.getElementById("mayo"),{height:Sim.present?250:280,aria:"Height-adjusted total kidney volume by age with Mayo class boundaries",
+  x:{min:15,max:80,step:5,label:"Age (years)"},y:{min:100,max:6000,log:true,label:"htTKV (mL/m)"},
+  series:BND.map(function(r,i){ return {id:"b"+i,name:"",color:A.muted,data:[],width:1,dash:[4,4],hover:false}; }).concat([{id:"traj",name:"Projected",color:A.accent,data:[],width:2,dash:[6,4]},{id:"trajT",name:"Projected on tolvaptan",color:A.teal,data:[],width:2,dash:[2,3]}]),legend:false});
+var eg=Plot.chart(document.getElementById("egfr"),{height:Sim.present?170:210,aria:"Projected eGFR by age",
+  x:{min:15,max:80,step:5,label:"Age (years)"},y:{min:0,max:130,step:30,label:"eGFR"},
+  series:[{id:"no",name:"No tolvaptan",color:A.muted,data:[],width:2.2},{id:"tv",name:"Tolvaptan",color:A.teal,data:[],width:2.4}],
+  hlines:[{y:15,label:"Kidney failure",color:A.red,dash:[5,4]},{y:25,label:"",color:A.muted,dash:[2,3]}],legend:true});
+function update(){
+  var age=C.age.get(), h=C.ht.get()/100, tkv=C.tkv.get(), e0=C.egfr.get(), tol=on("tol"), atyp=on("atyp"), pkd2=on("pkd2"), fh=on("fh");
+  var ht=tkv/h, r=Math.pow(ht/150,1/age)-1, ci=0; while(ci<4&&r*100>=BND[ci]) ci++;
+  var cls=atyp?"2":CLS[ci], gr=atyp?1.5:Math.max(0.5,r*100);
+  BND.forEach(function(b,i){ var d=[]; for(var a=15;a<=80;a+=1) d.push([a,150*Math.pow(1+b/100,a)]); mayo.setSeries("b"+i,d); });
+  var gT=tol&&!atyp?gr*0.55:gr, tr=[], trT=[];
+  for(var a=age;a<=80;a+=1){ tr.push([a,Math.min(6000,ht*Math.pow(1+gr/100,a-age))]); trT.push([a,Math.min(6000,ht*Math.pow(1+gT/100,a-age))]); }
+  mayo.setSeries("traj",tr); mayo.setSeries("trajT",tol?trT:[]);
+  var mk=[[0.75,"1A",76],[2.25,"1B",76],[3.75,"1C",70],[5.25,"1D",56],[6.75,"1E",44]].map(function(q){ return {x:q[2],y:150*Math.pow(1+q[0]/100,q[2]),label:q[1],color:A.muted}; });
+  mayo.update({marks:mk.concat([{x:age,y:ht,label:"Class "+cls,color:atyp?A.muted:A.accent}])});
+  var sl=atyp?-0.6:SLOPE[cls]; if(pkd2&&!atyp) sl*=0.6;
+  if(e0<60) sl*=1.15;
+  var slT=tol&&(cls==="1C"||cls==="1D"||cls==="1E")?sl+Math.min(1.3,Math.abs(sl)*0.33):sl;
+  var dno=[],dtv=[], aKF=null, aKFt=null;
+  for(var a2=15;a2<=80;a2+=0.5){ var vn=a2<age?null:e0+sl*(a2-age), vt=a2<age?null:e0+slT*(a2-age); if(vn===null) continue;
+    dno.push([a2,Math.max(0,vn)]); dtv.push([a2,Math.max(0,vt)]); if(aKF===null&&vn<15) aKF=a2; if(aKFt===null&&vt<15) aKFt=a2; }
+  eg.setSeries("no",dno); eg.setSeries("tv",tol?dtv:[]);
+  Sim.ro("roHt",Math.round(ht).toLocaleString("en-US"),ht>=600?"flag":null);
+  Sim.ro("roCls",cls,atyp?null:ci>=2?"flag":"ok");
+  Sim.ro("roGr",(tol&&!atyp?gT:gr).toFixed(1)+"%",gr>=3?"flag":"ok");
+  Sim.ro("roSl",(tol?slT:sl).toFixed(1),Math.abs(tol?slT:sl)>=2.5?"flag":"ok");
+  var kf=tol?aKFt:aKF; Sim.ro("roK",kf===null?"> 80":kf.toFixed(0),kf!==null&&kf<65?"flag":"ok");
+  var elig=!atyp&&ci>=2&&age>=18&&age<=55&&e0>=25;
+  Sim.ro("roTv",elig?"เข้าเกณฑ์":"ไม่เข้าเกณฑ์",elig?"ok":null);
+  /* unified criteria */
+  var cR=C.cR.get(), cL=C.cL.get(), tot=cR+cL, dx, ex="";
+  if(!fh) dx="ไม่มีประวัติครอบครัว: unified criteria ใช้ไม่ได้ ต้องดูจำนวน cyst มาก ไตโต ร่วมกับ genetic";
+  else if(age<15) dx="อายุ < 15 ใช้เกณฑ์นี้ไม่ได้";
+  else if(age<40){ dx=tot>=3?"<b>เข้าเกณฑ์</b> cyst ≥ 3 ก้อน (อายุ 15–39)":"<b>ยังไม่เข้าเกณฑ์</b> ต้องการ cyst ≥ 3 ก้อน"; ex=age>=30&&tot===0?"ไม่มี cyst ในอายุ 30–39 ตัดโรคได้ (NPV สูง)":tot<=1&&age>=30?"1 cyst ในอายุ 30–39 ยังตัดโรคไม่ได้ ใช้ MRI หรือ genetic":"ultrasound ตัดโรคในอายุนี้ไม่ได้ ใช้ MRI (< 5 cyst ตัดโรค) หรือ genetic"; }
+  else if(age<60){ dx=cR>=2&&cL>=2?"<b>เข้าเกณฑ์</b> ≥ 2 cyst ในแต่ละข้าง (อายุ 40–59)":"<b>ยังไม่เข้าเกณฑ์</b> ต้องการ ≥ 2 cyst ในแต่ละข้าง"; ex=tot<2?"< 2 cyst ในอายุ 40–59 ตัดโรคได้":""; }
+  else { dx=cR>=4&&cL>=4?"<b>เข้าเกณฑ์</b> ≥ 4 cyst ในแต่ละข้าง (อายุ ≥ 60)":"<b>ยังไม่เข้าเกณฑ์</b> ต้องการ ≥ 4 cyst ในแต่ละข้าง"; ex=tot<2?"< 2 cyst ในอายุ ≥ 60 ตัดโรคได้":""; }
+  document.getElementById("pei").innerHTML=dx+(ex?"<br><span style='color:var(--muted)'>"+ex+"</span>":"");
+  var m,bad=false;
+  if(atyp) m="<b>Atypical imaging</b> ไม่ใช้ Mayo class ประเมินด้วย eGFR slope ต่อเนื่อง ตรวจ genetic ถ้าไม่มีประวัติครอบครัว";
+  else if(elig&&!tol){ m="<b>Rapid progressor (class "+cls+")</b> เสนอ tolvaptan ตรวจ LFT ทุกเดือน 18 เดือนแรก ดื่มน้ำตาม polyuria ควบคุม BP และลดเกลือ"; bad=true; }
+  else if(elig&&tol) m="<b>ได้ tolvaptan</b> ติดตาม ALT/AST, Na, urine osm (เป้า Uosm < 280 สะท้อน V2 block) หยุดยาเมื่อ ALT > 3 เท่า หรือเมื่อเข้า KRT";
+  else if(ci>=2&&e0<25) m="<b>eGFR < 25</b> ไม่เริ่ม tolvaptan เตรียม KRT และ pre-emptive KT ประเมินญาติเป็น donor";
+  else if(ci>=2&&age>55) m="<b>Class "+cls+" อายุ > 55</b> ข้อมูลประโยชน์ของ tolvaptan จำกัด พิจารณาเป็นราย ๆ ตาม eGFR slope จริง";
+  else m="<b>Slow progressor (class "+cls+")</b> ไม่ให้ tolvaptan ควบคุม BP, น้ำ 2.5–3 L/วัน, ลดเกลือ, ติดตาม eGFR และ imaging เป็นระยะ";
+  var a=document.getElementById("act"); a.innerHTML="<b>Next step:</b> "+m; a.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"MX-04", title:"ADPKD: Mayo Imaging Class, Prognosis and Tolvaptan", lead:"ใส่อายุ ส่วนสูง และ TKV เพื่อดู Mayo class บนกราฟ htTKV ตามอายุ คาดการณ์ eGFR และอายุที่ถึง kidney failure ลองให้ tolvaptan และตรวจ unified ultrasound criteria ในญาติ",
+  scenarios:S, order:ORDER, captureMs:600,
+  onChange:function(k,s){ ["age","ht","tkv","egfr","cR","cL"].forEach(function(x){ C[x].set(s.p[x]); }); Object.keys(T).forEach(function(x){ T[x].setAttribute("aria-pressed",s.p.rx.indexOf(x)>=0?"true":"false"); }); update(); },
+  refs:["Irazabal MV, Rangel LJ, Bergstralh EJ, et al. Imaging classification of autosomal dominant polycystic kidney disease: a simple model for selecting patients for clinical trials. J Am Soc Nephrol 2015, 26(1): 160-172",
+        "Pei Y, Obaji J, Dupuis A, et al. Unified criteria for ultrasonographic diagnosis of ADPKD. J Am Soc Nephrol 2009, 20(1): 205-212",
+        "Pei Y, Hwang YH, Conklin J, et al. Imaging-based diagnosis of autosomal dominant polycystic kidney disease. J Am Soc Nephrol 2015, 26(3): 746-753",
+        "Torres VE, Chapman AB, Devuyst O, et al. Tolvaptan in patients with autosomal dominant polycystic kidney disease. N Engl J Med 2012, 367(25): 2407-2418",
+        "Torres VE, Chapman AB, Devuyst O, et al. Tolvaptan in later-stage autosomal dominant polycystic kidney disease. N Engl J Med 2017, 377(20): 1930-1942",
+        "KDIGO ADPKD Work Group. KDIGO 2025 clinical practice guideline for the evaluation, management and treatment of autosomal dominant polycystic kidney disease. Kidney Int 2025, 107(2S): S1-S239",
+        "Cornec-Le Gall E, Audrézet MP, Rousseau A, et al. The PROPKD score: a new algorithm to predict renal survival in ADPKD. J Am Soc Nephrol 2016, 27(3): 942-951"],
+  note:"Model เพื่อการสอน: อัตราโตของ htTKV = (htTKV/150)^(1/อายุ) − 1 eGFR slope เฉลี่ยตาม class (1A −0.25, 1B −1.3, 1C −2.6, 1D −3.5, 1E −4.8 mL/min/ปี) คูณ 1.15 เมื่อ eGFR < 60 และ 0.6 เมื่อเป็น PKD2 tolvaptan ลดการโตของ TKV ราว 45% และชะลอ eGFR decline ราว 1/3 ของ slope (ไม่เกิน 1.3 mL/min/ปี) ใน class 1C–1E เกณฑ์ tolvaptan ที่ใช้: class 1C–1E อายุ 18–55 eGFR ≥ 25 จริงควรดูฉลากยาและ guideline ประกอบ"
+});
+})();
+</script>
+</body>
+</html>

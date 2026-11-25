@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[PD-08] PD Catheter and Mechanical Problems</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(120px,160px) 1fr 100px}
+.sel{display:grid;grid-template-columns:minmax(120px,160px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.split{display:grid;grid-template-columns:0.9fr 1.1fr;gap:16px;align-items:start}
+@media (max-width:760px){.split{grid-template-columns:1fr}}
+#abd{max-height:400px}
+.readout{grid-template-columns:repeat(3,1fr)}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,1fr)}}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13.5px;margin-top:12px}
+.kv span:nth-child(odd){color:var(--muted)}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.act.good{background:#E9F6F3}
+body.present .bench{grid-template-columns:1.35fr 1fr}
+body.present #abd{max-height:330px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:16px 20px}
+body.present .ro{padding:8px 12px}
+body.present .kv{font-size:12.5px;margin-top:8px}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>ภาพ schematic และ drain curve</h2>
+      <div class="split">
+        <div class="svgwrap"><svg id="abd" viewBox="0 0 320 420" role="img" aria-label="Schematic abdomen with PD catheter"></svg></div>
+        <div><div id="chart"></div>
+          <div class="tools">
+            <button class="tog" type="button" id="tLax" aria-pressed="false">Laxative</button>
+            <button class="tog" type="button" id="tPos" aria-pressed="false">เปลี่ยนท่า/ลุกเดิน</button>
+            <button class="tog" type="button" id="tHep" aria-pressed="false">Heparin/flush, tPA</button>
+            <button class="tog" type="button" id="tLow" aria-pressed="false">ลด fill + ท่านอน</button>
+          </div>
+        </div>
+      </div>
+      <p class="hint no-present">เส้นจางคือ drain ปกติ (fast phase แล้วตามด้วย slow phase) inflow ช้าและ outflow ช้าพร้อมกัน = two-way obstruction (อุดในสาย) ถ้า inflow ปกติแต่ outflow ช้า = one-way (ปลายสายย้าย, omentum, ท้องผูก) กดปุ่มการรักษาขั้นแรกเพื่อดูผล</p>
+    </div>
+    <div class="card">
+      <h2>อาการและการตรวจ</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roIn"><b>-</b><span>Inflow time (min)</span></div>
+        <div class="ro" id="roOut"><b>-</b><span>Drain 20 นาที (%)</span></div>
+        <div class="ro" id="roPat"><b>-</b><span>Pattern</span></div>
+      </div>
+      <div class="kv" id="kv"></div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script>
+(function(){
+"use strict";
+/* in: inflow rate factor, qf: fast-phase drain ml/min, b: fraction ก่อนเข้า slow phase, c: fraction ที่ drain ได้ทั้งหมด
+   fix: ปุ่มที่แก้ได้, film/test/mgmt ข้อความ, flags: วาด */
+var D = {
+  normal:{name:"ปกติ", in:1, qf:220, b:0.8, c:0.93, fix:[], pat:"ปกติ", film:"ปลายสายอยู่ใน pelvis", test:"-", mgmt:"-", f:{}},
+  constip:{name:"ท้องผูก", in:1, qf:70, b:0.55, c:0.7, fix:["lax"], pat:"One-way", film:"ปลายสายใน pelvis มี stool เต็ม colon", test:"Plain abdominal film", mgmt:"Laxative (เช่น PEG, senna) ให้ถ่ายดี ก่อนทำอย่างอื่น", f:{stool:true}},
+  migr:{name:"ปลายสายย้ายขึ้น", in:1, qf:55, b:0.45, c:0.55, fix:[], part:["lax","pos"], pat:"One-way", film:"ปลายสายอยู่เหนือ pelvic brim (upper abdomen)", test:"Plain film AP ยืน", mgmt:"Laxative และเปลี่ยนท่าก่อน ถ้าไม่กลับให้ reposition (fluoroscopic guidewire หรือ laparoscopic) ± fixation", f:{migr:true}},
+  omen:{name:"Omental wrap", in:0.8, qf:40, b:0.4, c:0.45, fix:[], pat:"One-way (บางครั้งสองทาง)", film:"ตำแหน่งสายปกติ", test:"Film ปกติ ไม่ดีขึ้นด้วย laxative และ heparin", mgmt:"Laparoscopic revision ร่วม omentopexy/partial omentectomy", f:{omen:true}},
+  fibrin:{name:"Fibrin/clot ในสาย", in:0.35, qf:50, b:0.5, c:0.6, fix:["hep"], pat:"Two-way", film:"ตำแหน่งสายปกติ", test:"เห็น fibrin ในน้ำยาหรือสาย", mgmt:"Heparin 500–1000 unit/L ในน้ำยา flush ด้วย heparinized saline ถ้าไม่ดีขึ้นใช้ tPA instillation ในสาย", f:{fibrin:true}},
+  kink:{name:"Catheter kink", in:0.25, qf:45, b:0.5, c:0.6, fix:[], part:["pos"], pat:"Two-way (ขึ้นกับท่า)", film:"เห็นสายหักงอใน tunnel", test:"Plain film ด้านข้าง", mgmt:"ผ่าตัด revise tunnel หรือเปลี่ยนสาย", f:{kink:true}},
+  leak:{name:"Pericatheter leak", in:1, qf:200, b:0.7, c:0.68, fix:["low"], pat:"Drain ครบเร็วแต่ปริมาตรน้อย", film:"-", test:"Glucose strip บวกที่ exit site หรือ CT peritoneography", mgmt:"หยุด PD 1–3 สัปดาห์หรือ low-volume supine APD ใช้ HD ชั่วคราวถ้าจำเป็น ถ้าเป็นซ้ำต้องแก้ทางศัลยกรรม", f:{leak:"exit"}},
+  hydro:{name:"Hydrothorax", in:1, qf:200, b:0.7, c:0.6, fix:[], part:["low"], pat:"Drain น้อยลงมากเมื่อลุกนั่ง", film:"Right pleural effusion", test:"Pleural fluid glucose สูงกว่า serum มาก (gradient > 50 mg/dL) หรือ scintigraphy", mgmt:"หยุด PD ชั่วคราว (HD) low-volume supine ถ้าเป็นซ้ำ VATS pleurodesis หรือซ่อม diaphragm", f:{hydro:true}},
+  hernia:{name:"Hernia/genital edema", in:1, qf:210, b:0.72, c:0.72, fix:[], part:["low"], pat:"Drain น้อยลง บวมที่ท้องหรือถุงอัณฑะ", film:"-", test:"CT peritoneography หา patent processus vaginalis หรือ hernia", mgmt:"ผ่าตัดซ่อม hernia ใช้ low-volume supine APD หรือ HD ชั่วคราวรอบผ่าตัด", f:{hernia:true}}
+};
+var S={}, ORDER=["normal","constip","migr","omen","fibrin","kink","leak","hydro","hernia"];
+var TAKE={
+  normal:["Drain 2 L ปกติใช้ 15–20 นาที fast phase แล้วตามด้วย slow phase","Outflow failure พบบ่อยกว่า inflow failure","ท้องผูกเป็นสาเหตุ outflow failure ที่พบบ่อยที่สุด"],
+  constip:["ท้องผูกดันหรือห่อปลายสาย ทำให้ outflow ช้าแบบ one-way","ให้ laxative ทุกรายก่อนส่งตรวจอื่น","ป้องกันด้วย bowel regimen ตั้งแต่เริ่ม PD"],
+  migr:["ปลายสายย้ายขึ้นเหนือ pelvic brim เห็นจาก plain film","บางรายกลับเองเมื่อถ่ายดีหรือเปลี่ยนท่า","ถ้าไม่กลับ reposition ด้วย guidewire หรือ laparoscopy"],
+  omen:["Omentum ห่อหุ้มปลายสาย film อาจปกติ","มักเกิดช่วงแรกหลังใส่สาย","แก้ด้วย laparoscopic revision และ omentopexy"],
+  fibrin:["Fibrin ทำให้ inflow และ outflow ช้าพร้อมกัน (two-way)","Heparin ในน้ำยาหรือ tPA ในสายแก้ได้","พบบ่อยหลัง peritonitis หรือมีเลือดในน้ำยา"],
+  kink:["Two-way obstruction ที่เปลี่ยนตามท่า ให้นึกถึง kink","Kink มักอยู่ใน subcutaneous tunnel","ต้องแก้ทางศัลยกรรม"],
+  leak:["Leak ช่วงแรกหลังใส่สายสัมพันธ์กับ fill มากและท่าตั้งตรง","ยืนยันด้วย glucose ในน้ำที่ซึมหรือ CT peritoneography","พัก PD หรือใช้ low-volume supine ก่อนผ่าตัด"],
+  hydro:["น้ำยารั่วผ่าน diaphragm มักเป็นด้านขวา","Pleural glucose สูงกว่า serum เป็น clue สำคัญ","ถ้าเป็นซ้ำหลังพัก PD ใช้ pleurodesis หรือซ่อม diaphragm"],
+  hernia:["IPP สูงจาก PD ทำให้ hernia ขยายหรือเกิดใหม่","Genital edema ให้นึกถึง patent processus vaginalis หรือ inguinal hernia","CT peritoneography ช่วยหาตำแหน่งก่อนผ่าตัด"]
+};
+ORDER.forEach(function(k){ var d=D[k]; S[k]={name:d.name,p:{k:k},rows:[["Pattern",d.pat],["Imaging/test",d.test==="-"?d.film:d.test],["Management",d.mgmt==="-"?"ไม่ต้องแก้":d.mgmt]],take:TAKE[k]}; });
+
+var box=document.getElementById("ctls"), C={};
+var prob=Sim.h("select",{id:"sProb"},ORDER.map(function(k){ return Sim.h("option",{value:k,text:D[k].name}); }));
+prob.addEventListener("change",function(){ resetT(); update(); });
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"sProb",text:"ปัญหา"}),prob]));
+C.fill=Sim.slider({id:"sfill",label:"Fill volume",min:1000,max:2500,step:100,value:2000,unit:"ml",onInput:update}); box.appendChild(C.fill.el);
+var T={lax:document.getElementById("tLax"),pos:document.getElementById("tPos"),hep:document.getElementById("tHep"),low:document.getElementById("tLow")};
+Object.keys(T).forEach(function(k){ T[k].addEventListener("click",function(){ T[k].setAttribute("aria-pressed",T[k].getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); });
+function on(k){ return T[k].getAttribute("aria-pressed")==="true"; }
+function resetT(){ Object.keys(T).forEach(function(k){ T[k].setAttribute("aria-pressed","false"); }); }
+
+/* ---------- SVG ---------- */
+var svg=document.getElementById("abd"), F="IBM Plex Sans Thai, sans-serif";
+function el(t,a,p){ return Sim.svg(t,a,p||svg); }
+var G={};
+function draw(d,fixed,partial){
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  var f=d.f, ok=fixed;
+  /* torso */
+  el("path",{d:"M70 20 Q160 0 250 20 L268 160 Q275 250 255 330 Q240 380 215 405 L105 405 Q80 380 65 330 Q45 250 52 160 Z",fill:"#FAFAFC",stroke:"#D3D5E2","stroke-width":2});
+  /* lungs */
+  el("path",{d:"M82 34 Q118 24 150 34 L150 128 Q115 140 78 122 Z",fill:"#EEF0F7",stroke:"#D3D5E2"});
+  el("path",{d:"M170 34 Q202 24 238 34 L242 122 Q205 140 170 128 Z",fill:"#EEF0F7",stroke:"#D3D5E2"});
+  el("text",{x:116,y:80,"text-anchor":"middle","font-size":14,fill:"#9A9CB2","font-family":F,text:"R lung"});
+  if(f.hydro&&!(ok)){ el("path",{d:"M80 95 Q115 112 150 100 L150 128 Q115 140 78 122 Z",fill:"#9FD6EE",opacity:0.9}); el("text",{x:116,y:118,"text-anchor":"middle","font-size":13,fill:"#0B5E7A","font-family":F,text:"effusion"}); }
+  /* diaphragm */
+  el("path",{d:"M58 140 Q110 118 160 138 Q210 118 262 140",fill:"none",stroke:"#B9BCCD","stroke-width":2});
+  /* peritoneal fluid */
+  var fillLv=f.hydro&&!ok?0.6:1;
+  el("path",{d:"M64 170 Q160 150 256 170 L262 300 Q250 360 205 378 L115 378 Q70 360 58 300 Z",fill:"#EEF6FB",stroke:"#CFE3EF"});
+  /* bowel loops */
+  for(var i=0;i<7;i++){ var cx=100+(i%4)*40, cy=200+Math.floor(i/4)*44; el("path",{d:"M"+(cx-16)+" "+cy+" q8 -14 16 0 t16 0",fill:"none",stroke:"#D8C7B8","stroke-width":5,"stroke-linecap":"round",opacity:0.8}); }
+  if(f.stool&&!ok){ [[92,312],[118,330],[208,318],[232,300],[150,340]].forEach(function(p){ el("ellipse",{cx:p[0],cy:p[1],rx:13,ry:9,fill:"#8B6A4E",opacity:0.85}); }); el("text",{x:160,y:296,"text-anchor":"middle","font-size":14,fill:"#6B4E37","font-family":F,text:"stool"}); }
+  /* pelvic brim */
+  el("path",{d:"M78 288 Q160 262 242 288",fill:"none",stroke:"#B9BCCD","stroke-width":1.5,"stroke-dasharray":"5 4"});
+  el("text",{x:72,y:282,"font-size":13,fill:"#9A9CB2","font-family":F,text:"pelvic brim"});
+  /* omentum */
+  if(f.omen&&!ok) el("path",{d:"M90 175 Q160 168 230 175 L224 255 Q200 300 180 340 Q160 352 140 336 Q120 300 100 250 Z",fill:"#F7E3A1",opacity:0.75,stroke:"#E4C66B"});
+  /* catheter: exit site RLQ lateral -> tunnel -> deep cuff -> intraperitoneal */
+  var exit=[238,262], cuff=[200,240];
+  var tip=f.migr&&!ok?[118,186]:[150,350];
+  var tunnel=f.kink&&!ok?"M"+exit[0]+" "+exit[1]+" L226 252 L220 262 L212 246 L"+cuff[0]+" "+cuff[1]:"M"+exit[0]+" "+exit[1]+" Q220 246 "+cuff[0]+" "+cuff[1];
+  el("path",{d:tunnel,fill:"none",stroke:"#5B4BFF","stroke-width":4,"stroke-linecap":"round"});
+  var ip=f.migr&&!ok?"M"+cuff[0]+" "+cuff[1]+" Q170 220 140 200 Q118 186 "+tip[0]+" "+tip[1]:"M"+cuff[0]+" "+cuff[1]+" Q178 290 160 330 Q150 350 "+tip[0]+" "+tip[1];
+  el("path",{d:ip,fill:"none",stroke:"#5B4BFF","stroke-width":4,"stroke-linecap":"round"});
+  el("circle",{cx:tip[0],cy:tip[1],r:9,fill:"none",stroke:"#5B4BFF","stroke-width":3});
+  el("rect",{x:cuff[0]-5,y:cuff[1]-4,width:10,height:8,rx:2,fill:"#A8842C"});
+  el("rect",{x:224,y:250,width:9,height:7,rx:2,fill:"#A8842C"});
+  if(f.fibrin&&!ok){ for(var j=0;j<6;j++) el("circle",{cx:tip[0]-6+j*2.5,cy:tip[1]-3+(j%2)*5,r:2.6,fill:"#E9C9A8"}); el("text",{x:tip[0]+14,y:tip[1]+4,"font-size":14,fill:"#8B5A2B","font-family":F,text:"fibrin"}); }
+  if(f.kink&&!ok) el("text",{x:206,y:276,"font-size":14,fill:"#B4232A","font-family":F,text:"kink"});
+  if(f.migr&&!ok) el("text",{x:tip[0]-6,y:tip[1]-14,"font-size":14,fill:"#B4232A","font-family":F,text:"tip migrated"});
+  /* exit site */
+  el("circle",{cx:exit[0],cy:exit[1],r:4,fill:"#0B0B1F"});
+  el("text",{x:exit[0]-4,y:exit[1]+22,"font-size":13,fill:"#5E6075","font-family":F,text:"exit"});
+  if(f.leak==="exit"&&!ok){ el("ellipse",{cx:exit[0]-2,cy:exit[1]+2,rx:20,ry:14,fill:"#9FD6EE",opacity:0.55}); el("text",{x:exit[0]-30,y:exit[1]+28,"font-size":14,fill:"#0B5E7A","font-family":F,text:"leak"}); }
+  if(f.hernia&&!ok){ el("path",{d:"M150 186 q10 -18 20 0",fill:"#9FD6EE",stroke:"#0B5E7A"}); el("text",{x:176,y:182,"font-size":14,fill:"#0B5E7A","font-family":F,text:"hernia"}); el("ellipse",{cx:160,cy:402,rx:22,ry:12,fill:"#9FD6EE",opacity:0.8}); el("text",{x:186,y:410,"font-size":14,fill:"#0B5E7A","font-family":F,text:"scrotal edema"}); }
+  if(partial) el("text",{x:160,y:150,"text-anchor":"middle","font-size":14,fill:"#A8842C","font-family":F,text:"partial improvement"});
+}
+
+/* ---------- drain curve ---------- */
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?220:250,aria:"Inflow and drain volume over time",
+  x:{min:0,max:30,step:5,label:"min"},y:{min:0,max:2.5,step:0.5,label:"L"},
+  series:[{id:"ref",name:"Normal drain",color:A.muted,data:[],width:1.4,dash:[4,4]},{id:"dr",name:"Drain",color:A.accent,data:[],width:2.6},{id:"in",name:"Inflow",color:A.teal,data:[],width:1.8}],legend:true});
+function curve(prm,V){
+  var out=[], vol=0, tgt=prm.c*V, fastEnd=prm.b*V, tau=6;
+  for(var t=0;t<=30;t+=0.5){
+    out.push([t,vol/1000]);
+    if(vol<fastEnd) vol=Math.min(fastEnd,vol+prm.qf*0.5);
+    else vol=vol+(tgt-vol)*(1-Math.exp(-0.5/tau));
+  }
+  return out;
+}
+function inflow(rate,V){ var out=[], v=0, q=250*rate; for(var t=0;t<=30;t+=0.5){ out.push([t,v/1000]); v=Math.min(V,v+q*0.5); } return out; }
+function update(){
+  var k=prob.value, d=D[k], V=C.fill.get();
+  var fixed=d.fix.length&&d.fix.every(function(x){ return on(x); });
+  var partial=!fixed&&(d.part||[]).some(function(x){ return on(x); });
+  var prm={in:d.in,qf:d.qf,b:d.b,c:d.c};
+  if(fixed){ prm=D.normal; }
+  else if(partial){ prm={in:Math.min(1,d.in*1.6),qf:d.qf*1.6,b:Math.min(0.8,d.b+0.15),c:Math.min(0.9,d.c+0.15)}; }
+  if((k==="leak"||k==="hydro"||k==="hernia")&&on("low")&&!fixed){ prm.c=Math.min(0.88,prm.c+0.08); }
+  draw(d,fixed,partial);
+  chart.setSeries("ref",curve(D.normal,V)); chart.setSeries("dr",curve(prm,V)); chart.setSeries("in",inflow(prm.in,V));
+  chart.update({y:{min:0,max:Math.max(2,Math.ceil(V/500)/2+0.5),step:0.5,label:"L"}});
+  var tin=V/(250*prm.in), dr=curve(prm,V), d20=dr[40][1]*1000/V*100;
+  Sim.ro("roIn",tin.toFixed(0),tin>15?"flag":"ok");
+  Sim.ro("roOut",Math.round(d20),d20<85?"flag":"ok");
+  Sim.ro("roPat",fixed?"แก้แล้ว":d.pat.split(" (")[0],fixed||k==="normal"?"ok":"flag");
+  var kv=document.getElementById("kv"); kv.innerHTML="";
+  [["Plain film",d.film],["ตรวจยืนยัน",d.test],["ตอบสนองต่อ",d.fix.length?d.fix.map(function(x){ return {lax:"laxative",pos:"เปลี่ยนท่า",hep:"heparin/tPA",low:"ลด fill + ท่านอน"}[x]; }).join(", "):(d.part?"บางส่วนเท่านั้น":"ต้องแก้ทางศัลยกรรม")]].forEach(function(r){ kv.appendChild(Sim.h("span",{text:r[0]})); kv.appendChild(Sim.h("span",{text:r[1]})); });
+  var act=document.getElementById("act"), m, cls="act";
+  if(k==="normal"){ m="Drain ปกติ ไม่ต้องทำอะไร"; cls+=" good"; }
+  else if(fixed){ m="<b>ดีขึ้นด้วยการรักษาขั้นแรก</b> ติดตาม drain time และป้องกันซ้ำ ("+(k==="constip"?"bowel regimen ประจำ":k==="fibrin"?"heparin ในน้ำยาต่ออีกระยะ":"เพิ่ม fill ช้าๆ หลังหายรั่ว")+")"; cls+=" good"; }
+  else { m="<b>"+d.name+":</b> "+d.mgmt; cls+=" bad"; }
+  act.innerHTML="<b>Next step:</b> "+m; act.className=cls;
+}
+Sim.mount({code:"PD-08", title:"PD Catheter and Mechanical Problems", lead:"เลือกปัญหา ดูตำแหน่งสายและ drain curve แยก one-way จาก two-way obstruction แล้วลองการรักษาขั้นแรกว่าแก้ได้หรือต้องผ่าตัด",
+  scenarios:S, order:ORDER, captureMs:1800,
+  onChange:function(k){ prob.value=k; resetT(); C.fill.set(2000); update(); },
+  refs:["Crabtree JH, Shrestha BM, Chow KM, et al. Creating and maintaining optimal peritoneal dialysis access in the adult patient: 2019 update. Perit Dial Int 2019, 39(5): 414-436",
+        "Dejardin A, Robert A, Goffin E. Intraperitoneal pressure in PD patients: relationship to intraperitoneal volume, body size and PD-related complications. Nephrol Dial Transplant 2007, 22(5): 1437-1444",
+        "Chow KM, Szeto CC, Li PK. Management options for hydrothorax complicating peritoneal dialysis. Semin Dial 2003, 16(5): 389-394"],
+  note:"Schematic เพื่อการสอน ไม่ใช่ภาพ imaging จริง drain curve เป็น model สองช่วง (fast phase แล้ว slow phase แบบ exponential) inflow ปกติราว 250 ml/min ตัวเลขเป็นค่าประมาณ"
+});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,204 @@
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap");
+/* CORE-01 Nephrology Simulator Hub design tokens + layout (v3.2.0 "modern", v3.2 adds rule v6 graph-diet classes: .takeaway .more .stepper .panel-gap)
+   Layout idea: cool near-white workspace, near-black ink, one electric accent. Tight sans display, soft depth, no ornament.
+   Colour is reserved for meaning (flag, ok, selected). Class names are unchanged from v1.
+   Rule: change only in a backward-compatible way. Every sim shares this file. */
+:root{
+  --navy:#0E0857; --ink:#0B0B1F; --muted:#5E6075; --faint:#9A9CB2;
+  --accent:#5B4BFF; --accent2:#19C8E6; --accent-soft:#EFEDFF;
+  --shadow:0 1px 2px rgba(11,11,31,.04),0 12px 32px -12px rgba(11,11,31,.10);
+  --canvas:#F4F5F9; --card:#FFFFFF; --line:#E6E7F0; --line-strong:#D3D5E2;
+  --red:#B4232A; --teal:#1F7A72; --gold:#A8842C; --yellow:#FFDE59;
+  /* soft tints (legacy names kept for sims) */
+  --peach:#F6F1E6; --pink:#F9EAEA; --blue:#E9EFF8; --green:#E8F2E6; --navy-soft:#C9CAE6;
+  --display:"Geist","IBM Plex Sans Thai","Leelawadee UI",system-ui,sans-serif;
+  --body:"Geist","IBM Plex Sans Thai","Leelawadee UI",system-ui,sans-serif;
+  --mono:"Geist Mono",ui-monospace,Menlo,monospace;
+  --radius:18px; --maxw:1120px;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.6;-webkit-text-size-adjust:100%;-webkit-font-smoothing:antialiased}
+button{font-family:inherit}
+a{color:var(--navy)}
+.num,.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+
+/* ---------- header ---------- */
+.sim-header{background:var(--card);color:var(--ink);padding:20px 24px 22px;border-bottom:1px solid var(--line)}
+.sim-header .row{max-width:var(--maxw);margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.sim-header .ttl{min-width:0}
+.sim-header h1{margin:0;font-family:var(--display);font-size:clamp(26px,4.4vw,40px);font-weight:600;line-height:1.1;letter-spacing:-.035em;color:var(--ink);text-wrap:balance}
+.sim-header p{margin:10px 0 0;color:var(--muted);font-size:15px;max-width:68ch}
+.code-badge{display:table;font:500 11.5px var(--mono);letter-spacing:.08em;color:#fff;background:var(--ink);border-radius:7px;padding:3px 9px;margin:0 0 12px}
+.back{order:-1;align-self:flex-start;color:var(--muted);text-decoration:none;font-size:13px;font-weight:500;white-space:nowrap}
+.back:hover{color:var(--accent)}
+
+/* ---------- main grid ---------- */
+main.sim{max-width:calc(var(--maxw) + 48px);margin:0 auto;padding:24px;display:grid;gap:20px}
+@media (max-width:520px){main.sim{padding:16px;gap:16px}.sim-header{padding:16px 16px 18px}}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line-strong);background:var(--card);color:var(--ink);border-radius:999px;padding:7px 15px;font:500 13.5px var(--body);cursor:pointer;transition:border-color .15s,background .15s}
+.chip:hover{border-color:var(--ink)}
+.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
+.chip:focus-visible,.tog:focus-visible,.opt:focus-visible{border-radius:999px}
+.tog:focus-visible,.opt:focus-visible{border-radius:10px}
+
+.bench{display:grid;grid-template-columns:1.25fr 1fr;gap:20px;align-items:start}
+.bench.one{grid-template-columns:1fr}
+.bench.even{grid-template-columns:1fr 1fr}
+@media (max-width:900px){.bench,.bench.even{grid-template-columns:1fr}}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:22px;min-width:0;box-shadow:var(--shadow)}
+@media (max-width:520px){.card{padding:16px}}
+.card h2{margin:0 0 14px;font-size:15.5px;font-weight:600;letter-spacing:-.01em;color:var(--ink)}
+.card h3{margin:14px 0 6px;font-size:14px;font-weight:600;color:var(--ink)}
+.svgwrap{overflow-x:auto}
+.svgwrap svg{width:100%;height:auto;display:block}
+.hint{font-size:13px;color:var(--muted);margin:10px 0 0}
+
+/* toggles and controls */
+.tools{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.tog{border:1px solid var(--line-strong);background:var(--card);border-radius:10px;padding:7px 12px;font:500 13.5px var(--body);cursor:pointer;color:var(--ink);transition:border-color .15s,background .15s}
+.tog:hover{border-color:var(--ink)}
+.tog[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.ctls{display:grid;gap:10px}
+.ctl{display:grid;grid-template-columns:minmax(120px,170px) 1fr 84px;align-items:center;gap:12px;font-size:14px}
+.ctl label{font-weight:500}
+.ctl output{font:500 14.5px var(--mono);font-variant-numeric:tabular-nums;color:var(--ink);text-align:right}
+.ctl input[type=range]{width:100%;accent-color:var(--accent)}
+@media (max-width:520px){.ctl{grid-template-columns:1fr 84px}.ctl label{grid-column:1/-1}}
+select{font:500 14px var(--body);padding:7px 10px;border-radius:10px;border:1px solid var(--line-strong);background:var(--card);color:var(--ink)}
+
+/* readouts */
+.readout{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:1px;margin-top:14px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.ro{background:var(--card);padding:12px 14px}
+.ro b{display:block;font:500 25px/1.15 var(--mono);font-variant-numeric:tabular-nums;color:var(--ink);letter-spacing:-.02em}
+.ro span{font-size:12px;color:var(--muted)}
+.ro.flag b{color:var(--red)}
+.ro.ok b{color:var(--teal)}
+
+/* worked steps (CORE-03 renders into this) */
+.steps{margin:8px 0 0;padding-left:22px;font-size:14px}
+.steps li{margin:3px 0}
+.steps code{font:500 13.5px var(--mono);background:var(--canvas);border-radius:4px;padding:1px 5px}
+
+/* findings + take-home */
+.find{display:grid;grid-template-columns:1.2fr 1fr;gap:20px;align-items:start}
+@media (max-width:760px){.find{grid-template-columns:1fr}}
+table.ft{width:100%;border-collapse:collapse;font-size:14.5px}
+table.ft th,table.ft td{text-align:left;vertical-align:top;padding:10px 0;border-bottom:1px solid var(--line)}
+table.ft tr:last-child th,table.ft tr:last-child td{border-bottom:0;padding-bottom:0}
+table.ft th{width:30%;padding-right:14px;color:var(--muted);font-weight:500;font-size:13px}
+.take{background:radial-gradient(120% 140% at 100% 0%,#2A1F8F 0%,rgba(42,31,143,0) 55%),var(--ink);color:#fff;border-radius:var(--radius);padding:22px;box-shadow:var(--shadow)}
+.take h3{margin:0 0 10px;font:500 12px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent2)}
+.take ul{margin:0;padding-left:18px;display:grid;gap:8px;font-size:15px}
+.take li::marker{color:var(--accent2)}
+
+/* next-step quiz */
+.quiz{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:22px;box-shadow:var(--shadow)}
+@media (max-width:520px){.quiz{padding:16px}}
+.quiz h2{margin:0;font:500 12px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.quiz>.hint{display:none}
+.quiz .qi{margin-top:12px}
+.quiz .qtext{font-weight:500;font-size:16px;margin:0 0 14px;max-width:75ch}
+.quiz .opts{display:grid;gap:8px}
+.opt{display:flex;gap:12px;align-items:flex-start;text-align:left;border:1px solid var(--line-strong);background:var(--card);border-radius:10px;padding:10px 14px;font:400 14.5px/1.5 var(--body);cursor:pointer;color:var(--ink);transition:border-color .15s}
+.opt:hover:not([disabled]){border-color:var(--accent);background:var(--accent-soft)}
+.opt .lt{font:500 13px/1.7 var(--mono);color:var(--faint);min-width:14px}
+.opt.correct{background:var(--green);border-color:var(--teal)}
+.opt.correct .lt{color:var(--teal)}
+.opt.wrong{background:var(--pink);border-color:var(--red)}
+.opt.wrong .lt{color:var(--red)}
+.opt[disabled]{cursor:default}
+.quiz details{margin-top:12px;font-size:14px}
+.quiz summary{cursor:pointer;color:var(--accent);font-weight:500}
+.quiz .why{margin:10px 0 0;padding:12px 14px;background:var(--canvas);border-radius:10px;max-width:80ch}
+
+/* footer */
+.sim-foot{max-width:calc(var(--maxw) + 48px);margin:0 auto;padding:8px 24px 40px;font-size:12px;line-height:1.6;color:var(--faint)}
+@media (max-width:520px){.sim-foot{padding:8px 16px 32px}}
+.sim-foot b{font-weight:500;color:var(--muted)}
+.sim-foot .refs{margin:4px 0 0;padding-left:18px}
+.sim-foot .meta{margin-top:10px}
+
+.flag-txt{color:var(--red);font-weight:600}
+.ok-txt{color:var(--teal);font-weight:600}
+.star{color:var(--gold)}
+.pill{display:inline-block;font-size:11.5px;font-weight:500;border-radius:999px;padding:1px 9px;border:1px solid var(--line);color:var(--muted);background:var(--card);white-space:nowrap}
+.pill.live{border-color:var(--teal);color:var(--teal)}
+.pill.building{border-color:var(--gold);color:var(--gold)}
+.pill.revise{border-color:var(--red);color:var(--red)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------- presentation mode (?present=1) 16:9 stage ---------- */
+body.present{background:var(--canvas);overflow:hidden}
+body.present .no-present,body.present .quiz,body.present .sim-foot,body.present .back,body.present .secondary{display:none!important}
+body.present #stage{position:fixed;left:0;top:0;width:1600px;height:900px;transform-origin:top left;background:var(--canvas);overflow:hidden;display:flex;flex-direction:column}
+body.present .sim-header{padding:22px 40px 20px}
+body.present .sim-header .row{max-width:none}
+body.present .sim-header h1{font-size:42px}
+body.present .sim-header p{font-size:18px;max-width:none;margin-top:6px}
+body.present .code-badge{font-size:14px;margin-bottom:4px}
+body.present main.sim{max-width:none;width:100%;padding:20px 40px;gap:18px;flex:1;align-content:start}
+body.present .chip{font-size:16px;padding:7px 16px}
+body.present .card h2{font-size:19px}
+body.present .ctl{font-size:17px}
+body.present table.ft{font-size:16.5px}
+body.present .take{padding:16px 22px}
+body.present .take h3{margin-bottom:6px}
+body.present .take ul{font-size:16px;line-height:1.45;grid-auto-flow:column;grid-auto-columns:1fr;gap:28px;padding-left:18px}
+body.present .ro b{font-size:28px}
+.present-bar{display:none}
+body.present.capture .present-bar{display:none!important}
+body.present.capture *{caret-color:transparent}
+/* capture: keep only the active scenario chip as a label, frees one row for the 16:9 export */
+body.present.capture .chip[aria-pressed="false"]{display:none}
+body.present.capture .chip[aria-pressed="true"]{cursor:default}
+body.present .present-bar{display:flex;position:fixed;right:14px;bottom:10px;gap:8px;font:400 11px var(--mono);color:var(--faint);z-index:5}
+
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+
+/* ---------- v3.1 on-demand export (shell.js v1.4.0) ---------- */
+.sim-header .row{position:relative}
+.sim-export{position:absolute;right:0;top:0;z-index:20}
+.sim-exbtn{font:500 12.5px var(--body);color:var(--ink);background:var(--card);border:1px solid var(--line-strong);border-radius:999px;padding:5px 12px;cursor:pointer}
+.sim-exbtn:hover{border-color:var(--ink)}
+.sim-exmenu{display:none;position:absolute;right:0;top:calc(100% + 6px);min-width:220px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:6px}
+.sim-export.open .sim-exmenu{display:grid}
+.sim-exmenu button{text-align:left;font:400 13.5px var(--body);color:var(--ink);background:none;border:0;border-radius:8px;padding:8px 10px;cursor:pointer}
+.sim-exmenu button:hover{background:var(--accent-soft);color:var(--accent)}
+body.exporting .sim-export,body.present .sim-export{display:none}
+.sim-toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%) translateY(20px);opacity:0;background:var(--ink);color:#fff;font:400 13px var(--body);padding:9px 16px;border-radius:999px;z-index:50;transition:opacity .2s,transform .2s;pointer-events:none}
+.sim-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.sim-exhint{display:none;position:fixed;right:12px;bottom:12px;z-index:60;gap:10px;align-items:center;background:rgba(11,11,31,.86);color:#fff;font:400 12.5px var(--body);padding:6px 8px 6px 12px;border-radius:999px;transition:opacity .3s}
+.sim-exhint.show{display:flex}
+.sim-exhint.dim{opacity:.25}
+.sim-exhint.dim:hover{opacity:1}
+.sim-exhint button{font:500 12px var(--body);background:#fff;color:var(--ink);border:0;border-radius:999px;padding:4px 10px;cursor:pointer}
+@media (max-width:520px){.sim-export{position:static;align-self:flex-end;margin-top:-6px}}
+
+/* v3.2 rule v6 "graph diet" (pilot AKI-01, GN-06, HT-02)
+   .takeaway = one-line reading of the hero graph (UI text, Thai allowed), updates with sliders
+   details.more = folded secondary visuals or numbers ("ดูเพิ่ม")
+   .stepper = build-up steps for concept graphs */
+.takeaway{margin:10px 0 0;padding:10px 14px;border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 12px 12px 0;font-size:14.5px;line-height:1.55;color:var(--ink)}
+.takeaway b{font-weight:600}
+.takeaway .num{font-family:var(--mono);font-weight:500}
+.panel-gap{height:4px}
+details.more{margin-top:12px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+details.more>summary{cursor:pointer;list-style:none;padding:10px 14px;font-size:13.5px;font-weight:500;color:var(--muted);display:flex;align-items:center;gap:8px}
+details.more>summary::-webkit-details-marker{display:none}
+details.more>summary::before{content:"+";display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;border:1px solid var(--line-strong);font:500 13px/1 var(--mono);color:var(--ink)}
+details.more[open]>summary::before{content:"−"}
+details.more>summary:hover{color:var(--ink)}
+details.more>.more-body{padding:0 14px 14px}
+details.more .readout{margin-top:0}
+.stepper{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.stepper button{border:1px solid var(--line-strong);background:var(--card);color:var(--muted);border-radius:999px;padding:5px 12px;font:500 13px var(--body);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.stepper button i{font-style:normal;font:500 11px/1 var(--mono);width:18px;height:18px;border-radius:50%;display:inline-grid;place-items:center;background:var(--canvas);color:var(--ink)}
+.stepper button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.stepper button.on i{background:var(--accent);color:#fff}
+.stepper button.done{color:var(--ink)}
+body.present details.more,body.capture details.more{display:none}
+body.present .takeaway{font-size:16px;padding:8px 14px;margin-top:8px}

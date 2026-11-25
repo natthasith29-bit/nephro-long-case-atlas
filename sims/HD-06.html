@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[HD-06] HD Circuit and Pressure Alarms</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(110px,150px) 1fr 108px}
+.pat{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:12px}
+.pat th,.pat td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:center}
+.pat th{font-weight:500;color:var(--muted)}
+.pat td.lbl{text-align:left;color:var(--muted)}
+.pat td.v{font-family:var(--mono)}
+.up{color:var(--red);font-weight:600}.dn{color:#3B2C8F;font-weight:600}.eq{color:var(--faint)}
+.sel{display:grid;grid-template-columns:minmax(110px,150px) 1fr;gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+.pgrid{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+@media (max-width:760px){.pgrid{grid-template-columns:1fr}}
+body.present #bench{grid-template-columns:1.55fr 1fr}
+body.present .pgrid{grid-template-columns:1fr;gap:6px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench one" id="bench">
+    <div class="card">
+      <h2>HD circuit</h2>
+      <div class="svgwrap"><svg id="circ" aria-label="Hemodialysis extracorporeal circuit with pressure monitors"></svg></div>
+      <div class="tools no-present" id="faults"></div>
+      <p class="hint no-present">กดปุ่ม fault ได้หลายปุ่มพร้อมกัน แล้วดูว่าความดันแต่ละจุดขยับทิศไหน รูปแบบนี้ใช้ไล่หาตำแหน่งปัญหาในวงจร</p>
+    </div>
+    <div class="card">
+      <h2>Pressure pattern</h2>
+      <div class="pgrid"><div><div class="ctls" id="ctls"></div>
+      <table class="pat" id="pat" aria-label="Pressure change from baseline"></table></div><div>
+      <div class="readout">
+        <div class="ro" id="roDP"><b>-</b><span>PBE − PV (mmHg)</span></div>
+        <div class="ro" id="roTMP"><b>-</b><span>TMP (mmHg)</span></div>
+        <div class="ro" id="roAl"><b>-</b><span>Alarm</span></div>
+      </div>
+      <p class="hint" id="interp"></p>
+    </div></div></div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/circuit.js"></script>
+<script>
+(function(){
+"use strict";
+var F0={artKink:0,outflow:0,venClot:0,filterClot:0,disc:false,air:false};
+function F(o){ var r={}; for(var k in F0) r[k]=F0[k]; for(var j in o) r[j]=o[j]; return r; }
+var S = {
+  normal:{name:"Baseline", p:{Qb:300,G:15,UFR:700}, f:F({}),
+    rows:[["ตำแหน่ง","PA วัดก่อน pump (ติดลบ), PBE วัดหลัง pump ก่อน dialyzer, PV วัดที่ venous chamber"],["ค่าปกติ (Qb 300 15G)","PA ราว −140, PBE ราว +220, PV ราว +155 mmHg"],["Alarm window","machine ตั้ง window รอบค่าปัจจุบันหลังเริ่มฟอก (ในหน้านี้ PV ±50)"]],
+    take:["PA ขึ้นกับ needle gauge, Qb และ inflow ของ access","PV ขึ้นกับ needle gauge, Qb และ outflow ของ access","PBE − PV สะท้อนความต้านทานของ dialyzer ใช้ดู clotting","Needle เล็กลงหนึ่งขนาด PA ติดลบมากขึ้นและ PV สูงขึ้นที่ Qb เดิม"],
+    quiz:[{q:"เปลี่ยนเข็มจาก 15G เป็น 17G ในผู้ป่วย AVF ใหม่ โดยคง Qb 350 ข้อใดคาดว่าจะเกิดขึ้น",opts:["PA ติดลบมากขึ้นและ PV สูงขึ้น","PA และ PV ไม่เปลี่ยน","PBE ลดลงอย่างเดียว","TMP ลดลงเป็นหลัก"],ans:0,why:"เข็มเล็กเพิ่มความต้านทานทั้งฝั่งดูดและฝั่งคืน PA จึงติดลบมากขึ้นและ PV สูงขึ้น ถ้าเกิน limit ต้องลด Qb"}]},
+  artObs:{name:"Arterial side obstruction", p:{Qb:300,G:15,UFR:700}, f:F({artKink:1}),
+    rows:[["สาเหตุ","สาย arterial หักพับ, clamp ปิดค้าง, เข็มชิดผนังหลอดเลือด, inflow stenosis, catheter thrombus"],["Pattern","PA ติดลบมาก, PBE และ PV ลดลง (pump ได้เลือดน้อยลงจริง)"],["ผล","blood flow ที่ได้จริงต่ำกว่า Qb บนหน้าจอ dose ลดลง และเสี่ยง hemolysis"]],
+    take:["Obstruction ก่อน pump: PA ↓↓ PBE ↓ PV ↓","ไล่ตรวจจากเข็มไปถึง pump: ตำแหน่งเข็ม, clamp, kink","ถ้าเป็นซ้ำทุกครั้งให้นึกถึง inflow stenosis หรือ catheter dysfunction"],
+    quiz:[{q:"Arterial pressure alarm −290 mmHg ทันทีหลังผู้ป่วยขยับแขน PBE และ PV ลดลงทั้งคู่ ขั้นแรกที่เหมาะที่สุดคือข้อใด",opts:["เพิ่ม Qb เพื่อชดเชย","ตรวจสาย arterial หักพับและตำแหน่งเข็ม arterial","เพิ่ม heparin bolus","เปลี่ยน dialyzer"],ans:1,why:"PA ติดลบมากร่วมกับ PBE และ PV ลดลง คือ obstruction ฝั่งก่อน pump ตรวจสายและเข็มก่อน"}]},
+  venObs:{name:"Venous outflow obstruction", p:{Qb:300,G:15,UFR:700}, f:F({outflow:1}),
+    rows:[["สาเหตุ","venous needle infiltration, venous stenosis ของ access, สาย venous หักพับหลัง chamber"],["Pattern","PV ↑↑ และ PBE ↑ ตาม แต่ PBE − PV เท่าเดิม PA ไม่เปลี่ยน"],["อาการร่วม","บวมตรงเข็ม venous, เลือดออกนานหลังถอนเข็ม (ถ้าเป็น stenosis)"]],
+    take:["Obstruction หลัง venous chamber: PV ↑ PBE ↑ gradient เท่าเดิม","Infiltration ต้องหยุด pump และย้ายเข็มทันที","PV สูงขึ้นเรื่อยๆ หลายสัปดาห์ที่ Qb และขนาดเข็มเดิม ให้สงสัย outflow stenosis ตรวจ PE และส่งตรวจ access"],
+    quiz:[{q:"ระหว่างฟอก venous pressure alarm +290 mmHg ผู้ป่วยปวดและบวมรอบเข็ม venous PBE สูงตาม PA ปกติ ขั้นต่อไปที่เหมาะที่สุดคือข้อใด",opts:["เพิ่ม venous alarm limit แล้วฟอกต่อ","หยุด blood pump ถอนเข็ม venous และแทงใหม่ในตำแหน่งอื่น","ลด UF rate","ให้ heparin เพิ่ม"],ans:1,why:"PV สูงฉับพลันร่วมกับบวมรอบเข็มคือ infiltration ต้องหยุดปั๊มและย้ายเข็มเพื่อไม่ให้ hematoma ลุกลาม"}]},
+  chamberClot:{name:"Clot ใน venous chamber", p:{Qb:300,G:15,UFR:700}, f:F({venClot:1}),
+    rows:[["สาเหตุ","heparin ไม่พอ, ระดับเลือดใน chamber ต่ำ มีลมสัมผัสเลือด"],["Pattern","PV ↑ และ PBE ↑ (ถ้า transducer อยู่หลัง clot อาจเห็น PV ไม่สูง)"],["ตรวจ","มองเห็นก้อนเลือดใน chamber หรือ filter ของ chamber"]],
+    take:["Clot ใน chamber ทำให้ความดันก่อน clot สูง","ตรวจ heparin delivery (syringe ทำงาน, clamp เปิด) และระดับใน chamber","ถ้าความดันสูงต่อเนื่องให้เปลี่ยนชุดสาย"],
+    quiz:[{q:"PV และ PBE ค่อยๆ สูงขึ้นในชั่วโมงที่ 2 มองเห็นก้อนเลือดใน venous chamber syringe heparin หยุดเพราะ clamp ปิดอยู่ ขั้นต่อไปที่เหมาะที่สุดคือข้อใด",opts:["เปิด heparin line ทันทีแล้วฟอกต่อโดยไม่ทำอะไรเพิ่ม","คืนเลือดถ้าทำได้ แล้วเปลี่ยนชุดสายและแก้ heparin delivery","เพิ่ม Qb","ลด UF เหลือ 0"],ans:1,why:"มี clot ในวงจรแล้วการเปิด heparin ไม่ละลาย clot ควรคืนเลือดเท่าที่ปลอดภัย เปลี่ยนชุดสาย และแก้สาเหตุ"}]},
+  filterClot:{name:"Dialyzer clotting", p:{Qb:300,G:15,UFR:700}, f:F({filterClot:0.8}),
+    rows:[["สาเหตุ","anticoagulation ไม่พอ, heparin-free, Hct สูง, UF rate สูงมาก"],["Pattern","PBE ↑↑ PV ↓ เล็กน้อย ทำให้ PBE − PV กว้างมาก TMP ↑"],["ผล","clearance ลดลง (fiber อุดตัน) Kt/V ต่ำ"]],
+    take:["Gradient PBE − PV ที่กว้างขึ้นเรื่อยๆ คือ dialyzer clotting","TMP สูงเป็นสัญญาณร่วม","Heparin-free ใช้ saline flush เป็นระยะและ Qb สูง ดู HD-12"],
+    quiz:[{q:"Heparin-free HD ชั่วโมงที่ 3 PBE เพิ่มจาก +220 เป็น +390 PV ลดจาก +155 เป็น +140 TMP สูงขึ้น fiber สีเข้ม ข้อใดเหมาะที่สุด",opts:["Venous needle infiltration","Dialyzer clotting ควรคืนเลือดและพิจารณาเปลี่ยน dialyzer","Arterial kink","Access recirculation"],ans:1,why:"PBE สูงแต่ PV ไม่สูงตาม gradient จึงกว้างมาก บ่งชี้ความต้านทานใน dialyzer จาก clotting"}]},
+  disc:{name:"Venous needle dislodgement", p:{Qb:300,G:15,UFR:700}, f:F({disc:true}),
+    rows:[["เหตุการณ์","เข็ม venous หลุดออกจากผิว เลือดไหลออกนอกตัว"],["Pattern","PV ลดเพียงราว 20–30 mmHg เพราะความต้านทานส่วนใหญ่อยู่ที่ตัวเข็ม"],["อันตราย","PV ยังอยู่ใน alarm window จึงอาจไม่ alarm เสียเลือดได้หลายร้อย ml ในไม่กี่นาที"]],
+    take:["Venous pressure monitor ไม่ไวพอสำหรับ venous needle dislodgement","ต้องเห็นเข็มและเทปตลอด ห้ามคลุมแขนด้วยผ้าห่ม","ใช้ blood leak หรือ wetness detector ที่เข็ม และตั้ง lower venous limit ให้แคบ (ใกล้ค่าปัจจุบัน)"],
+    quiz:[{q:"ผู้ป่วยหลับคลุมผ้าห่ม venous pressure ลดจาก +155 เป็น +130 โดยไม่มี alarm ข้อใดคือสิ่งที่ต้องทำก่อน",opts:["บันทึกค่าแล้วติดตามต่อ","เปิดผ้าห่มตรวจเข็ม venous และรอยต่อทันที","ลด lower limit ลงอีก 50 mmHg เพื่อไม่ให้ alarm รบกวน","เพิ่ม Qb"],ans:1,why:"PV ที่ลดลงเล็กน้อยโดยไม่มีเหตุอื่นอาจเป็น venous needle dislodgement ซึ่งมักไม่ alarm ต้องตรวจเข็มทันที"}]},
+  air:{name:"Air ในสาย", p:{Qb:300,G:15,UFR:700}, f:F({air:true}),
+    rows:[["ที่มา","ข้อต่อฝั่ง arterial หลวม (ความดันติดลบดูดลมเข้า), ถุง saline หมด, ระดับ chamber ต่ำ"],["Machine","air detector ที่ venous line ตรวจพบ ปิด venous clamp และหยุด blood pump อัตโนมัติ"],["ถ้าลมเข้าผู้ป่วย","นอนตะแคงซ้ายศีรษะต่ำ ให้ O2 100% (ดู HD-11)"]],
+    take:["ส่วนก่อน pump มีความดันติดลบ ลมเข้าได้จากรอยรั่วเล็กๆ","Air detector และ venous clamp เป็นด่านสุดท้าย ห้าม bypass","ตรวจทุกข้อต่อฝั่ง arterial และ saline line"],
+    quiz:[{q:"Air detector alarm venous clamp ปิดเอง พบฟองอากาศใน venous chamber และข้อต่อ saline ฝั่ง arterial หลวม ขั้นต่อไปที่เหมาะที่สุดคือข้อใด",opts:["เปิด venous clamp ด้วยมือแล้วฟอกต่อ","ขันข้อต่อให้แน่น ไล่ลมออกจาก chamber ตามขั้นตอนก่อนเริ่ม pump ใหม่","เพิ่ม Qb เพื่อไล่ลมเข้าผู้ป่วยให้เร็ว","ปิด air detector ชั่วคราว"],ans:1,why:"ต้องแก้จุดรั่วและไล่ลมออกจากวงจรก่อนเสมอ ห้าม override clamp หรือ air detector"}]}
+};
+var ORDER=["normal","artObs","venObs","chamberClot","filterClot","disc","air"];
+
+var box=document.getElementById("ctls"), C={};
+function sl(k,o){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); box.appendChild(C[k].el); return C[k]; }
+sl("Qb",{label:"Qb",min:150,max:450,step:10,value:300,unit:"ml/min"});
+var gSel=Sim.h("select",{id:"sG"},[14,15,16,17].map(function(g){ return Sim.h("option",{value:g,text:g+"G"}); })); gSel.value="15"; gSel.addEventListener("change",update);
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"sG",text:"Needle gauge"}),gSel]));
+sl("UFR",{label:"UF rate",min:0,max:1500,step:50,value:700,unit:"ml/h"}).el.classList.add("secondary");
+
+var f=F({}), fb={}, FB=[["artKink","Arterial kink"],["outflow","Venous outflow"],["venClot","Clot ใน chamber"],["filterClot","Dialyzer clotting"],["disc","Venous needle หลุด"],["air","Air ในสาย"]];
+var fx=document.getElementById("faults");
+FB.forEach(function(x){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:x[1]}); b.addEventListener("click",function(){ var on=!(f[x[0]]&&f[x[0]]!==0); f[x[0]]= x[0]==="filterClot" ? (on?0.8:0) : (x[0]==="disc"||x[0]==="air" ? on : (on?1:0)); sync(); update(); }); fb[x[0]]=b; fx.appendChild(b); });
+function sync(){ FB.forEach(function(x){ fb[x[0]].setAttribute("aria-pressed",(f[x[0]]&&f[x[0]]!==0)?"true":"false"); }); }
+
+var c=Circuit.preset.hd(document.getElementById("circ"),{});
+
+function pressures(Qb,G,UFR,ff){
+  var Rn={14:0.38,15:0.5,16:0.65,17:0.9}[G], Pacc=20;
+  var kink=1+2.2*ff.artKink, PA=-(Rn*Qb*kink)+Pacc*0.5;
+  var Qe=Qb*(1-0.18*ff.artKink); // pump under-fills when inlet is obstructed
+  var fc=ff.filterClot;
+  var PV=Rn*0.9*Qe+Pacc+125*ff.outflow+120*ff.venClot-18*fc;
+  if(ff.disc) PV=Rn*0.9*Qe+125*ff.outflow+120*ff.venClot; // needle tip now at atmosphere
+  var PBE=PV+0.22*Qe*(1+3*fc);
+  var TMP=UFR/50+20+140*fc;
+  return {PA:Math.round(PA),PBE:Math.round(PBE),PV:Math.round(PV),TMP:Math.round(TMP),Qe:Qe};
+}
+function arrow(d,th){ return Math.abs(d)<th?["eq","="]:(d>0?["up",Math.abs(d)>=th*4?"↑↑":"↑"]:["dn",Math.abs(d)>=th*4?"↓↓":"↓"]); }
+function update(){
+  var Qb=C.Qb.get(), G=parseInt(gSel.value,10), UFR=C.UFR.get();
+  var b=pressures(Qb,G,UFR,F({})), r=pressures(Qb,G,UFR,f);
+  var win={PV:[b.PV-50,b.PV+50], PA:[-250,0], PBE:[0,450], TMP:[-50,300]};
+  c.set("PV",{value:r.PV, opts:{lo:win.PV[0],hi:win.PV[1]}});
+  c.set("PA",{value:r.PA}); c.set("PBE",{value:r.PBE}); c.set("TMP",{value:r.TMP});
+  var stop=f.air;
+  c.setFlows({Qb:stop?0:Math.round(r.Qe), Qd:500}); c.set("BP",{rate:stop?0:Qb, speed:stop?0:r.Qe});
+  c.set("art",{occl:f.artKink?0.9:0, occlAt:0.55, occlLabel:f.artKink?"kink":undefined});
+  c.set("ret3",{occl:f.outflow?0.9:0, occlAt:0.85, occlLabel:f.outflow?"outflow":undefined});
+  c.set("VC",{alarm:!!f.venClot||f.air, level:f.air?0.25:(f.venClot?0.85:0.6), air:f.air});
+  c.set("DZ",{clot:f.filterClot});
+  c.set("AD",{alarm:f.air}); c.set("VCL",{closed:f.air});
+  c.set("PT",{opts:{sub:f.disc?"V needle out":"AV fistula"}});
+  c.set("ret3",{dash:f.disc});
+  var al=[];
+  if(f.air) al.push("Air detector: clamp closed, pump stopped");
+  if(r.PA<win.PA[0]) al.push("Arterial pressure low");
+  if(r.PV>win.PV[1]) al.push("Venous pressure high");
+  if(r.PV<win.PV[0]) al.push("Venous pressure low");
+  if(r.PBE>win.PBE[1]) al.push("Pre-filter pressure high");
+  if(r.TMP>win.TMP[1]) al.push("TMP high");
+  c.alarm(al.length?al[0]:(f.disc?{text:"No alarm, but blood is leaking out",level:"amber"}:null));
+  var pat=document.getElementById("pat"); pat.innerHTML="";
+  pat.appendChild(Sim.h("tr",{},["","Baseline","ตอนนี้","ทิศ"].map(function(h){ return Sim.h("th",{text:h}); })));
+  [["PA (pre-pump)","PA",10],["PBE (pre-filter)","PBE",10],["PV (venous)","PV",10],["TMP","TMP",10]].forEach(function(x){
+    var a=arrow(r[x[1]]-b[x[1]],x[2]);
+    pat.appendChild(Sim.h("tr",{},[Sim.h("td",{class:"lbl",text:x[0]}),Sim.h("td",{class:"v",text:String(b[x[1]])}),Sim.h("td",{class:"v",text:String(r[x[1]])}),Sim.h("td",{class:a[0],text:a[1]})]));
+  });
+  Sim.ro("roDP",Sim.fmt(r.PBE-r.PV,0),(r.PBE-r.PV)>150?"flag":false);
+  Sim.ro("roTMP",Sim.fmt(r.TMP,0),r.TMP>300?"flag":false);
+  Sim.ro("roAl",al.length?String(al.length):(f.disc?"ไม่มี":"0"),al.length?"flag":(f.disc?"flag":"ok"));
+  var it="";
+  if(f.disc) it="PV ลดลง "+(b.PV-r.PV)+" mmHg ยังอยู่ใน window "+win.PV[0]+" ถึง "+win.PV[1]+" จึงไม่ alarm";
+  else if(f.artKink) it="Pump ได้เลือดจริงราว "+Math.round(r.Qe)+" ml/min ต่ำกว่าที่ตั้ง "+Qb;
+  else if(f.filterClot) it="Gradient PBE − PV "+(r.PBE-r.PV)+" mmHg (baseline "+(b.PBE-b.PV)+") บ่งชี้ความต้านทานใน dialyzer";
+  else if(f.outflow||f.venClot) it="PBE ขึ้นตาม PV แต่ gradient เท่าเดิม ปัญหาอยู่หลัง dialyzer";
+  else it="Alarm window ของ PV ตั้งรอบค่าปัจจุบัน "+win.PV[0]+" ถึง "+win.PV[1]+" mmHg";
+  document.getElementById("interp").textContent=it;
+}
+Sim.mount({code:"HD-06", title:"HD Circuit and Pressure Alarms", lead:"ใส่ fault ในวงจรแล้วดูรูปแบบ PA, PBE, PV และ TMP เพื่อไล่หาตำแหน่งปัญหา",
+  scenarios:S, order:ORDER, captureMs:2500,
+  onChange:function(k,s){ C.Qb.set(s.p.Qb); gSel.value=String(s.p.G); C.UFR.set(s.p.UFR); f=F(s.f); sync(); update(); },
+  refs:["Daugirdas JT, Blake PG, Ing TS. Handbook of Dialysis. 5th ed. Wolters Kluwer 2015 (chapter: Hemodialysis apparatus)",
+        "Axley B, Speranza-Reid J, Williams H. Venous needle dislodgement in patients on hemodialysis. Nephrol Nurs J 2012, 39(6): 435-444",
+        "Polaschegg HD. Venous needle dislodgement: the pitfalls of venous pressure measurement and possible alternatives. A review. J Ren Care 2010, 36(1): 41-48",
+        "Lok CE, Huber TS, Lee T, et al. KDOQI Clinical Practice Guideline for Vascular Access: 2019 Update. Am J Kidney Dis 2020, 75(4 Suppl 2): S1-S164"],
+  note:"Pressure model เชิงเส้นเพื่อการสอน: ความต้านทานเข็ม 14G 0.38, 15G 0.5, 16G 0.65, 17G 0.9 mmHg ต่อ ml/min, access pressure 20 mmHg, dialyzer gradient 0.22 × Qb"
+});
+})();
+</script>
+</body>
+</html>

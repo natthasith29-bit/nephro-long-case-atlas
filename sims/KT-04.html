@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[KT-04] Tacrolimus Pharmacokinetics and Drug Interactions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.35fr 1fr}}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.sel{display:grid;grid-template-columns:minmax(110px,150px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px;margin:6px 0}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:10px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present #live,body.present .act{display:none}
+body.present .card{padding:14px 18px}
+body.present .ctls{gap:3px}
+body.present .ctl{font-size:14px}
+body.present .sel{margin:2px 0;font-size:14px}
+body.present .tools{margin-top:4px;gap:5px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .ro{padding:6px 12px}
+body.present .ro b{font-size:19px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Whole-blood tacrolimus 21 วัน</h2>
+      <div id="chart"></div>
+      <div id="live"></div>
+      <p class="hint no-present">เส้นทึบคือระดับยาทุกชั่วโมง จุดคือ trough ก่อนมื้อเช้า แถบเขียวคือเป้า trough ยาที่ยับยั้งออกฤทธิ์ภายในวันเดียว ส่วนยาที่เหนี่ยวนำใช้เวลาหลายวันทั้งตอนเริ่มและตอนหยุด</p>
+    </div>
+    <div class="card">
+      <h2>Dose, genotype และยาที่ให้ร่วม</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="sel"><label for="sGen">CYP3A5</label><select id="sGen">
+        <option value="33">*3/*3 non-expresser</option><option value="13">*1/*3 expresser</option><option value="11">*1/*1 expresser</option></select></div>
+      <div class="sel"><label for="sTar">เป้า trough</label><select id="sTar">
+        <option value="e">เดือน 0–3: 8–10 ng/mL</option><option value="m">เดือน 3–12: 6–8 ng/mL</option><option value="l">หลัง 12 เดือน: 5–7 ng/mL</option></select></div>
+      <div class="sel"><label for="sDrug">ยาที่ให้ร่วม</label><select id="sDrug"></select></div>
+      <div class="ctls" id="ctls2"></div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roBase"><b>-</b><span>Trough ก่อนให้ยาร่วม</span></div>
+        <div class="ro" id="roMax"><b>-</b><span>Trough สูงสุด</span></div>
+        <div class="ro" id="roMin"><b>-</b><span>Trough ต่ำสุด</span></div>
+        <div class="ro" id="roOut"><b>-</b><span>วันที่อยู่นอกเป้า</span></div>
+        <div class="ro" id="roHalf"><b>-</b><span>t½ ตอนนี้ (h)</span></div>
+        <div class="ro" id="roDose"><b>-</b><span>Dose ที่ควรเป็น (mg q12h)</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/live.js"></script>
+<script>
+(function(){
+"use strict";
+/* f = multiplier on apparent clearance at full effect, on/off = time constant in days, adj = pre-emptive dose factor */
+var DR = {
+  none:{n:"ไม่มี", f:1, on:1, off:1, adj:1},
+  flu:{n:"Fluconazole 200–400 mg/d", f:0.5, on:0.7, off:1.5, adj:0.5, cls:"inh"},
+  vori:{n:"Voriconazole", f:0.33, on:1, off:2, adj:0.33, cls:"inh"},
+  posa:{n:"Posaconazole", f:0.3, on:1.5, off:3, adj:0.33, cls:"inh"},
+  dilt:{n:"Diltiazem", f:0.7, on:1, off:1.5, adj:0.75, cls:"inh"},
+  clar:{n:"Clarithromycin", f:0.4, on:0.8, off:2, adj:0.5, cls:"inh"},
+  pax:{n:"Nirmatrelvir/ritonavir 5 วัน", f:0.07, on:0.3, off:3, adj:0, cls:"inh"},
+  lete:{n:"Letermovir", f:0.6, on:1.5, off:2, adj:1, cls:"inh"},
+  rif:{n:"Rifampicin", f:3.5, on:3, off:5, adj:3, cls:"ind"},
+  phe:{n:"Phenytoin", f:2.0, on:4, off:6, adj:2, cls:"ind"},
+  carb:{n:"Carbamazepine", f:1.8, on:4, off:6, adj:1.8, cls:"ind"}
+};
+var TARGET = {e:[8,10], m:[6,8], l:[5,7]};
+var S = {
+  base:{name:"Non-expresser มาตรฐาน", p:{w:60, dose:3.5, gen:"33", tar:"e", drug:"none", start:7, dur:0, adj:false, diar:false},
+    rows:[["Recipient","60 kg หลัง KT 2 สัปดาห์ CYP3A5 *3/*3"],["Dose","Tacrolimus 3.5 mg q12h (ราว 0.12 mg/kg/d)"],["Trough","ราว 9 ng/mL steady state ภายใน 3 วัน"],["หลักการ","ระดับยาขึ้นกับ clearance ผ่าน CYP3A4/5 ในลำไส้และตับ"]],
+    take:["Steady state ใช้เวลาราว 3–5 half-life (2–3 วัน)","ปรับ dose ตาม trough แบบสัดส่วนตรงเพราะ PK เป็นเชิงเส้น","เป้า trough ลดลงตามเวลาหลังปลูกถ่าย"]},
+  expr:{name:"CYP3A5 expresser", p:{w:60, dose:3.5, gen:"11", tar:"e", drug:"none", start:7, dur:0, adj:false, diar:false},
+    rows:[["Recipient","CYP3A5 *1/*1 พบในคนเอเชียราว 10–15%"],["Dose","เท่าเดิม 3.5 mg q12h"],["Trough","ต่ำกว่าเป้ามาก"],["ผล","ต้องใช้ dose ราว 1.5–2 เท่า"]],
+    take:["CYP3A5 expresser มี clearance สูง ต้องใช้ tacrolimus มากกว่า","Trough ต่ำช่วงแรกเพิ่มความเสี่ยง rejection และ de novo DSA","Genotype ช่วยเลือก dose เริ่มต้น แต่ยังต้องวัด trough"]},
+  flu:{name:"Fluconazole", p:{w:60, dose:3.5, gen:"33", tar:"e", drug:"flu", start:7, dur:14, adj:false, diar:false},
+    rows:[["เหตุ","Esophageal candidiasis วันที่ 7"],["ยาร่วม","Fluconazole 14 วัน ไม่ได้ลด tacrolimus"],["Trough","ขึ้นเกือบเท่าตัวภายใน 2–3 วัน"],["อาการ","Cr ขึ้น มือสั่น K สูง"]],
+    take:["Azole ยับยั้ง CYP3A ทำให้ tacrolimus สูงภายในไม่กี่วัน","ลด dose ล่วงหน้าแล้วเจาะ trough ใน 2–3 วัน","เมื่อหยุด azole ต้องเพิ่ม dose กลับ ไม่งั้นระดับตก"]},
+  vori:{name:"Voriconazole ไม่ลด dose", p:{w:60, dose:3.5, gen:"33", tar:"e", drug:"vori", start:7, dur:0, adj:false, diar:false},
+    rows:[["เหตุ","Invasive aspergillosis"],["ยาร่วม","Voriconazole โดยไม่ปรับ tacrolimus"],["Trough","สูงเกิน 20 ng/mL"],["ผล","CNI toxicity, AKI, neurotoxicity"]],
+    take:["Voriconazole และ posaconazole ลด clearance tacrolimus ราวสองในสาม","ลด tacrolimus เหลือราวหนึ่งในสามตั้งแต่วันเริ่มยา","เจาะ trough บ่อยจน stable"]},
+  voriAdj:{name:"Voriconazole + ลด 1/3", p:{w:60, dose:3.5, gen:"33", tar:"e", drug:"vori", start:7, dur:0, adj:true, diar:false},
+    rows:[["ยาร่วม","Voriconazole"],["การปรับ","ลด tacrolimus เหลือ 1/3 ตั้งแต่วันแรก"],["Trough","ยังอยู่ในหรือใกล้เป้า"],["ติดตาม","Trough ทุก 2–3 วันใน 2 สัปดาห์แรก"]],
+    take:["ลด dose ล่วงหน้าป้องกัน toxicity ได้ดีกว่ารอให้ระดับสูงก่อน","ยังต้องเจาะ trough เพราะแต่ละคนตอบสนองต่างกัน","วางแผนเพิ่ม dose กลับเมื่อหยุด azole"]},
+  rif:{name:"Rifampicin (TB)", p:{w:60, dose:3.5, gen:"33", tar:"e", drug:"rif", start:5, dur:0, adj:false, diar:false},
+    rows:[["เหตุ","Pulmonary TB หลัง KT 1 เดือน"],["ยาร่วม","Rifampicin โดยไม่ปรับ tacrolimus"],["Trough","ลดลงต่อเนื่องหลายวันจนต่ำมาก"],["ผล","เสี่ยง acute rejection"]],
+    take:["Rifampicin เหนี่ยวนำ CYP3A และ P-gp ทำให้ต้องใช้ tacrolimus 3–5 เท่า","ผล induction ค่อยๆ เกิดและค่อยๆ หายเป็นสัปดาห์","พิจารณา rifabutin ที่ induce น้อยกว่าแทน"]},
+  pax:{name:"Paxlovid: hold tacrolimus", p:{w:60, dose:3.5, gen:"33", tar:"m", drug:"pax", start:7, dur:5, adj:true, diar:false},
+    rows:[["เหตุ","COVID-19 ภายใน 5 วันจากเริ่มอาการ"],["ยาร่วม","Nirmatrelvir/ritonavir 5 วัน"],["การปรับ","หยุด tacrolimus ระหว่างให้ยาและเริ่มใหม่หลังหยุดยาราว 2–3 วันตาม trough"],["ทางเลือก","Remdesivir หรือ molnupiravir ถ้าคุมระดับยาไม่ได้"]],
+    take:["Ritonavir ยับยั้ง CYP3A แรงมากและนานหลังหยุดยา","ถ้าให้ tacrolimus ต่อ ระดับยาจะสูงอันตราย","เริ่มยากลับตาม trough ไม่ใช่ตามวันอย่างเดียว"]},
+  dilt:{name:"Diltiazem (CNI-sparing)", p:{w:60, dose:3.5, gen:"11", tar:"e", drug:"dilt", start:5, dur:0, adj:false, diar:false},
+    rows:[["Recipient","CYP3A5 expresser ต้องใช้ tacrolimus สูง"],["ยาร่วม","Diltiazem 90–180 mg/d"],["Trough","เพิ่มขึ้นราว 40%"],["ข้อดี","ลดค่ายาและคุม BP ได้"]],
+    take:["Diltiazem เพิ่มระดับ tacrolimus ปานกลาง บางศูนย์ใช้ลดค่ายา","Amlodipine แทบไม่มีผล ส่วน verapamil และ diltiazem มีผล","ทุกครั้งที่เริ่มหรือหยุดยาที่มีผลต่อ CYP3A ต้องเจาะ trough"]}
+};
+var ORDER = ["base","expr","flu","vori","voriAdj","rif","pax","dilt"];
+var sDrug = document.getElementById("sDrug");
+Object.keys(DR).forEach(function(k){ var o = document.createElement("option"); o.value = k; o.textContent = DR[k].n; sDrug.appendChild(o); });
+var sGen = document.getElementById("sGen"), sTar = document.getElementById("sTar");
+[sGen, sTar, sDrug].forEach(function(s){ s.addEventListener("change", function(){ update(); }); });
+var C = {};
+function sl(box, k, o){ o.id = "s" + k; o.onInput = function(){ update(true); }; C[k] = Sim.slider(o); document.getElementById(box).appendChild(C[k].el); }
+sl("ctls", "w", {label:"น้ำหนัก", min:35, max:110, step:1, value:60, unit:"kg"});
+sl("ctls", "dose", {label:"Tacrolimus", min:0.5, max:12, step:0.5, value:3.5, unit:"mg q12h"});
+sl("ctls2", "start", {label:"เริ่มยาร่วมวันที่", min:2, max:14, step:1, value:7, unit:""});
+sl("ctls2", "dur", {label:"ให้ยาร่วมนาน", min:0, max:14, step:1, value:0, unit:"วัน", fmt:function(v){ return v === 0 ? "ต่อเนื่อง" : v; }});
+var F = {adj:false, diar:false}, TG = {};
+[["adj","ปรับ dose ล่วงหน้าตามคำแนะนำ"],["diar","Diarrhea"]].forEach(function(x){ TG[x[0]] = Sim.toggle(x[1], function(on){ F[x[0]] = on; update(); }, false); document.getElementById("tools").appendChild(TG[x[0]]); });
+function P(){ return {w:C.w.get(), dose:C.dose.get(), start:C.start.get(), dur:C.dur.get(), gen:sGen.value, tar:sTar.value, drug:sDrug.value, adj:F.adj, diar:F.diar}; }
+
+/* ---------- PK model ---------- */
+var DAYS = 21, DT = 0.25;
+function simulate(p){
+  var d = DR[p.drug], gen = {"33":1, "13":1.5, "11":1.9}[p.gen];
+  var CL0 = 0.4 * p.w * gen, V = 8 * p.w, ka = 4.5, Fb = p.diar ? 1.4 : 1;
+  var tStart = p.start * 24, tStop = p.dur > 0 ? (p.start + p.dur) * 24 : Infinity;
+  var g = 0, a = 0, fac = 1, conc = [], trough = [], cyp = [], halfNow = 0;
+  var holdUntil = -1;
+  for(var t = 0; t <= DAYS * 24 + 1e-6; t += DT){
+    // enzyme factor approaches target
+    var active = p.drug !== "none" && t >= tStart && t < tStop;
+    var target = active ? d.f : 1;
+    var tau = (active ? d.on : d.off) * 24;
+    fac += (target - fac) * (1 - Math.exp(-DT / tau));
+    // dosing every 12 h at 08:00 and 20:00 (t=0 is 08:00 day 0)
+    var dueDose = Math.abs((t % 12)) < 1e-6;
+    if(dueDose){
+      var dz = p.dose;
+      if(p.adj && p.drug !== "none"){
+        if(d.adj === 0){ if(t >= tStart && t < tStop + 48) dz = 0; }
+        else if(t >= tStart && t < tStop) dz = p.dose * d.adj;
+      }
+      if(Math.abs(t % 24) < 1e-6){ trough.push([t / 24, a / V * 1000]); }
+      g += dz * Fb;
+    }
+    var ab = ka * g * DT; g -= ab;
+    var CL = CL0 * fac;
+    a += ab - CL / V * a * DT;
+    if(Math.abs((t * 4) % 4) < 1e-6) conc.push([t / 24, a / V * 1000]);
+    if(Math.abs(t % 6) < 1e-6) cyp.push([t / 24, fac]);
+  }
+  return {conc:conc, trough:trough, cyp:cyp, CL0:CL0, V:V, d:d};
+}
+
+/* ---------- chart ---------- */
+var A = Plot.colors;
+var chart = Plot.chart(document.getElementById("chart"), {height:Sim.present ? 360 : 300, aria:"Tacrolimus whole blood concentration and trough levels over twenty-one days",
+  x:{min:0, max:DAYS, step:3, label:"Day"}, y:{min:0, max:25, step:5, label:"Tacrolimus (ng/mL)"},
+  series:[{id:"c", name:"Concentration", color:A.accent, data:[], width:1.6, hover:false},
+          {id:"tr", name:"Trough", color:A.ink, data:[], line:false, points:true}],
+  bands:[{y0:8, y1:10, color:"rgba(31,122,114,.13)", label:"Target"}],
+  hlines:[{y:15, label:"Toxicity risk", color:A.red, dash:[3,3]}], legend:true});
+var live = Live.player(chart, {mount:"live"}), LAST = null;
+
+function update(deb){
+  var p = P(), R = simulate(p), tg = TARGET[p.tar], d = R.d;
+  var tr = R.trough.filter(function(x){ return x[0] >= 1; });
+  var pre = tr.filter(function(x){ return x[0] < p.start; }), base = pre.length ? pre[pre.length - 1][1] : tr[0][1];
+  var after = p.drug === "none" ? tr.filter(function(x){ return x[0] >= 3; }) : tr.filter(function(x){ return x[0] >= p.start; });
+  var mx = Math.max.apply(null, after.map(function(x){ return x[1]; })), mn = Math.min.apply(null, after.map(function(x){ return x[1]; }));
+  var out = tr.filter(function(x){ return x[0] >= 3 && (x[1] < tg[0] - 0.5 || x[1] > tg[1] + 0.5); }).length;
+  var endF = R.cyp[R.cyp.length - 1][1];
+  var effDose = p.dose * (p.adj && p.drug !== "none" && d.adj > 0 && (p.dur === 0) ? d.adj : 1);
+  var last = tr[tr.length - 1][1];
+  var rec = last > 0.2 ? effDose * ((tg[0] + tg[1]) / 2) / last : null;
+  var ymax = Math.min(60, Math.max(20, Math.ceil(Math.max.apply(null, R.conc.map(function(x){ return x[1]; })) / 5) * 5 + 5));
+  chart.update({y:{min:0, max:ymax, step:ymax > 30 ? 10 : 5, label:"Tacrolimus (ng/mL)"},
+    bands:[{y0:tg[0], y1:tg[1], color:"rgba(31,122,114,.13)", label:"Target " + tg[0] + "-" + tg[1]}]});
+  chart.setSeries("c", R.conc); chart.setSeries("tr", tr);
+  var ev = [];
+  if(p.drug !== "none"){
+    ev.push({t:p.start, kind:"rx", text:"เริ่ม " + d.n + (p.adj ? (d.adj === 0 ? " และหยุด tacrolimus ชั่วคราว" : " และปรับ tacrolimus x" + d.adj) : " โดยไม่ปรับ tacrolimus")});
+    if(p.dur > 0) ev.push({t:p.start + p.dur, kind:"rx", text:"หยุด " + d.n + (d.cls === "ind" ? " ผล induction ยังอยู่อีกหลายวัน" : "")});
+  }
+  var hi = tr.filter(function(x){ return x[1] > 15; })[0]; if(hi) ev.push({t:hi[0], kind:"warn", text:"Trough " + hi[1].toFixed(1) + " ng/mL เสี่ยง nephrotoxicity, neurotoxicity, hyperK"});
+  var lo = tr.filter(function(x){ return x[0] >= 3 && x[1] < Math.max(4, tg[0] - 3); })[0]; if(lo) ev.push({t:lo[0], kind:"warn", text:"Trough " + lo[1].toFixed(1) + " ng/mL ต่ำกว่าเป้ามาก เสี่ยง rejection"});
+  var ok = tr.filter(function(x){ return x[0] >= 2; })[0]; if(ok && !hi && !lo) ev.push({t:ok[0], kind:"ok", text:"เข้าสู่ steady state trough " + ok[1].toFixed(1) + " ng/mL"});
+  var msg, bad = false;
+  if(hi && p.drug !== "none" && !p.adj){ bad = true; msg = "Trough สูงจาก " + d.n + " ลด tacrolimus ตามสัดส่วน (เช่น x" + (d.adj || 0.33) + ") เจาะ trough ซ้ำใน 2–3 วัน ตรวจ Cr และ K ถ้ามี AKI ให้ hold 1–2 dose"; }
+  else if(lo && d.cls === "ind"){ bad = true; msg = "Induction ทำให้ระดับยาตก เพิ่ม tacrolimus 2–5 เท่าโดยดู trough ทุก 2–3 วัน หรือเปลี่ยนเป็นยาที่ induce น้อยกว่า (rifabutin, levetiracetam) และเมื่อหยุดยาต้องลด dose กลับช้าๆ"; }
+  else if(p.drug === "pax"){ msg = "Hold tacrolimus ระหว่าง nirmatrelvir/ritonavir แล้วเริ่มใหม่หลังหยุดยาเมื่อ trough ลดเข้าใกล้เป้า (มักราววันที่ 3 หลังหยุด) เจาะ trough ทุก 1–2 วัน"; }
+  else if(last < tg[0] - 0.5 || last > tg[1] + 0.5){ bad = last > 15 || last < tg[0] - 3; msg = "Trough ล่าสุด " + last.toFixed(1) + " ng/mL ปรับเป็น " + (rec ? (Math.round(rec * 2) / 2).toFixed(1) : "-") + " mg q12h (สัดส่วนตรง) แล้วเจาะ trough ซ้ำใน 3 วัน"; }
+  else msg = "Trough อยู่ในเป้า เจาะซ้ำตามรอบ และทุกครั้งที่เริ่มหรือหยุดยาที่มีผลต่อ CYP3A, เกิด diarrhea หรือ hepatic dysfunction";
+  LAST = {p:p, R:R, base:base, mx:mx, mn:mn, out:out, rec:rec, tg:tg, endF:endF, act:"<b>Next step:</b> " + msg, bad:bad};
+  live.load({tMax:DAYS, unit:"วัน", ms:7000, debounce:deb === true, num:function(x){ return x.toFixed(1); }, events:ev.sort(function(a, b){ return a.t - b.t; }), onFrame:onFrame,
+    cursorLabel:function(t){ return "Day " + t.toFixed(1); }});
+}
+function onFrame(t, done){
+  var M = LAST, tg = M.tg;
+  var cur = M.R.cyp.filter(function(x){ return x[0] <= t; }); var f = cur.length ? cur[cur.length - 1][1] : 1;
+  var half = 0.693 * M.R.V / (M.R.CL0 * f);
+  Sim.ro("roBase", M.base.toFixed(1), M.base < tg[0] - 0.5 || M.base > tg[1] + 0.5 ? "flag" : "ok");
+  Sim.ro("roMax", done ? M.mx.toFixed(1) : "…", done ? (M.mx > 15 ? "flag" : null) : null);
+  Sim.ro("roMin", done ? M.mn.toFixed(1) : "…", done ? (M.mn < tg[0] - 2 ? "flag" : null) : null);
+  Sim.ro("roOut", done ? M.out : "…", done ? (M.out > 3 ? "flag" : M.out === 0 ? "ok" : null) : null);
+  Sim.ro("roHalf", half.toFixed(0), half > 30 || half < 6 ? "flag" : null);
+  Sim.ro("roDose", done && M.rec ? (M.rec > 20 ? "> 20" : (Math.round(M.rec * 2) / 2).toFixed(1)) : "…", done && M.rec > 20 ? "flag" : null);
+  var a = document.getElementById("act");
+  if(done){ a.innerHTML = M.act; a.className = "act" + (M.bad ? " bad" : ""); }
+  else { a.innerHTML = "<b>กำลังจำลอง</b> วันที่ " + t.toFixed(1) + " CYP3A activity x" + f.toFixed(2) + " t½ ราว " + half.toFixed(0) + " ชม."; a.className = "act"; }
+}
+Sim.mount({code:"KT-04", title:"Tacrolimus Pharmacokinetics and Drug Interactions",
+  lead:"ปรับ dose, CYP3A5 genotype และยาที่ให้ร่วม ดู trough ของ tacrolimus 21 วันแบบ real time ว่ายาที่ยับยั้งหรือเหนี่ยวนำ CYP3A ดันระดับยาออกนอกเป้าเร็วแค่ไหน และควรปรับ dose อย่างไร",
+  scenarios:S, order:ORDER, captureMs:1200,
+  onChange:function(k, s){ var q = s.p; C.w.set(q.w); C.dose.set(q.dose); C.start.set(q.start); C.dur.set(q.dur); sGen.value = q.gen; sTar.value = q.tar; sDrug.value = q.drug;
+    F.adj = q.adj; TG.adj.setState(q.adj); F.diar = q.diar; TG.diar.setState(q.diar); update(); },
+  refs:["Staatz CE, Tett SE. Clinical pharmacokinetics and pharmacodynamics of tacrolimus in solid organ transplantation. Clin Pharmacokinet 2004, 43(10): 623-653",
+        "Birdwell KA, Decker B, Barbarino JM, et al. Clinical Pharmacogenetics Implementation Consortium (CPIC) guidelines for CYP3A5 genotype and tacrolimus dosing. Clin Pharmacol Ther 2015, 98(1): 19-24",
+        "Brunet M, van Gelder T, Åsberg A, et al. Therapeutic drug monitoring of tacrolimus-personalized therapy: second consensus report. Ther Drug Monit 2019, 41(3): 261-307",
+        "Christians U, Jacobsen W, Benet LZ, Lampen A. Mechanisms of clinically relevant drug interactions associated with tacrolimus. Clin Pharmacokinet 2002, 41(11): 813-851",
+        "Salerno DM, Jennings DL, Lange NW, et al. Early clinical experience with nirmatrelvir/ritonavir for the treatment of COVID-19 in solid organ transplant recipients. Am J Transplant 2022, 22(8): 2083-2088",
+        "Kidney Disease: Improving Global Outcomes (KDIGO) Transplant Work Group. KDIGO clinical practice guideline for the care of kidney transplant recipients. Am J Transplant 2009, 9(Suppl 3): S1-S155"],
+  note:"Model เพื่อการสอน: one-compartment oral ka 4.5/h, CL/F 0.4 L/h/kg (CYP3A5 *1/*3 x1.5, *1/*1 x1.9), V/F 8 L/kg (t½ ราว 14 ชม.), diarrhea เพิ่ม bioavailability 40% ยาร่วมคูณ clearance ตามค่า f เข้าใกล้เป้าแบบ exponential (ยับยั้ง τ ราว 1 วัน, เหนี่ยวนำ τ 3–4 วัน, หมดฤทธิ์ 2–6 วัน) ค่า f เป็นค่าประมาณ ขนาดที่ปรับจริงให้ยึด trough และเภสัชกร"
+});
+})();
+</script>
+</body>
+</html>

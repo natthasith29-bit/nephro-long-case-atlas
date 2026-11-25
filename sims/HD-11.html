@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[HD-11] Dialyzer Reactions and HD Emergencies</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(120px,160px) 1fr 104px}
+.sym{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.dx{display:grid;gap:8px;margin-top:4px}
+.dxr{display:grid;grid-template-columns:150px 1fr 44px;gap:10px;align-items:center;font-size:13.5px}
+.dxr .bar{height:10px;border-radius:6px;background:var(--line);overflow:hidden}
+.dxr .bar i{display:block;height:100%;background:var(--accent);border-radius:6px}
+.dxr.top .bar i{background:var(--red)}
+.dxr span:last-child{font-family:var(--mono);text-align:right;color:var(--muted)}
+.plan{margin-top:14px;padding:14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.plan h3{margin:0 0 6px;font-size:14.5px}
+.plan ol{margin:0;padding-left:20px;display:grid;gap:4px}
+.plan.bad{background:var(--pink)}
+.ret{display:inline-block;font:500 12px var(--mono);border-radius:999px;padding:2px 10px;margin-bottom:8px}
+.ret.no{background:var(--red);color:#fff}.ret.yes{background:var(--teal);color:#fff}
+@media (max-width:520px){.dxr{grid-template-columns:110px 1fr 40px}}
+body.present .bench{grid-template-columns:1.2fr 1fr}
+body.present .find .card,body.present .find{display:none}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>อาการและเวลาที่เริ่ม</h2>
+      <div class="svgwrap"><svg id="circ" aria-label="HD circuit highlighting the likely source"></svg></div>
+      <div class="ctls" id="ctls"></div>
+      <div class="sym" id="sym" role="group" aria-label="อาการ"></div>
+    </div>
+    <div class="card">
+      <h2>Differential diagnosis</h2>
+      <div class="dx" id="dx"></div>
+      <div class="plan" id="plan"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/circuit.js"></script>
+<script>
+(function(){
+"use strict";
+var SYM=[["itch","คัน ลมพิษ"],["dysp","หายใจลำบาก wheeze"],["hypo","BP ต่ำ"],["angio","ปากบวม angioedema"],["burn","แสบร้อนที่ access"],["back","ปวดหลัง เจ็บหน้าอกเล็กน้อย"],["red","เลือดใน venous line ใส สีแดงสด / plasma สีไวน์"],["hyperk","K สูง หลังเริ่มฟอก"],["foam","ฟองใน venous line, air alarm"],["cough","ไอ เจ็บหน้าอก ซึมลงฉับพลัน"],["fever","ไข้ หนาวสั่น"],["multi","เป็นหลายรายพร้อมกัน"],["cramp","ตะคริว"]];
+var DX={
+  A:{name:"Type A (anaphylactic)",w:{itch:3,dysp:3,hypo:2,angio:3,burn:2,back:0.5},win:[0,30],ret:false,plan:["หยุดฟอกทันที clamp สาย ห้ามคืนเลือดในวงจร","Epinephrine 0.3–0.5 mg IM, O2, IV fluid, antihistamine, steroid","หาสาเหตุ: ethylene oxide, AN69 ร่วมกับ ACEi (bradykinin), heparin ปนเปื้อน, iron IV","ครั้งต่อไป: rinse dialyzer ให้ทั่ว, เปลี่ยนเป็น dialyzer ที่ sterilize ด้วย steam หรือ gamma, งด AN69 ถ้าใช้ ACEi"]},
+  B:{name:"Type B (non-specific)",w:{back:3,dysp:0.5,hypo:0.5},win:[15,60],ret:true,plan:["ฟอกต่อได้ อาการมักดีขึ้นใน 1 ชั่วโมง","O2 และรักษาตามอาการ แยก ACS, hemolysis, pericarditis","สัมพันธ์กับ complement activation ของ membrane ใหม่","ครั้งต่อไป: ใช้ membrane ชนิด synthetic ที่ biocompatible กว่า"]},
+  H:{name:"Hemolysis",w:{red:4,back:2,hyperk:3,dysp:1,hypo:0.5,multi:1},win:[0,240],ret:false,plan:["หยุด blood pump clamp สาย ห้ามคืนเลือด (K สูงจาก hemolysis)","ตรวจ K, Hb, LDH, haptoglobin, ECG รักษา hyperkalemia","ตรวจ dialysate conductivity (hypotonic) และ temperature (overheated), สายหักพับหรือ pump ผิดปกติ, น้ำ (chloramine, copper, nitrate)","ถ้าหลายรายพร้อมกันให้นึกถึงระบบน้ำ หยุดใช้จนกว่าจะตรวจ"]},
+  E:{name:"Air embolism",w:{foam:4,cough:3,dysp:2,hypo:1},win:[0,240],ret:false,plan:["Clamp venous line หยุด pump ทันที","จัดท่า left lateral decubitus ศีรษะต่ำ (Trendelenburg) ถ้านั่งอยู่ให้นอนตะแคงซ้าย","O2 100%, พิจารณา hyperbaric oxygen ถ้ามีอาการทางระบบประสาท","หาจุดรั่ว: ข้อต่อฝั่ง arterial, saline line, catheter เปิดค้าง"]},
+  P:{name:"Pyrogenic reaction",w:{fever:4,multi:2,hypo:0.5},win:[20,90],ret:true,plan:["หยุดฟอก เจาะ blood culture แยก bacteremia (โดยเฉพาะ catheter)","ให้ antipyretic ถ้าสงสัย catheter-related bacteremia ให้ empirical antibiotic","ส่ง culture และ endotoxin ของ dialysate และน้ำ","หลายรายพร้อมกัน: ตรวจระบบน้ำ ดู HD-07"]},
+  V:{name:"IDH / volume (ไม่ใช่ reaction)",w:{cramp:3,hypo:2},win:[120,300],ret:true,plan:["ลด UF หรือหยุด UF ชั่วคราว ยกขา ให้ NSS 100–200 ml","ประเมิน dry weight และ UFR (ดู HD-08)","อาการช่วงท้ายการฟอกมักเป็น volume ไม่ใช่ dialyzer reaction"]}
+};
+function P(t,list){ return {t:t,s:list}; }
+var S = {
+  typeA:{name:"Type A", p:P(5,["itch","dysp","hypo","angio","burn"]),
+    rows:[["เหตุการณ์","dialyzer ใหม่ 5 นาทีแรก คันทั้งตัว หายใจไม่อิ่ม BP 80/50 ปากบวม ใช้ ACEi"],["Diagnosis","Type A anaphylactic reaction"],["Key","เกิดในนาทีแรก รุนแรง ห้ามคืนเลือด"]],
+    take:["Type A: ภายใน 5–30 นาทีแรก IgE หรือ bradykinin mediated","AN69 membrane + ACEi ทำให้ bradykinin สูง","ห้ามคืนเลือดในวงจรเพราะมี allergen"],
+    quiz:[{q:"ผู้ป่วยเริ่มฟอกด้วย dialyzer ใหม่ 3 นาที คันทั้งตัว wheeze BP 78/40 ข้อใดถูกต้องที่สุด",opts:["คืนเลือดในวงจรแล้วหยุดฟอก","หยุดฟอก clamp สาย ไม่คืนเลือด ให้ epinephrine IM","ลด Qb แล้วฟอกต่อ","ให้ antihistamine แล้วฟอกต่อ"],ans:1,why:"Type A anaphylaxis ต้องหยุดทันทีและไม่คืนเลือดที่สัมผัส allergen ให้ epinephrine"}]},
+  typeB:{name:"Type B", p:P(30,["back"]),
+    rows:[["เหตุการณ์","30 นาทีหลังเริ่ม ปวดหลังและแน่นหน้าอกเล็กน้อย BP ปกติ"],["Diagnosis","Type B reaction"],["Key","ไม่รุนแรง ฟอกต่อได้"]],
+    take:["Type B: 20–40 นาที ไม่รุนแรง สัมพันธ์กับ complement activation","ฟอกต่อได้ รักษาตามอาการ","ต้องแยก ACS และ hemolysis ก่อนสรุป"],
+    quiz:[{q:"ผู้ป่วยปวดหลังและแน่นหน้าอกเล็กน้อยหลังเริ่มฟอก 30 นาที BP ปกติ ECG ไม่เปลี่ยน เลือดในสายสีปกติ ข้อใดเหมาะที่สุด",opts:["หยุดฟอกทันทีไม่คืนเลือด","ฟอกต่อ ให้ O2 และติดตามอาการ","ให้ epinephrine","เปลี่ยนเป็น catheter"],ans:1,why:"เข้าได้กับ Type B reaction ซึ่งไม่รุนแรง ฟอกต่อได้"}]},
+  hemolysis:{name:"Hemolysis", p:P(45,["red","back","hyperk","dysp"]),
+    rows:[["เหตุการณ์","45 นาที ปวดหลัง แน่นหน้าอก เลือดใน venous line ใสสีแดงสด plasma สีไวน์ K 6.8"],["Diagnosis","Acute hemolysis"],["สาเหตุ","dialysate hypotonic หรือร้อนเกิน, chloramine/copper, สายหักพับหรือเข็มเล็กที่ Qb สูง"]],
+    take:["เลือดใส สีแดงสด (cherry-red) และ plasma สีไวน์ = hemolysis","ห้ามคืนเลือดเพราะมี K สูง","ตรวจ conductivity และ temperature ของ dialysate ทันที"],
+    quiz:[{q:"ระหว่างฟอกผู้ป่วยแน่นหน้าอก ปวดหลัง เลือดใน venous line ใสสีแดงสด ข้อใดเหมาะที่สุดเป็นอันดับแรก",opts:["คืนเลือดแล้วหยุดฟอก","หยุด pump clamp สาย ไม่คืนเลือด ตรวจ K และ dialysate","เพิ่ม Qb","ให้ epinephrine"],ans:1,why:"hemolysis ทำให้เลือดในวงจรมี K สูง ห้ามคืนเลือด"}]},
+  air:{name:"Air embolism", p:P(70,["foam","cough","dysp","hypo"]),
+    rows:[["เหตุการณ์","ข้อต่อ saline หลวม air alarm มีฟองใน venous line ผู้ป่วยไอ เจ็บหน้าอก ซึมลง"],["Diagnosis","Air embolism"],["Key","ท่า left lateral decubitus ศีรษะต่ำ O2 100%"]],
+    take:["Air เข้าได้ง่ายที่ฝั่ง arterial ก่อน pump (ความดันติดลบ) และ catheter ที่เปิดค้าง","ท่าศีรษะต่ำตะแคงซ้ายกักลมไว้ใน right ventricle","ห้าม override air detector"],
+    quiz:[{q:"ผู้ป่วยไอและเจ็บหน้าอกฉับพลัน มีฟองใน venous line ข้อใดถูกต้อง",opts:["นั่งตัวตรง","Clamp venous line หยุด pump นอนตะแคงซ้ายศีรษะต่ำ ให้ O2 100%","คืนเลือดที่เหลือให้หมด","ให้ heparin"],ans:1,why:"เป็นการจัดการมาตรฐานของ air embolism"}]},
+  pyrogen:{name:"Pyrogenic reaction", p:P(40,["fever","multi"]),
+    rows:[["เหตุการณ์","ผู้ป่วย 3 รายไข้หนาวสั่นที่ 40 นาที"],["Diagnosis","Pyrogenic reaction จาก endotoxin"],["ต้องแยก","catheter-related bacteremia"]],
+    take:["ไข้หลายรายพร้อมกันช่วงต้นการฟอกคิดถึงระบบน้ำ","Blood culture ทุกราย","ตรวจ culture และ endotoxin ของน้ำและ dialysate"],
+    quiz:[{q:"ผู้ป่วยหลายรายมีไข้หนาวสั่นภายในชั่วโมงแรก ข้อใดเหมาะที่สุด",opts:["ให้ paracetamol แล้วฟอกต่อ","หยุดฟอก blood culture และตรวจคุณภาพน้ำและ dialysate","เปลี่ยน dialyzer เป็น AN69","เพิ่ม heparin"],ans:1,why:"pyrogenic reaction ต้องหยุดและหาแหล่ง endotoxin พร้อมแยก bacteremia"}]},
+  volume:{name:"ตะคริวท้ายฟอก", p:P(210,["cramp","hypo"]),
+    rows:[["เหตุการณ์","ชั่วโมงที่ 3.5 ตะคริวขา BP 85/50"],["Diagnosis","IDH และตะคริวจาก UF ไม่ใช่ dialyzer reaction"],["Key","เวลาเกิดช่วยแยก"]],
+    take:["อาการช่วงท้ายการฟอกมักเป็น volume","ลด UF, NSS bolus, ยกขา","ประเมิน dry weight และ UFR"],
+    quiz:[{q:"ตะคริวและ BP ต่ำชั่วโมงที่ 3.5 โดยไม่มีอาการอื่น ข้อใดเหมาะที่สุด",opts:["หยุดฟอกไม่คืนเลือด","ลดหรือหยุด UF ชั่วคราว ให้ NSS ยกขา แล้วทบทวน dry weight","ให้ epinephrine","เปลี่ยน dialyzer"],ans:1,why:"เป็น IDH ที่สัมพันธ์กับ UF จัดการด้วย volume"}]}
+};
+var ORDER=["typeA","typeB","hemolysis","air","pyrogen","volume"];
+
+var on={}, box=document.getElementById("ctls"), symBox=document.getElementById("sym"), btn={};
+var tS=Sim.slider({id:"sT",label:"เริ่มมีอาการที่นาที",min:0,max:240,step:5,value:5,unit:"min",onInput:update}); box.appendChild(tS.el);
+SYM.forEach(function(x){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:x[1]}); b.addEventListener("click",function(){ on[x[0]]=!on[x[0]]; b.setAttribute("aria-pressed",on[x[0]]?"true":"false"); update(); }); btn[x[0]]=b; symBox.appendChild(b); });
+
+var c=Circuit.preset.hd(document.getElementById("circ"),{});
+
+function score(t){
+  var out=[];
+  Object.keys(DX).forEach(function(k){
+    var d=DX[k], s=0, max=0;
+    for(var j in d.w){ max+=d.w[j]; if(on[j]) s+=d.w[j]; }
+    for(var q in on){ if(on[q] && !(q in d.w)) s-=0.8; }
+    var inWin = t>=d.win[0] && t<=d.win[1];
+    s = s/max*(inWin?1:0.45);
+    out.push([k,Math.max(0,s)]);
+  });
+  out.sort(function(a,b){ return b[1]-a[1]; });
+  return out;
+}
+function update(){
+  var t=tS.get(), sc=score(t), dx=document.getElementById("dx"); dx.innerHTML="";
+  sc.forEach(function(x,i){ var d=DX[x[0]]; dx.appendChild(Sim.h("div",{class:"dxr"+(i===0&&x[1]>0.25?" top":"")},[Sim.h("span",{text:d.name}),Sim.h("div",{class:"bar"},[Sim.h("i",{style:"width:"+Math.round(x[1]*100)+"%"})]),Sim.h("span",{text:Math.round(x[1]*100)+"%"})])); });
+  var top=sc[0], d=DX[top[0]], plan=document.getElementById("plan"); plan.innerHTML="";
+  c.clearHighlight(); c.alarm(null); c.set("DZ",{alarm:false}); c.set("AD",{alarm:false}); c.set("VC",{air:false,alarm:false});
+  ["ven","ret1","ret2","ret3"].forEach(function(k){ c.set(k,{fluid:"ven"}); });
+  if(top[1]<0.25){ plan.className="plan"; plan.appendChild(Sim.h("h3",{text:"เลือกอาการเพื่อดู differential"})); return; }
+  plan.className="plan"+(d.ret?"":" bad");
+  plan.appendChild(Sim.h("span",{class:"ret "+(d.ret?"yes":"no"),text:d.ret?"คืนเลือดได้ / ฟอกต่อได้ตามอาการ":"ห้ามคืนเลือด"}));
+  plan.appendChild(Sim.h("h3",{text:"Next step: "+d.name}));
+  var ol=Sim.h("ol"); d.plan.forEach(function(x){ ol.appendChild(Sim.h("li",{text:x})); }); plan.appendChild(ol);
+  if(top[0]==="A"||top[0]==="B"){ c.highlight("DZ"); c.set("DZ",{alarm:top[0]==="A"}); c.alarm(top[0]==="A"?{text:"Stop: anaphylaxis"}:{text:"Type B: dialysis may continue",level:"amber"}); }
+  if(top[0]==="H"){ ["ven","ret1","ret2","ret3"].forEach(function(k){ c.set(k,{fluid:{fill:"#ff6b6b",dot:"#ff2d2d"}}); }); c.highlight(["DS"]); c.alarm({text:"Hemolysis: check conductivity and temperature"}); }
+  if(top[0]==="E"){ c.set("VC",{air:true,alarm:true}); c.set("AD",{alarm:true}); c.highlight(["AD","VC"]); c.alarm({text:"Air detected: clamp venous line"}); }
+  if(top[0]==="P"){ c.highlight("DS"); c.alarm({text:"Pyrogenic: check water and dialysate",level:"amber"}); }
+  if(top[0]==="V"){ c.highlight("PT"); c.alarm({text:"Reduce UF",level:"amber"}); }
+}
+Sim.mount({code:"HD-11", title:"Dialyzer Reactions and HD Emergencies", lead:"เลือกเวลาที่เกิดอาการและอาการที่พบ แล้วดู differential diagnosis, คืนเลือดได้หรือไม่ และ next step",
+  scenarios:S, order:ORDER, captureMs:2000,
+  onChange:function(k,s){ tS.set(s.p.t); on={}; s.p.s.forEach(function(x){ on[x]=true; }); SYM.forEach(function(x){ btn[x[0]].setAttribute("aria-pressed",on[x[0]]?"true":"false"); }); update(); },
+  refs:["Saha M, Allon M. Diagnosis, treatment, and prevention of hemodialysis emergencies. Clin J Am Soc Nephrol 2017, 12(2): 357-369",
+        "Ebo DG, Bosmans JL, Couttenye MM, Stevens WJ. Haemodialysis-associated anaphylactic and anaphylactoid reactions. Allergy 2006, 61(2): 211-220",
+        "Tielemans C, Madhoun P, Lenaers M, et al. Anaphylactoid reactions during hemodialysis on AN69 membranes in patients receiving ACE inhibitors. Kidney Int 1990, 38(5): 982-984",
+        "Daugirdas JT, Blake PG, Ing TS. Handbook of Dialysis. 5th ed. Wolters Kluwer 2015 (chapter: Complications during hemodialysis)"],
+  note:"คะแนน differential เป็นการถ่วงน้ำหนักอาการและช่วงเวลาเพื่อการสอน ไม่ใช่ clinical decision tool"
+});
+})();
+</script>
+</body>
+</html>

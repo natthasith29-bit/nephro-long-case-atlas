@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[MX-08] Tropical Nephrology and Toxins</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.1fr 1fr}}
+.sel{display:grid;grid-template-columns:minmax(80px,120px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px;margin-bottom:8px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%;font:inherit;padding:6px 10px;border-radius:10px;border:1px solid var(--line-strong);background:#fff}
+table.card2{width:100%;border-collapse:collapse;margin-top:10px;font-size:13.5px}
+table.card2 th{text-align:left;font-weight:500;color:var(--muted);width:24%;padding:6px 8px 6px 0;vertical-align:top;border-top:1px solid var(--line)}
+table.card2 td{padding:6px 0;border-top:1px solid var(--line)}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.pq[hidden]{display:none}
+.gap{height:8px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:12px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .svgwrap svg{max-height:330px}
+body.present.pqmode .svgwrap svg{max-height:240px}
+body.present table.card2{font-size:12px}
+body.present table.card2 th,body.present table.card2 td{padding:3px 0}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+body.present .sel{margin-bottom:4px;font-size:12.5px}
+body.present .ctl{font-size:12.5px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>ตำแหน่งที่บาดเจ็บและเวลาที่เกิด AKI</h2>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 640 400" role="img" aria-label="Kidney compartments injured, extrarenal organs involved and onset window of kidney injury"></svg></div>
+      <div class="pq" id="pqBox"><div class="gap"></div><div id="pq"></div></div>
+      <p class="hint no-present">กล่องบนแสดง compartment ของไตที่บาดเจ็บ แถวกลางคืออวัยวะนอกไตที่มักเกี่ยวข้อง แถบล่างคือช่วงเวลาหลังสัมผัสที่ AKI มักเกิด (แกน log) สำหรับ paraquat มีกราฟ Proudfoot nomogram ระดับ paraquat ในเลือดเทียบเวลาหลังกิน จุดเหนือเส้นพยากรณ์เสียชีวิตสูง</p>
+    </div>
+    <div class="card">
+      <h2>สารพิษและเชื้อ</h2>
+      <div class="sel"><label for="ag">สาเหตุ</label><select id="ag"></select></div>
+      <div class="pq ctls" id="pqCtl" hidden></div>
+      <table class="card2" id="dcard"></table>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script>
+(function(){
+"use strict";
+function SV(t,a,p){ var b={}; for(var k in a) if(a[k]!==null&&a[k]!==undefined) b[k]=a[k]; return Sim.svg(t,b,p); }
+/* comp: glom, vessel, tubule, interstitium, obstruct  organ: brain, liver, lung, muscle, blood, gut   on: [h0,h1] hours */
+var D={
+  star:{n:"Star fruit (มะเฟือง)",comp:["tubule","obstruct"],organ:["brain"],on:[2,72],
+    src:"กินมะเฟืองหรือน้ำมะเฟืองปริมาณมาก โดยเฉพาะขณะท้องว่างหรือขาดน้ำ",mech:"Oxalate สูงตกผลึกใน tubule (acute oxalate nephropathy) และ caramboxin เป็น neurotoxin ที่ขับทางไต",pat:"AKI ภายใน 1–3 วัน oxalate crystal ใน tubule",extra:"สะอึก สับสน ชัก โคม่า เด่นในผู้ป่วย CKD หรือ dialysis",lab:"Cr ขึ้น CaOx crystal ในปัสสาวะ",rx:"HD เร็วในผู้ป่วยที่มีอาการทางสมองหรือมี CKD (HD ดีกว่า PD) ให้น้ำในรายไตปกติ ห้ามกินมะเฟืองใน CKD"},
+  djen:{n:"Djenkol bean (ลูกเนียง)",comp:["obstruct","tubule"],organ:[],on:[2,36],
+    src:"กินลูกเนียงดิบหรือปริมาณมาก",mech:"Djenkolic acid ละลายน้อยใน urine กรด ตกผลึกรูปเข็มอุดท่อไตและ ureter",pat:"Obstructive AKI ปวดเอวปวดท้อง hematuria ปัสสาวะมีกลิ่นกำมะถัน",extra:"Colic ปวดบิด",lab:"Needle-shaped crystals, hematuria, oliguria",rx:"ให้น้ำและ NaHCO3 ให้ urine pH > 7 เพื่อละลายผลึก ส่วนใหญ่หายภายในไม่กี่วัน ฟอกเลือดเมื่อ anuria นาน"},
+  russell:{n:"Russell's viper (งูแมวเซา)",comp:["tubule","vessel","glom","interstitium"],organ:["blood","muscle"],on:[6,96],
+    src:"งูแมวเซากัด (hemotoxic)",mech:"Procoagulant ทำให้ VICC/DIC, hemolysis, hypotension, direct nephrotoxicity, TMA บางราย cortical necrosis",pat:"ATN เป็นหลัก oliguria บางรายเป็น bilateral cortical necrosis ไม่ฟื้น",extra:"เลือดออกตามไรฟัน แผล 20WBCT ไม่แข็งตัว hypotension",lab:"VCT/20WBCT ไม่แข็งตัว fibrinogen ต่ำ hemoglobinuria Cr ขึ้น",rx:"Antivenom เฉพาะชนิดเร็วที่สุดเมื่อ 20WBCT ไม่แข็งตัว ให้ซ้ำตาม coagulopathy hydration ฟอกเลือดตามข้อบ่งชี้ ไม่มีบทบาทของ PLEX ทั่วไป"},
+  lepto:{n:"Leptospirosis",comp:["tubule","interstitium"],organ:["liver","lung","muscle"],on:[72,240],
+    src:"ลุยน้ำท่วม ทำนา สัมผัสปัสสาวะหนู",mech:"Leptospira outer membrane protein จับ TLR2 ที่ PT ทำให้ interstitial nephritis และยับยั้ง NHE3/NKCC2",pat:"Non-oliguric AKI ร่วม K ต่ำ และ Na wasting (polyuric) ในระยะแรก",extra:"ไข้ ปวดน่อง conjunctival suffusion ตัวเหลือง ไอเป็นเลือด (pulmonary hemorrhage)",lab:"K ต่ำ, FENa สูง, CK สูง, bilirubin สูงแต่ transaminase ไม่สูงมาก, platelet ต่ำ",rx:"Doxycycline หรือ penicillin/ceftriaxone แก้ K และ volume ฟอกเลือดเร็ว (daily) ในรายรุนแรงหรือมี pulmonary hemorrhage"},
+  pq:{n:"Paraquat (ยาฆ่าหญ้า)",comp:["tubule"],organ:["lung","liver","gut"],on:[12,96],
+    src:"กินโดยตั้งใจหรืออุบัติเหตุ",mech:"Redox cycling สร้าง superoxide ทำลาย PT และ alveolar cell สะสมในปอดตลอด",pat:"ATN ใน 1–4 วัน ไตวายลดการขับ paraquat ทำให้ปอดได้รับพิษมากขึ้น",extra:"แผลไหม้ปากคอ หลอดอาหาร ต่อมา pulmonary fibrosis",lab:"Urine dithionite test สีน้ำเงิน ระดับ paraquat ในเลือดเทียบ nomogram",rx:"ล้างท้องและ activated charcoal ภายใน 1–2 ชม. หลีกเลี่ยง O2 ยกเว้น SpO2 ต่ำมาก hemoperfusion ช่วยเฉพาะภายใน 2–4 ชม. แรก ประเมินพยากรณ์ด้วย nomogram"},
+  mal:{n:"Falciparum malaria",comp:["tubule","vessel","glom"],organ:["brain","liver","blood","lung"],on:[72,240],
+    src:"เดินทางในพื้นที่ป่า ชายแดน",mech:"Parasitized RBC เกาะผนังหลอดเลือด (sequestration) hypovolemia hemolysis hemoglobinuria (blackwater) ทำให้ ATN",pat:"Oliguric ATN ในผู้ใหญ่ blackwater fever",extra:"ไข้สูง cerebral malaria ซีด ตัวเหลือง ARDS",lab:"Parasitemia สูง Hb ต่ำ bilirubin สูง hypoglycemia lactate สูง",rx:"IV artesunate fluid อย่างระวัง ARDS ฟอกเลือดเร็ว (HD หรือ CRRT ดีกว่า PD)"},
+  wasp:{n:"ต่อ ผึ้ง ต่อยจำนวนมาก",comp:["tubule","interstitium"],organ:["muscle","blood","liver"],on:[6,72],
+    src:"ถูกต่อยหลายสิบถึงหลายร้อยตัว",mech:"Venom (phospholipase, melittin) ทำให้ rhabdomyolysis, hemolysis, direct tubular toxicity และ AIN",pat:"Pigment ATN ใน 1–3 วัน บางรายเป็น AIN",extra:"Anaphylaxis ระยะแรก ปวดกล้ามเนื้อ ปัสสาวะสีโค้ก",lab:"CK สูง LDH สูง hemoglobinuria/myoglobinuria transaminase สูง",rx:"รักษา anaphylaxis ให้น้ำตาม rhabdomyolysis (ดู AKI-09) ฟอกเลือดตามข้อบ่งชี้ จำนวนเหล็กในต่อยสัมพันธ์กับความรุนแรง"},
+  mush:{n:"เห็ดพิษ (Amanita, Cortinarius)",comp:["tubule","interstitium"],organ:["liver","gut"],on:[24,400],
+    src:"กินเห็ดป่า",mech:"Amatoxin ทำลายตับและ PT (hepatorenal) Orellanine (Cortinarius) ทำให้ tubulointerstitial nephritis ที่มาช้า",pat:"Amanita: AKI ร่วม acute liver failure ใน 2–4 วัน  Cortinarius: AKI 3–20 วันหลังกิน",extra:"อาเจียนท้องเสียหลังกิน 6–24 ชม. (amatoxin) แล้วตับวาย",lab:"Transaminase สูงมาก INR สูง Cr ขึ้น",rx:"Activated charcoal ซ้ำ silibinin หรือ penicillin G (amatoxin) N-acetylcysteine ฟอกเลือด ประเมินปลูกถ่ายตับ"},
+  aa:{n:"Aristolochic acid (สมุนไพร)",comp:["tubule","interstitium"],organ:[],on:[700,8000],
+    src:"สมุนไพรจีนที่มี Aristolochia หรือปนเปื้อน (Balkan nephropathy)",mech:"AA–DNA adduct ทำลาย PT และทำให้ interstitial fibrosis มีฤทธิ์ก่อมะเร็ง urothelium",pat:"CKD ก้าวหน้าเร็ว hypocellular interstitial fibrosis ไตเล็ก proteinuria น้อย",extra:"Upper tract urothelial carcinoma ภายหลัง",lab:"Anemia ไม่สมกับ GFR glycosuria tubular proteinuria",rx:"หยุดสมุนไพร คัดกรองมะเร็ง urothelium ตลอดชีวิต เมื่อเข้า KRT หรือ KT พิจารณาตัดไตและ ureter"},
+  heat:{n:"Heat stress และ CKD of unknown cause",comp:["tubule","interstitium"],organ:["muscle"],on:[3,8000],
+    src:"ทำงานกลางแดดร้อน ขาดน้ำซ้ำ ๆ (เกษตรกร คนงานอ้อย)",mech:"Volume depletion ซ้ำ, hyperuricosuria, rhabdomyolysis เล็กน้อย, vasopressin และ fructokinase pathway",pat:"AKI ซ้ำ ๆ แล้วเป็น CKD tubulointerstitial ไม่มี proteinuria มาก",extra:"Heat illness ตะคริว",lab:"Pyuria ไม่มีเชื้อ K ต่ำ urate สูง proteinuria น้อย",rx:"น้ำ ร่มเงา พักเป็นระยะ (water, rest, shade) หลีกเลี่ยง NSAID ติดตาม eGFR ในกลุ่มเสี่ยง"}
+};
+var S={
+  star:{name:"มะเฟืองใน CKD", a:"star",
+    rows:[["ผู้ป่วย","CKD G4 ดื่มน้ำมะเฟือง 1 แก้ว"],["อาการ","สะอึกไม่หยุด สับสน ชัก"],["ต่อ","HD ทันที"]],
+    take:["มะเฟืองมี oxalate และ caramboxin ที่ขับทางไต","ผู้ป่วย CKD หรือ dialysis เกิดพิษต่อสมองได้แม้กินน้อย","อาการทางสมองเป็นข้อบ่งชี้ให้ HD เร็ว"]},
+  djen:{name:"ลูกเนียง", a:"djen",
+    rows:[["ผู้ป่วย","กินลูกเนียง 20 ลูก"],["อาการ","ปวดเอว hematuria ปัสสาวะออกน้อย"],["ต่อ","NaHCO3 ให้ urine pH > 7"]],
+    take:["Djenkolic acid ตกผลึกใน urine กรดทำให้ obstructive AKI","Alkalinize urine เป็นการรักษาหลัก","มักหายได้ดีภายในไม่กี่วัน"]},
+  russell:{name:"งูแมวเซา", a:"russell",
+    rows:[["ผู้ป่วย","ถูกงูแมวเซากัด 6 ชม. ก่อน"],["Lab","20WBCT ไม่แข็งตัว hemoglobinuria"],["ต่อ","antivenom เฉพาะ"]],
+    take:["งูแมวเซาเป็นสาเหตุ AKI จากงูที่สำคัญที่สุดในไทยและเอเชียใต้","20WBCT ไม่แข็งตัวเป็นข้อบ่งชี้ให้ antivenom","AKI มักเป็น ATN บางรายเป็น cortical necrosis ที่ไม่ฟื้น"]},
+  lepto:{name:"Leptospirosis", a:"lepto",
+    rows:[["ผู้ป่วย","ชาวนา หลังน้ำท่วม 7 วัน ไข้ ปวดน่อง"],["Lab","Cr 4.0 K 2.9 bilirubin 8 platelet 40"],["ต่อ","antibiotic แก้ K ฟอกเลือดเร็ว"]],
+    take:["AKI ของ leptospirosis มักเป็น non-oliguric และ K ต่ำ ต่างจาก ATN ทั่วไป","กลไกคือ interstitial nephritis และ tubular dysfunction","Pulmonary hemorrhage เป็นสาเหตุเสียชีวิตสำคัญ ฟอกเลือดเร็วช่วยในรายรุนแรง"]},
+  pqHi:{name:"Paraquat เหนือเส้น", a:"pq", h:6, c:1.2,
+    rows:[["ผู้ป่วย","กิน paraquat 6 ชม. ก่อน"],["ระดับ","1.2 mg/L ที่ 6 ชม."],["แปลผล","เหนือเส้น Proudfoot พยากรณ์ไม่ดี"]],
+    take:["Paraquat ทำลายไตและปอดผ่าน redox cycling","ไตวายลดการขับ paraquat ทำให้พิษต่อปอดเพิ่ม","ระดับในเลือดเทียบเวลา (Proudfoot) ใช้พยากรณ์ ไม่ใช่เกณฑ์การฟอก"]},
+  pqLo:{name:"Paraquat ใต้เส้น", a:"pq", h:10, c:0.12,
+    rows:[["ผู้ป่วย","กินน้อย มาถึง 10 ชม."],["ระดับ","0.12 mg/L"],["แปลผล","ใต้เส้น โอกาสรอดสูง"]],
+    take:["ระดับใต้เส้นพยากรณ์รอดสูง","ยังต้องติดตาม Cr และการทำงานของปอดหลายวัน","หลีกเลี่ยง O2 เกินจำเป็นเพราะเพิ่ม oxidative injury"]},
+  mal:{name:"Falciparum malaria", a:"mal",
+    rows:[["ผู้ป่วย","กลับจากป่าชายแดน ไข้ ปัสสาวะสีดำ"],["Lab","parasitemia 8% Hb 6 Cr 5"],["ต่อ","IV artesunate ฟอกเลือด"]],
+    take:["Severe malaria AKI พบในผู้ใหญ่มากกว่าเด็ก","Blackwater fever จาก intravascular hemolysis","HD หรือ CRRT ดีกว่า PD ใน severe malaria"]},
+  wasp:{name:"ต่อต่อยหลายร้อยตัว", a:"wasp",
+    rows:[["ผู้ป่วย","ต่อต่อย 150 จุด"],["Lab","CK 45,000 ปัสสาวะสีโค้ก"],["ต่อ","fluid ตาม rhabdomyolysis"]],
+    take:["พิษต่อทำให้ rhabdomyolysis และ hemolysis พร้อมกัน","จำนวนจุดที่ถูกต่อยสัมพันธ์กับความเสี่ยง AKI","ติดตาม CK, K, Cr ใกล้ชิดใน 72 ชม. แรก"]},
+  aa:{name:"Aristolochic acid", a:"aa",
+    rows:[["ผู้ป่วย","กินสมุนไพรลดน้ำหนักนานหลายปี"],["Lab","eGFR 25 anemia มาก proteinuria น้อย"],["Biopsy","hypocellular interstitial fibrosis"]],
+    take:["Aristolochic acid nephropathy: CKD ก้าวหน้าเร็ว interstitial fibrosis","เพิ่มความเสี่ยงมะเร็ง urothelium ระยะยาว","ถามประวัติสมุนไพรในผู้ป่วย CKD ที่ไม่รู้สาเหตุ"]}
+};
+var ORDER=["star","djen","russell","lepto","pqHi","pqLo","mal","wasp","aa"];
+var ag=document.getElementById("ag"); Object.keys(D).forEach(function(k){ ag.appendChild(Sim.h("option",{value:k,text:D[k].n})); }); ag.addEventListener("change",update);
+var C={}, pc=document.getElementById("pqCtl");
+function sl(k,o){ o.id="s"+k; o.onInput=function(){ update(); }; C[k]=Sim.slider(o); pc.appendChild(C[k].el); }
+sl("h",{label:"เวลาหลังกิน",min:2,max:30,step:0.5,value:6,unit:" h",fmt:function(v){ return v.toFixed(1); }});
+sl("c",{label:"Paraquat ในเลือด",min:0.02,max:5,step:0.02,value:1.2,unit:" mg/L",fmt:function(v){ return v.toFixed(2); }});
+var PF=[[4,2.0],[6,0.6],[10,0.3],[16,0.16],[24,0.1]];
+function pfLine(h){ var L=PF; if(h<=L[0][0]){ var s=Math.log(L[1][1]/L[0][1])/Math.log(L[1][0]/L[0][0]); return L[0][1]*Math.pow(h/L[0][0],s); }
+  for(var i=1;i<L.length;i++){ if(h<=L[i][0]){ var a=L[i-1],b=L[i], s2=Math.log(b[1]/a[1])/Math.log(b[0]/a[0]); return a[1]*Math.pow(h/a[0],s2); } }
+  var a2=L[L.length-2],b2=L[L.length-1], s3=Math.log(b2[1]/a2[1])/Math.log(b2[0]/a2[0]); return b2[1]*Math.pow(h/b2[0],s3); }
+var A=Plot.colors;
+var pq=Plot.chart(document.getElementById("pq"),{height:Sim.present?175:220,aria:"Proudfoot nomogram for paraquat",
+  x:{min:2,max:30,step:4,label:"Hours after ingestion"},y:{min:0.02,max:10,log:true,label:"Paraquat (mg/L)"},
+  series:[{id:"line",name:"Proudfoot survival line",color:A.red,data:[],width:2.2}],legend:false});
+(function(){ var d=[]; for(var h=2;h<=30;h+=0.25) d.push([h,pfLine(h)]); pq.setSeries("line",d); })();
+var svg=document.getElementById("vis"), INK="#0B0B1F", MUT="#5E6075", ACC="#5B4BFF", RED="#B4232A", LINE="#D3D5E2", FT="IBM Plex Sans Thai, sans-serif";
+function tx(x,y,s,o){ o=o||{}; return SV("text",{x:x,y:y,"text-anchor":o.a||"middle","font-family":o.mono?"Geist Mono, monospace":FT,"font-size":o.fs||12,"font-weight":o.fw||400,fill:o.fill||INK,text:s},svg); }
+function icon(k,cx,cy,col){
+  if(k==="glom"){ for(var i=0;i<6;i++){ var a=i*Math.PI/3; SV("circle",{cx:cx+Math.cos(a)*9,cy:cy+Math.sin(a)*9,r:6,fill:"none",stroke:col,"stroke-width":1.6},svg); } SV("circle",{cx:cx,cy:cy,r:19,fill:"none",stroke:col,"stroke-width":1.2,"stroke-dasharray":"3 3"},svg); }
+  else if(k==="vessel"){ SV("path",{d:"M"+(cx-22)+" "+(cy-6)+" Q"+cx+" "+(cy-14)+" "+(cx+22)+" "+(cy-6)+" M"+(cx-22)+" "+(cy+6)+" Q"+cx+" "+(cy-2)+" "+(cx+22)+" "+(cy+6),fill:"none",stroke:col,"stroke-width":2},svg); SV("circle",{cx:cx-4,cy:cy-4,r:3,fill:col},svg); SV("circle",{cx:cx+8,cy:cy-5,r:3,fill:col},svg); }
+  else if(k==="tubule"){ SV("rect",{x:cx-24,y:cy-12,width:48,height:24,rx:12,fill:"none",stroke:col,"stroke-width":2},svg); for(var j=0;j<4;j++) SV("circle",{cx:cx-15+j*10,cy:cy,r:3.4,fill:col},svg); }
+  else if(k==="interstitium"){ for(var q=0;q<7;q++) SV("circle",{cx:cx-18+(q*13)%40,cy:cy-10+(q*7)%22,r:3.6,fill:col,opacity:0.8},svg); }
+  else { SV("rect",{x:cx-24,y:cy-12,width:48,height:24,rx:12,fill:"none",stroke:col,"stroke-width":2},svg); for(var r=0;r<3;r++){ var x=cx-12+r*12; SV("path",{d:"M"+x+" "+(cy-8)+" L"+(x+5)+" "+cy+" L"+x+" "+(cy+8)+" L"+(x-5)+" "+cy+" Z",fill:col},svg); } }
+}
+var EN={star:"Star fruit",djen:"Djenkol bean",russell:"Russell's viper",lepto:"Leptospirosis",pq:"Paraquat",mal:"Falciparum malaria",wasp:"Mass envenomation (wasp, bee)",mush:"Mushroom poisoning",aa:"Aristolochic acid",heat:"Heat stress and CKDu"};
+var COMP=[["glom","Glomerulus"],["vessel","Vessels, TMA"],["tubule","Tubular injury"],["interstitium","Interstitial nephritis"],["obstruct","Crystal, obstruction"]];
+var ORG=[["brain","Brain"],["lung","Lung"],["liver","Liver"],["muscle","Muscle"],["blood","Blood, coagulation"],["gut","Gut"]];
+function draw(d){
+  svg.innerHTML="";
+  tx(20,20,"Kidney compartment",{a:"start",fs:13,fw:600});
+  COMP.forEach(function(c,i){ var x=20+i*122, hot=d.comp.indexOf(c[0])>=0;
+    SV("rect",{x:x,y:32,width:112,height:104,rx:14,fill:hot?"#fff":"#F4F5F9",stroke:hot?RED:LINE,"stroke-width":hot?2:1},svg);
+    icon(c[0],x+56,70,hot?RED:"#B9BBCB");
+    var w=c[1].split(" "); tx(x+56,112,w.length>2?w.slice(0,2).join(" "):c[1],{fs:11.5,fw:hot?600:400,fill:hot?INK:MUT}); if(w.length>2) tx(x+56,126,w.slice(2).join(" "),{fs:11.5,fw:hot?600:400,fill:hot?INK:MUT}); });
+  tx(20,172,"Extrarenal involvement",{a:"start",fs:13,fw:600});
+  ORG.forEach(function(o,i){ var x=20+i*101, hot=d.organ.indexOf(o[0])>=0;
+    SV("rect",{x:x,y:184,width:93,height:34,rx:17,fill:hot?INK:"#fff",stroke:hot?INK:LINE},svg);
+    tx(x+46.5,205,o[1],{fs:o[1].length>12?10.5:12,fw:hot?600:400,fill:hot?"#fff":MUT}); });
+  /* onset timeline log hours 1..8760 */
+  var X0=40,X1=610, y=300; function X(h){ return X0+Math.log(h)/Math.log(8760)*(X1-X0); }
+  tx(20,256,"When kidney injury appears after exposure",{a:"start",fs:13,fw:600});
+  SV("line",{x1:X0,y1:y,x2:X1,y2:y,stroke:MUT},svg);
+  [[1,"1 h"],[6,"6 h"],[24,"1 d"],[72,"3 d"],[168,"1 wk"],[720,"1 mo"],[8760,"1 yr"]].forEach(function(t){ SV("line",{x1:X(t[0]),y1:y-4,x2:X(t[0]),y2:y+4,stroke:MUT},svg); tx(X(t[0]),y+20,t[1],{fs:11,mono:true,fill:MUT}); });
+  SV("rect",{x:X(d.on[0]),y:y-14,width:Math.max(6,X(Math.min(8760,d.on[1]))-X(d.on[0])),height:28,rx:14,fill:ACC,opacity:0.85},svg);
+  var cx=(X(d.on[0])+X(Math.min(8760,d.on[1])))/2;
+  tx(Math.min(560,Math.max(80,cx)),y+48,"Typical onset window",{fs:11.5,fill:ACC,fw:600});
+  tx(20,385,EN[ag.value]||"",{a:"start",fs:12.5,fw:600,fill:MUT});
+}
+function update(){
+  var k=ag.value, d=D[k]; draw(d);
+  var isPq=k==="pq"; document.body.classList.toggle("pqmode",isPq); document.getElementById("pqBox").hidden=!isPq; pc.hidden=!isPq;
+  var tbl=document.getElementById("dcard"); tbl.innerHTML="";
+  [["การสัมผัส",d.src],["กลไก",d.mech],["รูปแบบที่ไต",d.pat],["นอกไต",d.extra],["Lab clue",d.lab],["รักษา",d.rx]].forEach(function(r){ tbl.appendChild(Sim.h("tr",{},[Sim.h("th",{text:r[0]}),Sim.h("td",{text:r[1]})])); });
+  var m=d.rx, bad=true;
+  if(isPq){ var h=C.h.get(), c=C.c.get(), L=pfLine(h), above=c>L;
+    pq.update({marks:[{x:h,y:c,label:above?"Above line":"Below line",color:above?A.red:A.teal}]});
+    m=above?"<b>เหนือเส้น Proudfoot</b> ("+c.toFixed(2)+" เทียบเส้น "+L.toFixed(2)+" mg/L ที่ "+h.toFixed(1)+" ชม.) พยากรณ์เสียชีวิตสูง ให้การรักษาประคับประคองเต็มที่ คุยเรื่องเป้าหมายการรักษากับครอบครัว hemoperfusion ไม่เปลี่ยนผลเมื่อเลย 4 ชม.":"<b>ใต้เส้น Proudfoot</b> โอกาสรอดสูง ติดตาม Cr, LFT, chest film และ SpO2 ทุกวัน หลีกเลี่ยง O2 ถ้า SpO2 ยังดี";
+    bad=above; }
+  else m="<b>"+d.n+"</b> "+d.rx;
+  var a=document.getElementById("act"); a.innerHTML="<b>Next step:</b> "+m; a.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"MX-08", title:"Tropical Nephrology and Toxins", lead:"เลือกสารพิษ สัตว์พิษ หรือเชื้อในเขตร้อน ดู compartment ของไตที่บาดเจ็บ อวัยวะอื่นที่เกี่ยวข้อง เวลาที่ AKI มักเกิด lab clue และการรักษา พร้อม Proudfoot nomogram ของ paraquat",
+  scenarios:S, order:ORDER, captureMs:600,
+  onChange:function(k,s){ ag.value=s.a; if(s.h){ C.h.set(s.h); C.c.set(s.c); } update(); },
+  refs:["Neto MM, da Costa JA, Garcia-Cairasco N, et al. Intoxication by star fruit (Averrhoa carambola) in 32 uraemic patients: treatment and outcome. Nephrol Dial Transplant 2003, 18(1): 120-125",
+        "Bunawan NC, Rastegar A, White KP, Wang NE. Djenkolism: case report and literature review. Int Med Case Rep J 2014, 7: 79-84",
+        "Kanjanabuch T, Sitprija V. Snakebite nephrotoxicity in Asia. Semin Nephrol 2008, 28(4): 363-372",
+        "Sitprija V. Nephropathy in falciparum malaria. Kidney Int 1988, 34(6): 867-877",
+        "Andrade L, Cleto S, Seguro AC. Door-to-dialysis time and daily hemodialysis in patients with leptospirosis: impact on mortality. Clin J Am Soc Nephrol 2007, 2(4): 739-744",
+        "Proudfoot AT, Stewart MS, Levitt T, Widdop B. Paraquat poisoning: significance of plasma-paraquat concentrations. Lancet 1979, 2(8138): 330-332",
+        "Gawarammana IB, Buckley NA. Medical management of paraquat ingestion. Br J Clin Pharmacol 2011, 72(5): 745-757",
+        "Jha V, Parameswaran S. Community-acquired acute kidney injury in tropical countries. Nat Rev Nephrol 2013, 9(5): 278-290",
+        "Jadot I, Declèves AE, Nortier J, Caron N. An integrated view of aristolochic acid nephropathy: update of the literature. Int J Mol Sci 2017, 18(2): 297",
+        "Johnson RJ, Wesseling C, Newman LS. Chronic kidney disease of unknown cause in agricultural communities. N Engl J Med 2019, 380(19): 1843-1852"],
+  note:"ข้อมูลสรุปเพื่อการสอน ช่วงเวลาเป็นค่าประมาณจากรายงานผู้ป่วยและ review ที่อ้างอิง Proudfoot nomogram ใช้จุด 2.0, 0.6, 0.3, 0.16 และ 0.1 mg/L ที่ 4, 6, 10, 16 และ 24 ชม. เชื่อมแบบ log-log"
+});
+})();
+</script>
+</body>
+</html>

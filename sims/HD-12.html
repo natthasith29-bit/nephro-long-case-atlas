@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[HD-12] Anticoagulation during Hemodialysis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(120px,160px) 1fr 104px}
+.sel{display:grid;grid-template-columns:minmax(120px,160px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;width:100%}
+.readout{grid-template-columns:repeat(3,1fr)}
+.meter{display:grid;grid-template-columns:110px 1fr 54px;gap:10px;align-items:center;font-size:13.5px;margin-top:8px}
+.meter .bar{height:10px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;border-radius:6px}
+.meter span:last-child{font-family:var(--mono);text-align:right}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act.bad{background:var(--pink)}
+body.present .bench{grid-template-columns:1.45fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>ระดับ anticoagulation ตลอด session</h2>
+      <div id="chart"></div>
+      <p class="hint no-present">แถบสีคือช่วงเป้า ACT ตามความเสี่ยงเลือดออก ค่าท้ายฟอกบอกความเสี่ยงเลือดออกจากรูเข็มและหัตถการหลังฟอก</p>
+      <div class="meter"><span>Circuit clotting</span><div class="bar"><i id="mClot"></i></div><span id="vClot">-</span></div>
+      <div class="meter"><span>Bleeding</span><div class="bar"><i id="mBleed"></i></div><span id="vBleed">-</span></div>
+    </div>
+    <div class="card">
+      <h2>Regimen</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roA60"><b>-</b><span>ACT ที่ 60 นาที (s)</span></div>
+        <div class="ro" id="roAend"><b>-</b><span>ACT ท้ายฟอก (s)</span></div>
+        <div class="ro" id="roDose"><b>-</b><span>Heparin รวม (U)</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script>
+(function(){
+"use strict";
+var REG={std:"Heparin มาตรฐาน",tight:"Tight heparin",free:"Heparin-free + saline flush",lmwh:"LMWH bolus (enoxaparin)",cit:"Regional citrate (Ca-free dialysate)",arg:"Argatroban (HIT)"};
+function P(o){ var d={reg:"std",bolus:30,inf:800,stop:60,risk:"low",Qb:350,w:70,t:240,hit:false,liver:100}; for(var k in o) d[k]=o[k]; return d; }
+var S = {
+  standard:{name:"Heparin มาตรฐาน", p:P({}),
+    rows:[["Regimen","bolus 30 U/kg แล้ว 800 U/h หยุด 60 นาทีก่อนจบ"],["ACT","ราว 200–250 s ระหว่างฟอก กลับใกล้ baseline ก่อนถอนเข็ม"],["ผล","clotting ต่ำ bleeding จากรูเข็มต่ำ"]],
+    take:["Routine: ACT เป้าราว baseline + 80% (200–250 s)","หยุด infusion 30–60 นาทีก่อนจบ (AVF) ใน catheter หยุดได้ช้ากว่า","Heparin t½ ใน ESKD ราว 1–2 ชั่วโมง"],
+    quiz:[{q:"ผู้ป่วยเลือดออกนานจากรูเข็มหลังฟอกทุกครั้ง ACT ท้ายฟอก 260 s ได้ heparin 1,000 U/h จนจบฟอก ข้อใดเหมาะที่สุด",opts:["เพิ่ม heparin","หยุด heparin infusion 60 นาทีก่อนจบหรือลด rate","เปลี่ยนเป็น heparin-free ถาวร","ให้ protamine ทุกครั้ง"],ans:1,why:"ACT ท้ายฟอกสูงจาก infusion ที่ให้จนจบ ควรหยุดก่อนจบหรือลดขนาด"}]},
+  tight:{name:"Tight heparin (เสี่ยงเลือดออกปานกลาง)", p:P({reg:"tight",bolus:15,inf:500,stop:30,risk:"mod"}),
+    rows:[["ผู้ป่วย","หลังผ่าตัดเล็ก 3 วัน หรือมีแผลที่เลือดออกง่าย"],["เป้า","ACT baseline + 40% (ราว 150–180 s)"],["Trade-off","clotting มากขึ้นเล็กน้อย"]],
+    take:["Tight heparin สำหรับ bleeding risk ปานกลาง","ติดตาม ACT ทุก 30–60 นาที","ถ้ายังเสี่ยงมากให้ใช้ heparin-free หรือ citrate"],
+    quiz:[{q:"ผู้ป่วยมี GI bleeding หยุดแล้ว 48 ชั่วโมง ต้องฟอก ข้อใดเหมาะที่สุด",opts:["Heparin มาตรฐาน","Heparin-free หรือ regional citrate","LMWH ขนาดเต็ม","Warfarin"],ans:1,why:"bleeding risk สูง ควรหลีกเลี่ยง systemic anticoagulation"}]},
+  free:{name:"Heparin-free", p:P({reg:"free",risk:"high",Qb:350}),
+    rows:[["Regimen","ไม่ให้ heparin flush saline 100–200 ml ทุก 15–30 นาที Qb สูง"],["ผล","ไม่มี systemic anticoagulation แต่ clotting ในวงจรราว 5–10%"],["ข้อควรระวัง","saline flush ต้องนับรวมใน UF goal"]],
+    take:["ใช้ใน active bleeding, หลังผ่าตัดใหญ่, intracranial hemorrhage","Qb สูงลด clotting, หลีกเลี่ยง blood transfusion ทางวงจร","ทางเลือกที่ดีกว่าในบางหน่วย: regional citrate"],
+    quiz:[{q:"ใน heparin-free HD ข้อใดช่วยลด circuit clotting",opts:["Qb ต่ำ","Qb สูงและ saline flush เป็นระยะ","UF rate สูง","ให้เลือดทางสาย venous"],ans:1,why:"Qb สูงและ flush ลด stasis และ hemoconcentration ใน dialyzer"}]},
+  lmwh:{name:"LMWH bolus", p:P({reg:"lmwh",w:70}),
+    rows:[["Regimen","enoxaparin bolus เข้าสาย arterial ต้นฟอก"],["Monitoring","ACT ไม่สะท้อน LMWH ใช้ anti-Xa"],["ความเสี่ยง","ESKD ขับ LMWH ช้า สะสมได้ ผลยาวหลังจบฟอก"]],
+    take:["LMWH bolus เดียวสะดวก ใช้มากในยุโรป","ไม่ใช้ใน HIT (cross-reactivity สูง)","Protamine reverse ได้ไม่หมด"],
+    quiz:[{q:"ผู้ป่วยใช้ enoxaparin สำหรับ HD มีเลือดออกนานหลังฟอกและก่อนผ่าตัด ข้อใดถูกต้อง",opts:["ACT ปกติแปลว่าไม่มีผลของ LMWH","ใช้ anti-Xa ประเมินและระวังการสะสมใน ESKD","Protamine reverse ได้ 100%","ใช้ LMWH ได้ใน HIT"],ans:1,why:"LMWH ถูกขับทางไต ผลยาวใน ESKD ต้องดู anti-Xa ACT ไม่ไว"}]},
+  citrate:{name:"Regional citrate HD", p:P({reg:"cit",risk:"high"}),
+    rows:[["Regimen","citrate เข้าสาย arterial dialysate ไม่มี Ca เติม Ca กลับทาง venous"],["ผล","anticoagulation เฉพาะในวงจร systemic ACT ปกติ"],["ข้อควรระวัง","hypocalcemia ถ้าเติม Ca ไม่พอ, ต้องมี protocol"]],
+    take:["เหมาะกับ bleeding risk สูงและ HIT","ใน intermittent HD ใช้ Ca-free dialysate หรือ citrate-containing dialysate","ดูรายละเอียด citrate kinetics ใน HD-14"],
+    quiz:[{q:"ผู้ป่วย intracranial hemorrhage ต้องฟอก ข้อใดเป็นทางเลือก anticoagulation ที่เหมาะสม",opts:["Heparin มาตรฐาน","Regional citrate หรือ heparin-free","Argatroban ขนาดเต็ม","LMWH"],ans:1,why:"ไม่ให้ systemic anticoagulation ในผู้ป่วยเลือดออกในสมอง"}]},
+  hit:{name:"HIT", p:P({reg:"arg",hit:true,risk:"mod"}),
+    rows:[["ผู้ป่วย","platelet ลด 55% วันที่ 7 หลังเริ่ม heparin, anti-PF4 บวก, มี DVT"],["Regimen","หยุด heparin ทุกรูปแบบ (รวม lock และ flush) ใช้ argatroban"],["Monitoring","aPTT 1.5–3 เท่า argatroban ไม่ต้องปรับตามไต (ขับทางตับ)"]],
+    take:["HIT: หยุด heparin รวม catheter lock และ LMWH","Argatroban ขับทางตับ เหมาะกับ ESKD ลดขนาดในโรคตับ","Catheter lock ใช้ citrate 4% แทน heparin"],
+    quiz:[{q:"ผู้ป่วย HD ที่ใช้ catheter เกิด HIT ข้อใดถูกต้อง",opts:["เปลี่ยนเป็น LMWH","หยุด heparin ทั้งหมดรวม lock ใช้ argatroban หรือ citrate และ lock ด้วย citrate","ใช้ heparin ต่อแต่ลดขนาด","ใช้ heparin เฉพาะ lock ได้"],ans:1,why:"heparin ปริมาณน้อยใน lock ก็กระตุ้น HIT ได้ ต้องหยุดทั้งหมด"}]}
+};
+var ORDER=["standard","tight","free","lmwh","citrate","hit"];
+
+var box=document.getElementById("ctls"), C={};
+var rSel=Sim.h("select",{id:"sReg"},Object.keys(REG).map(function(k){ return Sim.h("option",{value:k,text:REG[k]}); }));
+var kSel=Sim.h("select",{id:"sRisk"},[["low","ต่ำ"],["mod","ปานกลาง"],["high","สูง (active bleeding)"]].map(function(x){ return Sim.h("option",{value:x[0],text:x[1]}); }));
+rSel.addEventListener("change",update); kSel.addEventListener("change",update);
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"sReg",text:"Regimen"}),rSel]));
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"sRisk",text:"Bleeding risk"}),kSel]));
+function sl(k,o){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); box.appendChild(C[k].el); return C[k]; }
+sl("bolus",{label:"Heparin bolus",min:0,max:60,step:5,value:30,unit:"U/kg"});
+sl("inf",{label:"Heparin infusion",min:0,max:1500,step:100,value:800,unit:"U/h"});
+sl("stop",{label:"หยุดก่อนจบ",min:0,max:90,step:15,value:60,unit:"min"});
+sl("Qb",{label:"Qb",min:200,max:450,step:10,value:350,unit:"ml/min"});
+sl("w",{label:"น้ำหนัก",min:40,max:110,step:1,value:70,unit:"kg"}).el.classList.add("secondary");
+
+var A=Plot.colors, chart=Plot.chart(document.getElementById("chart"),{height:270,aria:"ACT during dialysis",
+  x:{min:0,max:360,step:60,label:"Time (min), HD 0–240"}, y:{min:100,max:350,step:50,label:"ACT (s) or equivalent"},
+  series:[{id:"act",name:"Systemic",color:A.accent,data:[],width:2.6},{id:"circ",name:"Circuit",color:A.teal,data:[],width:1.6,dash:[5,4]}],legend:true});
+
+function update(){
+  var reg=rSel.value, risk=kSel.value, w=C.w.get(), t=240, Qb=C.Qb.get();
+  var hep = reg==="std"||reg==="tight";
+  [C.bolus,C.inf,C.stop].forEach(function(x){ x.el.style.opacity=hep?1:0.4; });
+  var V=0.06*w, kel=Math.log(2)/90, H=0, ys=[], cs=[], total=0, base=120;
+  var bolusU = hep ? C.bolus.get()*w : 0, inf = hep ? C.inf.get() : 0, stopAt=t-C.stop.get();
+  var lm=0, lmK=Math.log(2)/(5*60); // LMWH effect, t½ 5 h in ESKD
+  if(hep){ H=bolusU/V; total=bolusU+inf*stopAt/60; }
+  if(reg==="lmwh") lm=1;
+  var argOn = reg==="arg";
+  for(var m=0;m<=360;m+=2){
+    var act, ca;
+    if(hep){ if(m<stopAt) H+=inf/60*2/V; H-=H*kel*2; act=base+H*0.2; ca=act; }
+    else if(reg==="lmwh"){ act=base+lm*95; lm-=lm*lmK*2; ca=act; }
+    else if(reg==="cit"){ act=base+4; ca= m<t ? 300 : base; }
+    else if(reg==="arg"){ var on=m<t-30; act= on ? base+Math.min(80,(m/30)*80) : base+80*Math.exp(-(m-(t-30))/50); ca=act; }
+    else { act=base; ca=base; }
+    ys.push([m,act]); cs.push([m,ca]);
+  }
+  var a60=ys[30][1], aend=ys[120][1], cMean=0; for(var i=0;i<=120;i++) cMean+=cs[i][1]; cMean/=121;
+  var band = risk==="low"?[200,250]:(risk==="mod"?[150,180]:[100,130]);
+  chart.update({bands:[{y0:band[0],y1:band[1],color:Plot.alpha(A.teal,0.10),label:"Target"}],xbands:[{x0:0,x1:240,label:"HD",color:Plot.alpha(A.accent,0.05)}]});
+  chart.setSeries("act",ys); chart.setSeries("circ",cs);
+  var clot = Math.max(0.03,Math.min(0.97, 0.9*Math.exp(-(cMean-120)/45) + (reg==="free"?0.0:0) - (Qb-300)/900 ));
+  if(reg==="free") clot=Math.max(0.2,Math.min(0.6,0.45-(Qb-300)/600));
+  var bleedMult = risk==="high"?1.8:(risk==="mod"?1.3:1);
+  var sysMean=0; for(var j=0;j<=120;j++) sysMean+=ys[j][1]; sysMean/=121;
+  var bleed=Math.max(0.03,Math.min(0.97,(Math.max(0,aend-150)/120+Math.max(0,sysMean-band[1])/150)*bleedMult+(risk==="high"&&sysMean>140?0.35:0)));
+  if(rSel.value==="std"||rSel.value==="tight"){}
+  var hitBad = (reg==="std"||reg==="tight"||reg==="lmwh") && (S[Sim.current()]&&S[Sim.current()].p.hit);
+  function meter(id,v,vid){ var e=document.getElementById(id); e.style.width=(v*100)+"%"; e.style.background=v>0.5?"#B4232A":(v>0.25?"#A8842C":"#1F7A72"); document.getElementById(vid).textContent=Math.round(v*100)+"%"; }
+  meter("mClot",clot,"vClot"); meter("mBleed",bleed,"vBleed");
+  Sim.ro("roA60",reg==="lmwh"?"ใช้ anti-Xa":Sim.fmt(a60,0),reg==="lmwh"?false:((a60<band[0]-10||a60>band[1]+15)?"flag":"ok"));
+  Sim.ro("roAend",reg==="lmwh"?"ยังมีผล":Sim.fmt(aend,0),aend>180?"flag":"ok");
+  Sim.ro("roDose",hep?Sim.fmt(total,0):"0");
+  var act=document.getElementById("act"), msg, bad=false;
+  if(hitBad){ msg="HIT: ห้ามใช้ heparin และ LMWH เปลี่ยนเป็น argatroban หรือ citrate"; bad=true; }
+  else if(risk==="high" && (hep||reg==="lmwh"||reg==="arg")){ msg="Bleeding risk สูง: ใช้ heparin-free หรือ regional citrate"; bad=true; }
+  else if(hep && aend>180){ msg="ACT ท้ายฟอกสูง: หยุด infusion เร็วขึ้นหรือลด rate"; bad=true; }
+  else if(hep && a60<band[0]-10){ msg="ACT ต่ำกว่าเป้า: เพิ่ม bolus หรือ infusion"; bad=true; }
+  else if(hep && a60>band[1]+15){ msg="ACT สูงกว่าเป้าของ bleeding risk นี้: ลด heparin"; bad=true; }
+  else if(clot>0.4){ msg="Clotting สูง: เพิ่ม Qb, flush บ่อยขึ้น หรือพิจารณา citrate"; bad=true; }
+  else msg="Regimen เหมาะกับ bleeding risk นี้";
+  act.className="act"+(bad?" bad":""); act.textContent="Next step: "+msg;
+}
+Sim.mount({code:"HD-12", title:"Anticoagulation during Hemodialysis", lead:"เลือก regimen ตาม bleeding risk ปรับ heparin bolus, infusion และเวลาหยุด แล้วดู ACT, clotting และ bleeding",
+  scenarios:S, order:ORDER, captureMs:2000,
+  onChange:function(k,s){ var p=s.p; rSel.value=p.reg; kSel.value=p.risk; ["bolus","inf","stop","Qb","w"].forEach(function(x){ C[x].set(p[x]); }); update(); },
+  refs:["Kessler M, Moureau F, Nguyen P. Anticoagulation in chronic hemodialysis: progress toward an optimal approach. Semin Dial 2015, 28(5): 474-489",
+        "Shen JI, Winkelmayer WC. Use and safety of unfractionated heparin for anticoagulation during maintenance hemodialysis. Am J Kidney Dis 2012, 60(3): 473-486",
+        "Lim W, Cook DJ, Crowther MA. Safety and efficacy of low molecular weight heparins for hemodialysis in patients with end-stage renal failure: a meta-analysis of randomized trials. J Am Soc Nephrol 2004, 15(12): 3192-3206",
+        "Cuker A, Arepally GM, Chong BH, et al. American Society of Hematology 2018 guidelines for management of venous thromboembolism: heparin-induced thrombocytopenia. Blood Adv 2018, 2(22): 3360-3392",
+        "Daugirdas JT, Blake PG, Ing TS. Handbook of Dialysis. 5th ed. Wolters Kluwer 2015 (chapter: Anticoagulation)"],
+  note:"Model เพื่อการสอน: heparin one-compartment Vd 0.06 L/kg t½ 90 นาที ACT เพิ่มเชิงเส้นตามระดับ LMWH แสดงเป็น ACT เทียบเท่าเพื่อเปรียบเทียบเท่านั้น (จริงต้องใช้ anti-Xa)"
+});
+})();
+</script>
+</body>
+</html>

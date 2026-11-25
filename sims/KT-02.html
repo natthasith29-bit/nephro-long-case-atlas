@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[KT-02] Crossmatch and Donor-Specific Antibody</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.25fr 1fr}}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.sub{font-size:12.5px;color:var(--muted);margin:14px 0 4px}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b,.cat b{font-weight:600}
+.cat{margin-top:12px;padding:10px 14px;border-radius:12px;border:1px solid var(--line);font-size:14px}
+.cat.hi{background:#F9EAEA;border-color:#E9B9BC}
+.cat.lo{background:#E8F4F2;border-color:#B5D9D3}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .act{display:none}
+body.present .card{padding:14px 18px}
+body.present .ctls{gap:4px}
+body.present .ctl{font-size:14px}
+body.present .tools{margin-top:4px;gap:5px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .sub{margin:6px 0 2px}
+body.present .ro{padding:6px 12px}
+body.present .ro b{font-size:19px}
+body.present .cat{margin-top:6px;padding:6px 12px;font-size:13px}
+body.present .svgwrap svg{max-height:430px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>CDC, flow crossmatch และ single antigen bead</h2>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 680 470" role="img" aria-label="CDC wells, flow cytometry crossmatch histograms and DSA MFI bars"></svg></div>
+      <p class="hint no-present">Crossmatch และ MFI ในภาพคำนวณจาก DSA ที่ตั้งไว้ class I ทำให้ทั้ง T และ B cell บวก class II ทำให้บวกเฉพาะ B cell เกณฑ์ MFI ที่ใช้ (1,000, 3,000, 10,000) เป็นค่าประมาณ แต่ละ lab ต้องใช้ cut-off ของตนเอง</p>
+    </div>
+    <div class="card">
+      <h2>Antibody และปัจจัยรบกวน</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="sub">ปัจจัยที่ทำให้ crossmatch เปลี่ยน</div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roCT"><b>-</b><span>CDC T cell</span></div>
+        <div class="ro" id="roCB"><b>-</b><span>CDC B cell</span></div>
+        <div class="ro" id="roVX"><b>-</b><span>Virtual crossmatch</span></div>
+        <div class="ro" id="roFT"><b>-</b><span>FCXM T (MCS)</span></div>
+        <div class="ro" id="roFB"><b>-</b><span>FCXM B (MCS)</span></div>
+        <div class="ro" id="roPool"><b>-</b><span>Compatible donor pool</span></div>
+      </div>
+      <div class="cat" id="cat"></div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script>
+(function(){
+"use strict";
+var S = {
+  low:{name:"Low risk", p:{c1:0, c2:0, cpra:0, igm:false, dtt:false, rtx:false, pron:false, atg:false},
+    rows:[["Recipient","ชาย 38 ปี first KT ไม่เคยได้เลือดหรือตั้งครรภ์"],["SAB","ไม่มี HLA antibody cPRA 0%"],["Crossmatch","CDC T/B ลบ FCXM T/B ลบ"],["Category","Low immunologic risk"]],
+    take:["ไม่มี DSA และ crossmatch ลบ เป็น low immunologic risk","Induction ด้วย basiliximab ได้","ยังต้องตรวจ DSA ซ้ำเมื่อมี sensitizing event ใหม่ก่อนผ่าตัด"]},
+  igm:{name:"IgM autoantibody", p:{c1:0, c2:0, cpra:0, igm:true, dtt:false, rtx:false, pron:false, atg:false},
+    rows:[["Recipient","หญิง SLE รอปลูกถ่าย"],["CDC","T และ B บวก แต่ autocrossmatch บวกด้วย"],["SAB","ไม่มี DSA"],["คำถาม","CDC บวกนี้ห้ามปลูกถ่ายหรือไม่"]],
+    take:["CDC บวกที่ DTT ทำให้หายและ autocrossmatch บวกมักเป็น IgM autoantibody","IgM autoantibody ไม่ใช่ข้อห้ามปลูกถ่าย","SAB และ FCXM (วัด IgG) ช่วยยืนยันว่าไม่มี DSA"]},
+  lowdsa:{name:"Low-level DSA, FCXM ลบ", p:{c1:0, c2:1800, cpra:35, igm:false, dtt:false, rtx:false, pron:false, atg:false},
+    rows:[["Recipient","หญิงมีบุตร 2 คน donor เป็นสามี"],["SAB","DSA anti-DQ7 MFI 1,800"],["Crossmatch","CDC ลบ FCXM T และ B ลบ"],["Category","Intermediate"]],
+    take:["DSA บวกแต่ FCXM ลบเป็น intermediate risk","เพิ่มความเสี่ยง ABMR แต่ปลูกถ่ายได้ถ้าเตรียมเหมาะสม","ใช้ T-cell depleting induction และติดตาม DSA หลังผ่าตัด"]},
+  fcxm:{name:"FCXM บวก, CDC ลบ", p:{c1:6000, c2:2500, cpra:70, igm:false, dtt:false, rtx:false, pron:false, atg:false},
+    rows:[["Recipient","Retransplant cPRA 70%"],["SAB","DSA anti-A2 MFI 6,000 และ anti-DR4 2,500"],["Crossmatch","CDC ลบ FCXM T และ B บวก"],["Category","High"]],
+    take:["FCXM บวก CDC ลบ ร่วมกับ DSA เป็น high risk ต่อ ABMR","ถ้าไม่มี donor อื่น ต้อง desensitization ก่อน","Paired kidney exchange เป็นทางเลือกที่ควรพิจารณาก่อน"]},
+  cdc:{name:"CDC T cell IgG บวก", p:{c1:14000, c2:0, cpra:88, igm:false, dtt:true, rtx:false, pron:false, atg:false},
+    rows:[["Recipient","หญิง cPRA 88%"],["SAB","DSA anti-B62 MFI 14,000"],["Crossmatch","CDC T บวกแม้ใส่ DTT"],["Category","Contraindicated กับ donor นี้"]],
+    take:["CDC T cell IgG บวกร่วมกับ DSA เสี่ยง hyperacute rejection","ไม่ควรปลูกถ่ายกับ donor นี้โดยไม่ desensitization","หา donor อื่นหรือเข้า paired exchange"]},
+  rtx:{name:"B cell บวกหลัง rituximab", p:{c1:0, c2:0, cpra:0, igm:false, dtt:false, rtx:true, pron:false, atg:false},
+    rows:[["Recipient","เคยได้ rituximab เมื่อ 2 เดือนก่อน (MN)"],["Crossmatch","FCXM B บวก FCXM T ลบ"],["SAB","ไม่มี DSA"],["คำถาม","B cell crossmatch บวกจริงหรือไม่"]],
+    take:["Rituximab ทำให้ B cell FCXM บวกปลอม","ใช้ pronase ตัด CD20 ก่อนทำ หรืออาศัย SAB","ต้องรู้ประวัติยาก่อนแปลผล crossmatch"]},
+  hipra:{name:"cPRA 99%, virtual XM ลบ", p:{c1:600, c2:400, cpra:99, igm:false, dtt:false, rtx:false, pron:false, atg:false},
+    rows:[["Recipient","Highly sensitized รอ deceased donor 9 ปี"],["SAB","Antibody หลายตัวแต่ไม่ตรงกับ donor รายนี้ (MFI สูงสุด 600)"],["Virtual XM","ลบ"],["Crossmatch จริง","CDC และ FCXM ลบ"]],
+    take:["cPRA 99% หมายถึง donor ส่วนใหญ่ไม่เข้ากัน แต่บาง donor เข้ากันได้","Virtual crossmatch ช่วยคัด donor ได้เร็วก่อนส่งเลือดจริง","ระบบจัดสรรควรให้ priority แก่ผู้ป่วย cPRA สูงมาก"]}
+};
+var ORDER = ["low","igm","lowdsa","fcxm","cdc","rtx","hipra"];
+var box = document.getElementById("ctls"), C = {};
+function add(k, o){ o.onInput = update; o.id = "s" + k; C[k] = Sim.slider(o); box.appendChild(C[k].el); }
+add("c1", {label:"Class I DSA MFI", min:0, max:20000, step:100, value:0, unit:"", fmt:function(v){ return v.toLocaleString("en-US"); }});
+add("c2", {label:"Class II DSA MFI", min:0, max:20000, step:100, value:0, unit:"", fmt:function(v){ return v.toLocaleString("en-US"); }});
+add("cpra", {label:"cPRA", min:0, max:100, step:1, value:0, unit:"%"});
+var F = {}, TG = {};
+[["igm","IgM autoantibody"],["dtt","DTT treat serum"],["rtx","Rituximab < 6 เดือน"],["pron","Pronase"],["atg","ATG ล่าสุด"]].forEach(function(x){ F[x[0]] = false; TG[x[0]] = Sim.toggle(x[1], function(on){ F[x[0]] = on; update(); }, false); document.getElementById("tools").appendChild(TG[x[0]]); });
+function P(){ var p = {}; Object.keys(C).forEach(function(k){ p[k] = C[k].get(); }); Object.keys(F).forEach(function(k){ p[k] = F[k]; }); return p; }
+
+/* ---------- model ---------- */
+var CUT = 1000;
+function model(p){
+  var igmOn = p.igm && !p.dtt;
+  var cdcT = p.c1 >= 10000 || igmOn || p.atg, cdcB = p.c1 >= 10000 || p.c2 >= 10000 || igmOn || p.atg || (p.rtx && !p.pron && p.c2 > 5000);
+  var cdcTscore = cdcT ? (p.c1 >= 15000 || p.atg ? 8 : 6) : 1, cdcBscore = cdcB ? (p.c1 + p.c2 >= 15000 || p.atg ? 8 : 6) : 1;
+  var ft = Math.round(p.c1 / 40 + (p.atg ? 300 : 0) + (p.igm ? 8 : 0));
+  var fb = Math.round((p.c1 + p.c2) / 30 + (p.rtx && !p.pron ? 260 : 0) + (p.atg ? 300 : 0) + (p.igm ? 12 : 0));
+  var dsa = Math.max(p.c1, p.c2) >= CUT;
+  var cdcIgG = (p.c1 >= 10000) || (p.c2 >= 10000);
+  var falseCdc = (cdcT || cdcB) && !cdcIgG;
+  var cat, cls, why;
+  if(cdcIgG && dsa){ cat = "Very high: contraindicated with this donor"; cls = "hi"; why = "CDC บวกจาก IgG DSA (DTT ไม่ทำให้หาย)"; }
+  else if(dsa && (ft >= 50 && p.c1 >= CUT || fb >= 100 && !(p.rtx && !p.pron && fb - 260 < 100))){ cat = "High: DSA + positive FCXM"; cls = "hi"; why = "FCXM บวกจาก DSA ระดับปานกลางถึงสูง"; }
+  else if(dsa){ cat = "Intermediate: DSA + negative crossmatch"; cls = ""; why = "มี DSA แต่ crossmatch ลบ"; }
+  else if(p.cpra > 0){ cat = "Low to intermediate: sensitized, no DSA"; cls = ""; why = "มี HLA antibody แต่ไม่จำเพาะต่อ donor นี้"; }
+  else { cat = "Low"; cls = "lo"; why = "ไม่มี HLA antibody และ crossmatch ลบ"; }
+  return {cdcT:cdcT, cdcB:cdcB, cdcTs:cdcTscore, cdcBs:cdcBscore, ft:ft, fb:fb, dsa:dsa, falseCdc:falseCdc, cat:cat, cls:cls, why:why, igmOn:igmOn};
+}
+
+/* ---------- drawing ---------- */
+var svg = document.getElementById("vis"), FT = "IBM Plex Sans Thai, sans-serif", MO = "Geist Mono, monospace";
+function SV(t, a, p){ var o = {}; Object.keys(a).forEach(function(k){ if(a[k] !== null && a[k] !== undefined) o[k] = a[k]; }); return Sim.svg(t, o, p); }
+function rng(seed){ var s = seed; return function(){ s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; }; }
+function well(cx, cy, score, label){
+  var dead = {1:0.05, 2:0.15, 4:0.35, 6:0.65, 8:0.9}[score], r = rng(label === "T" ? 11 : 29);
+  SV("circle", {cx:cx, cy:cy, r:58, fill:"#FBFBFD", stroke:"#D3D5E2"}, svg);
+  for(var i = 0; i < 46; i++){
+    var a = r() * Math.PI * 2, d = Math.sqrt(r()) * 50, x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d, isD = r() < dead;
+    SV("circle", {cx:x, cy:y, r:4.2, fill:isD ? "#B4232A" : "#E8F4F2", stroke:isD ? "#7A1419" : "#1F7A72", "stroke-width":0.8}, svg);
+  }
+  SV("text", {x:cx, y:cy + 78, "text-anchor":"middle", "font-family":FT, "font-size":12.5, fill:"#0B0B1F", text:label + " cell CDC: score " + score + (score >= 6 ? " (POS)" : " (neg)")}, svg);
+}
+function hist(x0, y0, w, h, shift, cut, label){
+  SV("rect", {x:x0, y:y0, width:w, height:h, fill:"#FBFBFD", stroke:"#E6E7F0"}, svg);
+  var neg = 300, sd = 55, max = 1024;
+  function curve(mu, col, dash, fill){
+    var d = "M" + x0 + "," + (y0 + h);
+    for(var c = 0; c <= max; c += 8){ var v = Math.exp(-Math.pow(c - mu, 2) / (2 * sd * sd)); d += " L" + (x0 + c / max * w).toFixed(1) + "," + (y0 + h - v * (h - 14)).toFixed(1); }
+    d += " L" + (x0 + w) + "," + (y0 + h) + " Z";
+    SV("path", {d:d, fill:fill, stroke:col, "stroke-width":1.6, "stroke-dasharray":dash}, svg);
+  }
+  var pos = shift >= cut;
+  curve(neg, "#9A9CB2", "4 3", "none");
+  curve(Math.min(980, neg + shift), pos ? "#B4232A" : "#1F7A72", null, pos ? "rgba(180,35,42,.14)" : "rgba(31,122,114,.12)");
+  var tx = x0 + (neg + cut) / max * w;
+  SV("line", {x1:tx, y1:y0 + 4, x2:tx, y2:y0 + h, stroke:"#0B0B1F", "stroke-dasharray":"2 3"}, svg);
+  SV("text", {x:tx + 4, y:y0 + 14, "font-family":MO, "font-size":10.5, fill:"#5E6075", text:"+" + cut}, svg);
+  SV("text", {x:x0, y:y0 - 6, "font-family":FT, "font-size":12.5, fill:"#0B0B1F", text:label + " FCXM: MCS " + shift + (pos ? " (POS)" : " (neg)")}, svg);
+  SV("text", {x:x0 + w, y:y0 + h + 13, "text-anchor":"end", "font-family":MO, "font-size":10, fill:"#9A9CB2", text:"IgG fluorescence (channel)"}, svg);
+}
+function draw(p, M){
+  svg.innerHTML = "";
+  SV("text", {x:16, y:20, "font-family":FT, "font-size":13, "font-weight":600, fill:"#0B0B1F", text:"Complement-dependent cytotoxicity" + (p.dtt ? " (DTT-treated serum)" : "")}, svg);
+  well(100, 96, M.cdcTs, "T"); well(250, 96, M.cdcBs, "B");
+  SV("text", {x:356, y:20, "font-family":FT, "font-size":13, "font-weight":600, fill:"#0B0B1F", text:"Flow cytometry crossmatch"}, svg);
+  hist(356, 46, 308, 64, M.ft, 50, "T");
+  hist(356, 140, 308, 64, M.fb, 100, "B");
+  SV("text", {x:356, y:236, "font-family":FT, "font-size":10.5, fill:"#9A9CB2", text:"Dashed curve: negative control serum"}, svg);
+  // MFI bars
+  var y0 = 262;
+  SV("text", {x:16, y:y0, "font-family":FT, "font-size":13, "font-weight":600, fill:"#0B0B1F", text:"Single antigen bead: donor-specific antibody (MFI)"}, svg);
+  var bx = 130, bw = 470, mx = 20000;
+  function X(v){ return bx + bw * Math.min(v, mx) / mx; }
+  [[1000,"1,000"],[3000,"3,000"],[10000,"10,000"]].forEach(function(t){ SV("line", {x1:X(t[0]), y1:y0 + 14, x2:X(t[0]), y2:y0 + 118, stroke:"#9A9CB2", "stroke-dasharray":"3 3"}, svg); SV("text", {x:X(t[0]), y:y0 + 132, "text-anchor":"middle", "font-family":MO, "font-size":10.5, fill:"#5E6075", text:t[1]}, svg); });
+  [["Class I DSA", p.c1, 30],["Class II DSA", p.c2, 74]].forEach(function(b){
+    var v = b[1], col = v >= 10000 ? "#B4232A" : v >= 3000 ? "#D9731A" : v >= 1000 ? "#A8842C" : "#9A9CB2";
+    SV("text", {x:bx - 10, y:y0 + b[2] + 16, "text-anchor":"end", "font-family":FT, "font-size":12.5, fill:"#0B0B1F", text:b[0]}, svg);
+    SV("rect", {x:bx, y:y0 + b[2], width:bw, height:24, rx:7, fill:"#F4F5F9"}, svg);
+    SV("rect", {x:bx, y:y0 + b[2], width:Math.max(2, X(v) - bx), height:24, rx:7, fill:col}, svg);
+    SV("text", {x:bx + bw + 8, y:y0 + b[2] + 16, "font-family":MO, "font-size":12, fill:"#5E6075", text:v.toLocaleString("en-US")}, svg);
+  });
+  [["Below cut-off", 1000, "#9A9CB2"], ["Usually FCXM neg", 3000, "#A8842C"], ["Often FCXM pos", 10000, "#D9731A"], ["Often CDC pos", 20000, "#B4232A"]].forEach(function(z, i){
+    var x = 16 + i * 166; SV("rect", {x:x, y:y0 + 150, width:12, height:12, rx:3, fill:z[2]}, svg); SV("text", {x:x + 18, y:y0 + 160, "font-family":FT, "font-size":11.5, fill:"#5E6075", text:z[0]}, svg);
+  });
+  SV("text", {x:16, y:y0 + 196, "font-family":FT, "font-size":12, fill:M.cls === "hi" ? "#B4232A" : M.cls === "lo" ? "#1F7A72" : "#0B0B1F", text:"Risk: " + M.cat}, svg);
+}
+function update(){
+  var p = P(), M = model(p);
+  draw(p, M);
+  Sim.ro("roCT", M.cdcT ? "Pos" : "Neg", M.cdcT ? "flag" : "ok");
+  Sim.ro("roCB", M.cdcB ? "Pos" : "Neg", M.cdcB ? "flag" : "ok");
+  Sim.ro("roVX", M.dsa ? "Pos" : "Neg", M.dsa ? "flag" : "ok");
+  Sim.ro("roFT", M.ft, M.ft >= 50 ? "flag" : "ok");
+  Sim.ro("roFB", M.fb, M.fb >= 100 ? "flag" : "ok");
+  Sim.ro("roPool", (100 - p.cpra) + "%", p.cpra >= 95 ? "flag" : p.cpra === 0 ? "ok" : null);
+  var c = document.getElementById("cat"); c.className = "cat" + (M.cls ? " " + M.cls : "");
+  c.innerHTML = "<b>Immunologic risk:</b> " + M.cat + " (" + M.why + ")";
+  var n = [];
+  if(M.falseCdc && p.igm && !p.dtt) n.push("CDC บวกโดยไม่มี IgG DSA ที่สูงพอ สงสัย IgM autoantibody ให้ทำ autocrossmatch และ DTT ถ้า DTT ทำให้ผลลบ ปลูกถ่ายได้");
+  if(M.falseCdc && p.atg) n.push("ได้ ATG มาไม่นาน rabbit IgG ทำให้ crossmatch บวกปลอม อาศัย SAB หรือรอให้ยาหมด");
+  if(p.rtx && !p.pron && M.fb >= 100 && p.c2 < CUT && p.c1 < CUT) n.push("B cell FCXM บวกจาก rituximab ไม่ใช่ DSA ทำซ้ำด้วย pronase หรือยึดผล SAB");
+  if(M.cls === "hi" && /Very/.test(M.cat)) n.push("ไม่ปลูกถ่ายกับ donor นี้ เสนอ paired kidney exchange หรือ donor อื่น ถ้าไม่มีทางเลือกจึงพิจารณา desensitization (PLEX + IVIG ± rituximab หรือ imlifidase) ให้ crossmatch ลบก่อน");
+  else if(M.cls === "hi") n.push("พิจารณา paired exchange ก่อน ถ้าใช้ donor นี้ต้อง desensitization ให้ FCXM ลบหรือ MFI ต่ำลง แล้วใช้ ATG induction ร่วม IVIG และเฝ้าระวัง ABMR");
+  else if(M.dsa) n.push("ปลูกถ่ายได้ ใช้ ATG induction พิจารณา IVIG ตามนโยบายศูนย์ ตรวจ DSA หลังผ่าตัดเป็นระยะ และ biopsy เมื่อ graft function เปลี่ยน");
+  else if(p.cpra >= 95) n.push("Virtual crossmatch ลบกับ donor นี้ ส่งเลือดทำ crossmatch จริงทันที โอกาสได้ donor ที่เข้ากันมีน้อย ไม่ควรปล่อยให้หลุด");
+  else if(!M.falseCdc) n.push(p.cpra > 0 ? "ไม่มี DSA ปลูกถ่ายได้ เลือก induction ตามระดับ sensitization" : "ปลูกถ่ายได้ basiliximab induction ร่วม tacrolimus, MPA และ steroid");
+  document.getElementById("act").innerHTML = "<b>Next step:</b> " + n.join(" ");
+}
+Sim.mount({code:"KT-02", title:"Crossmatch and Donor-Specific Antibody",
+  lead:"ปรับ MFI ของ DSA ดู CDC, flow และ virtual crossmatch เปลี่ยนตาม ลองใส่ IgM autoantibody, rituximab หรือ ATG ที่ทำให้บวกปลอม แล้วแบ่ง immunologic risk",
+  scenarios:S, order:ORDER, captureMs:800,
+  onChange:function(k, s){ var q = s.p; ["c1","c2","cpra"].forEach(function(x){ C[x].set(q[x]); }); Object.keys(F).forEach(function(x){ F[x] = !!q[x]; TG[x].setState(F[x]); }); update(); },
+  refs:["Tambur AR, Campbell P, Claas FH, et al. Sensitization in transplantation: assessment of risk (STAR) 2017 working group meeting report. Am J Transplant 2018, 18(7): 1604-1614",
+        "Tait BD, Süsal C, Gebel HM, et al. Consensus guidelines on the testing and clinical management issues associated with HLA and non-HLA antibodies in transplantation. Transplantation 2013, 95(1): 19-47",
+        "Mulley WR, Kanellis J. Understanding crossmatch testing in organ transplantation: a case-based guide for the general nephrologist. Nephrology 2011, 16(2): 125-133",
+        "Lefaucheur C, Loupy A, Hill GS, et al. Preexisting donor-specific HLA antibodies predict outcome in kidney transplantation. J Am Soc Nephrol 2010, 21(8): 1398-1406",
+        "Kidney Disease: Improving Global Outcomes (KDIGO) Transplant Work Group. KDIGO clinical practice guideline for the care of kidney transplant recipients. Am J Transplant 2009, 9(Suppl 3): S1-S155"],
+  note:"Model เพื่อการสอน: MCS ของ T cell = class I MFI/40, B cell = (class I + class II)/30 เกณฑ์บวก T ≥ 50 และ B ≥ 100 channel, CDC บวกเมื่อ MFI ≥ 10,000 ความสัมพันธ์ MFI กับ crossmatch จริงขึ้นกับ bead, ความหนาแน่น antigen, subclass และ lab การแบ่ง risk เป็นกรอบที่ใช้ทั่วไป ให้ปรับตามแนวทางของศูนย์"
+});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[MX-02] Trial Reading Lab: KM, NNT, Non-inferiority and Subgroups</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.3fr 1fr}}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:4px;margin-bottom:10px}
+.sub{font-size:12.5px;color:var(--muted);margin:14px 0 4px}
+.grp[hidden]{display:none}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .steps{display:none}
+body.present .card{padding:14px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .ro{padding:6px 12px}
+body.present .ro b{font-size:17px}
+body.present .ctls{gap:2px}
+body.present .ctl{font-size:13px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .tools{margin:2px 0 4px;gap:5px}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+body.present .svgwrap svg{max-height:420px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2 id="visTitle">Kaplan-Meier</h2>
+      <div class="tools" id="modes" role="group" aria-label="View"></div>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 640 440" role="img" aria-label="Trial figure"></svg></div>
+      <p class="hint no-present" id="hint"></p>
+    </div>
+    <div class="card">
+      <h2>Trial design</h2>
+      <div class="grp" id="gKM"><div class="ctls" id="cKM"></div></div>
+      <div class="grp" id="gNI" hidden><div class="ctls" id="cNI"></div></div>
+      <div class="grp" id="gSG" hidden><div class="ctls" id="cSG"></div><div class="tools" id="tSG"></div></div>
+      <div class="readout">
+        <div class="ro" id="r1"><b>-</b><span>-</span></div>
+        <div class="ro" id="r2"><b>-</b><span>-</span></div>
+        <div class="ro" id="r3"><b>-</b><span>-</span></div>
+        <div class="ro" id="r4"><b>-</b><span>-</span></div>
+        <div class="ro" id="r5"><b>-</b><span>-</span></div>
+        <div class="ro" id="r6"><b>-</b><span>-</span></div>
+      </div>
+      <div class="act" id="act"></div>
+      <div id="steps" class="no-present"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/calc.js"></script>
+<script>
+(function(){
+"use strict";
+function SV(t,a,p){ var b={}; for(var k in a) if(a[k]!==null&&a[k]!==undefined) b[k]=a[k]; return Sim.svg(t,b,p); }
+function Phi(z){ var t=1/(1+0.2316419*Math.abs(z)), d=0.3989423*Math.exp(-z*z/2), p=d*t*(0.3193815+t*(-0.3565638+t*(1.781478+t*(-1.821256+t*1.330274)))); return z>0?1-p:p; }
+function pfmt(p){ return p<0.001?"<0.001":p<0.01?p.toFixed(3):p.toFixed(2); }
+function K(o){ var d={mode:"km",n:2000,pc:20,hr:0.75,T:3,drop:3,k:1}; for(var x in o) d[x]=o[x]; return d; }
+function N(o){ var d={mode:"ni",cr:10,diff:0.5,nn:1500,margin:4}; for(var x in o) d[x]=o[x]; return d; }
+function G(o){ var d={mode:"sg",shr:0.8,sn:4000,rate:15,het:1,seed:7}; for(var x in o) d[x]=o[x]; return d; }
+var S={
+  km:{name:"Positive trial", p:K({}),
+    rows:[["Design","2,000 ต่อกลุ่ม event กลุ่มควบคุม 20% ใน 3 ปี"],["ผล","HR 0.75 CI แคบ p < 0.001"],["อ่าน","ARR ราว 4.6% ใน 3 ปี NNT ราว 22"]],
+    take:["HR เป็น relative effect ใช้ตลอดช่วงติดตามภายใต้ proportional hazards","ผลต่อผู้ป่วยรายบุคคลดูที่ ARR และ NNT ณ เวลาที่ระบุ ไม่ใช่ RRR","NNT ต้องบอกระยะเวลาเสมอ เช่น NNT 22 ใน 3 ปี"]},
+  under:{name:"Underpowered", p:K({n:250,hr:0.8}),
+    rows:[["Design","250 ต่อกลุ่ม"],["ผล","HR 0.80 แต่ CI กว้างคร่อม 1 p ไม่ significant"],["อ่าน","power ต่ำ ไม่ได้พิสูจน์ว่าไม่มีผล"]],
+    take:["p > 0.05 ใน trial ที่ power ต่ำคือ absence of evidence ไม่ใช่ evidence of absence","ดูขอบบนและล่างของ CI ว่ายังเข้ากันได้กับผลที่มีความหมายทางคลินิกหรือไม่","Power ขึ้นกับจำนวน event ไม่ใช่จำนวนผู้ป่วยโดยตรง (type II error)"]},
+  lowrisk:{name:"Baseline risk ต่ำ", p:K({n:4000,pc:4}),
+    rows:[["Design","4,000 ต่อกลุ่ม event กลุ่มควบคุม 4%"],["ผล","HR 0.75 เท่าเดิม"],["อ่าน","ARR ราว 1% NNT ราว 100 ใน 3 ปี"]],
+    take:["HR เดียวกันให้ NNT ต่างกันมากตาม baseline risk","ผู้ป่วยเสี่ยงสูงได้ประโยชน์สัมบูรณ์มากกว่า","นำผลไปใช้กับผู้ป่วยตรงหน้าโดยประมาณ risk ของเขาเองก่อน"]},
+  censor:{name:"Censoring มาก", p:K({drop:25}),
+    rows:[["Design","drop out 25% ต่อปี"],["ผล","event ลดลง CI กว้างขึ้น power ลด"],["อ่าน","ตรวจ number at risk และเหตุผลที่ censor"]],
+    take:["Censoring ลดจำนวน event ที่สังเกตได้ ทำให้ power ลด","KM สมมติว่า censoring เป็น non-informative ถ้าคนที่ออกจากการศึกษามี prognosis ต่างออกไป ผลจะ bias","ดู number at risk ใต้กราฟ ช่วงท้ายที่เหลือน้อยเชื่อถือได้น้อย"]},
+  multi:{name:"Multiplicity", p:K({hr:1,k:10}),
+    rows:[["Design","ไม่มีผลจริง (HR 1.0) แต่ทดสอบ 10 endpoint"],["ผล","โอกาสพบ p < 0.05 อย่างน้อย 1 ตัวราว 40%"],["อ่าน","ให้น้ำหนักกับ primary endpoint ที่กำหนดล่วงหน้า"]],
+    take:["ทดสอบหลายครั้งเพิ่ม type I error สะสม (family-wise error)","Secondary endpoint ที่ significant เมื่อ primary ไม่ significant เป็นเพียง hypothesis-generating","Hierarchical testing หรือ Bonferroni ควบคุม type I error"]},
+  niMet:{name:"Non-inferiority ผ่าน", p:N({}),
+    rows:[["Design","event 10% margin 4% (absolute)"],["ผล","CI ของผลต่างอยู่ทางซ้ายของ margin ทั้งหมด"],["อ่าน","non-inferior"]],
+    take:["NI trial ถามว่ายาใหม่แย่กว่าไม่เกิน margin ที่ยอมรับได้หรือไม่","ตัดสินด้วยขอบบนของ CI (ฝั่งที่ยาใหม่แย่กว่า) เทียบกับ margin","Margin ต้องกำหนดล่วงหน้าจากผลของยาเดิมเทียบ placebo และความเห็นทางคลินิก"]},
+  niInc:{name:"Inconclusive", p:N({nn:300}),
+    rows:[["Design","300 ต่อกลุ่ม"],["ผล","CI คร่อม margin"],["อ่าน","สรุปไม่ได้ ไม่ใช่ non-inferior"]],
+    take:["CI ที่คร่อม margin แปลว่าสรุปไม่ได้","NI trial ต้องการขนาดใหญ่เพราะ margin มักแคบ","ใน NI การวิเคราะห์ ITT อาจเอนเข้าหา 'ไม่ต่างกัน' จึงต้องดู per-protocol ให้สอดคล้องกัน"]},
+  niWorse:{name:"NI แต่แย่กว่าอย่างมีนัยสำคัญ", p:N({diff:2.5,nn:6000}),
+    rows:[["Design","6,000 ต่อกลุ่ม"],["ผล","CI ทั้งหมด > 0 แต่ยังน้อยกว่า margin"],["อ่าน","non-inferior ตามนิยาม แต่แย่กว่าจริง"]],
+    take:["ผลอาจเป็น non-inferior และ statistically inferior ได้พร้อมกัน","ตัดสินว่าความแย่ที่ยอมรับได้คุ้มกับข้อดีอื่น (ราคา ความสะดวก ผลข้างเคียง) หรือไม่","Margin กว้างเกินไปทำให้ยอมรับยาที่แย่กว่าได้"]},
+  niSup:{name:"Superior", p:N({diff:-3,nn:2000}),
+    rows:[["Design","2,000 ต่อกลุ่ม"],["ผล","CI ทั้งหมด < 0"],["อ่าน","non-inferior และ superior"]],
+    take:["เมื่อพิสูจน์ non-inferiority แล้ว ทดสอบ superiority ต่อได้โดยไม่เสีย type I error (ถ้ากำหนดล่วงหน้า)","ทางกลับกัน trial superiority ที่ไม่ significant จะอ้างว่า non-inferior ไม่ได้ถ้าไม่ได้กำหนด margin ล่วงหน้า","อ่านทิศของผลต่างให้ดีว่าค่าบวกหมายถึงยาใหม่แย่กว่าหรือดีกว่า"]},
+  sgChance:{name:"Subgroup ต่างโดยบังเอิญ", p:G({}),
+    rows:[["Design","ผลจริงเท่ากันทุก subgroup (HR 0.80)"],["ผล","subgroup eGFR < 45 ดูเหมือนไม่ได้ผล"],["อ่าน","p interaction ไม่ significant ใช้ผลรวม"]],
+    take:["ดู p for interaction ไม่ใช่เทียบว่า subgroup ไหน significant","ยิ่งดูหลาย subgroup ยิ่งมีโอกาสเจอความต่างโดยบังเอิญ","ผล overall มักเป็นค่าประมาณที่ดีที่สุดสำหรับทุก subgroup"]},
+  sgTrue:{name:"True interaction", p:G({het:2.2,seed:3}),
+    rows:[["Design","ยาได้ผลเฉพาะผู้ป่วยเบาหวาน"],["ผล","p interaction ต่ำ subgroup สองฝั่งไม่ซ้อนกัน"],["อ่าน","มีหลักฐานว่า effect ต่างกันจริง"]],
+    take:["Interaction ที่น่าเชื่อ: กำหนดล่วงหน้า จำนวนน้อย มีเหตุผลทางชีววิทยา p interaction ต่ำ และพบซ้ำใน trial อื่น","Quantitative interaction (ขนาดต่าง ทิศเดียวกัน) พบบ่อยกว่า qualitative (ทิศตรงข้าม)","Post hoc subgroup เป็น hypothesis-generating"]},
+  sgSmall:{name:"Trial เล็ก หลาย subgroup", p:G({sn:900,seed:11}),
+    rows:[["Design","900 ราย 6 subgroup"],["ผล","CI กว้างทุก subgroup จุดกระจายมาก"],["อ่าน","อย่าแปล subgroup ใน trial เล็ก"]],
+    take:["Subgroup มี event น้อย CI จึงกว้างและจุดประมาณแกว่งมาก","Forest plot ที่ดูกระจายใน trial เล็กมักเป็นแค่ random variation","กดสุ่มใหม่หลายครั้งเพื่อดูว่าความต่างระดับนี้เกิดจากโชคบ่อยแค่ไหน"]}
+};
+var ORDER=["km","under","lowrisk","censor","multi","niMet","niInc","niWorse","niSup","sgChance","sgTrue","sgSmall"];
+var C={};
+function sl(box,k,o){ o.id="s"+k; o.onInput=function(){ update(); }; C[k]=Sim.slider(o); document.getElementById(box).appendChild(C[k].el); }
+sl("cKM","n",{label:"n ต่อกลุ่ม",min:100,max:6000,step:50,value:2000,unit:""});
+sl("cKM","pc",{label:"Event กลุ่มควบคุมที่ T",min:2,max:50,step:1,value:20,unit:" %"});
+sl("cKM","hr",{label:"True HR",min:0.4,max:1.3,step:0.01,value:0.75,unit:"",fmt:function(v){ return v.toFixed(2); }});
+sl("cKM","T",{label:"Follow-up",min:1,max:6,step:0.5,value:3,unit:" ปี"});
+sl("cKM","drop",{label:"Censoring ต่อปี",min:0,max:40,step:1,value:3,unit:" %"});
+sl("cKM","k",{label:"จำนวน endpoint ที่ทดสอบ",min:1,max:20,step:1,value:1,unit:""});
+sl("cNI","cr",{label:"Event กลุ่มควบคุม",min:2,max:40,step:0.5,value:10,unit:" %"});
+sl("cNI","diff",{label:"True difference (ใหม่ − เดิม)",min:-6,max:8,step:0.1,value:0.5,unit:" %",fmt:function(v){ return (v>0?"+":"")+v.toFixed(1); }});
+sl("cNI","nn",{label:"n ต่อกลุ่ม",min:100,max:8000,step:50,value:1500,unit:""});
+sl("cNI","margin",{label:"NI margin",min:1,max:10,step:0.5,value:4,unit:" %"});
+sl("cSG","shr",{label:"True HR overall",min:0.5,max:1.2,step:0.01,value:0.8,unit:"",fmt:function(v){ return v.toFixed(2); }});
+sl("cSG","sn",{label:"n รวม",min:400,max:12000,step:100,value:4000,unit:""});
+sl("cSG","rate",{label:"Event rate รวม",min:4,max:40,step:1,value:15,unit:" %"});
+sl("cSG","het",{label:"True interaction (DM เทียบ non-DM)",min:1,max:3,step:0.05,value:1,unit:"",fmt:function(v){ return v<1.05?"none":"x"+v.toFixed(2); }});
+var SEED=7;
+var rb=Sim.h("button",{class:"tog",type:"button",text:"สุ่มใหม่ (seed ใหม่)"}); rb.addEventListener("click",function(){ SEED=(SEED*7+13)%997; update(); }); document.getElementById("tSG").appendChild(rb);
+var MODE="km", MB={};
+[["km","KM และ NNT"],["ni","Non-inferiority"],["sg","Subgroup forest"]].forEach(function(m){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:m[1]}); b.addEventListener("click",function(){ setMode(m[0]); update(); }); document.getElementById("modes").appendChild(b); MB[m[0]]=b; });
+function setMode(m){ MODE=m; Object.keys(MB).forEach(function(k){ MB[k].setAttribute("aria-pressed",k===m?"true":"false"); });
+  document.getElementById("gKM").hidden=m!=="km"; document.getElementById("gNI").hidden=m!=="ni"; document.getElementById("gSG").hidden=m!=="sg";
+  document.getElementById("visTitle").textContent=m==="km"?"Kaplan-Meier และ number at risk":m==="ni"?"Non-inferiority: CI ของผลต่าง":"Subgroup forest plot";
+  document.getElementById("hint").textContent=m==="km"?"เส้นทึบ = กลุ่มรักษา เส้นจาง = กลุ่มควบคุม ขีดตั้งเล็กคือผู้ป่วยที่ถูก censor ตารางล่างคือ number at risk แต่ละปี ARR และ NNT อ่านที่เวลา T":m==="ni"?"ผลต่างของ event rate (ยาใหม่ − ยาเดิม) ค่าบวกแปลว่ายาใหม่แย่กว่า เส้นประแดงคือ margin เส้นทึบคือ 0 แถบคือ 95% CI ของ trial นี้ ด้านล่างเป็นรูปแบบผลมาตรฐาน 5 แบบเพื่อเทียบ":"สี่เหลี่ยมคือ HR ของแต่ละ subgroup ขนาดตามจำนวน event เส้นคือ 95% CI diamond คือผลรวม p int คือ p for interaction ของแต่ละคู่";
+}
+var svg=document.getElementById("vis"), INK="#0B0B1F", MUT="#5E6075", FAINT="#9A9CB2", ACC="#5B4BFF", RED="#B4232A", TEAL="#1F7A72", LINE="#D3D5E2", CANV="#F4F5F9";
+function tx(x,y,s,o){ o=o||{}; return SV("text",{x:x,y:y,"text-anchor":o.a||"middle","font-family":o.mono?"Geist Mono, monospace":"IBM Plex Sans Thai, sans-serif","font-size":o.fs||12,"font-weight":o.fw||400,fill:o.fill||INK,text:s},svg); }
+function ln(x1,y1,x2,y2,c,w,d){ return SV("line",{x1:x1,y1:y1,x2:x2,y2:y2,stroke:c||LINE,"stroke-width":w||1,"stroke-dasharray":d||null},svg); }
+function setRO(i,label,val,cls){ var el=document.getElementById("r"+i); el.querySelector("span").textContent=label; Sim.ro("r"+i,val,cls); }
+function act(m,bad){ var a=document.getElementById("act"); a.innerHTML="<b>Next step:</b> "+m; a.className="act"+(bad?" bad":""); }
+/* ---------- KM ---------- */
+function km(){
+  var n=C.n.get(), pc=C.pc.get()/100, hr=C.hr.get(), T=C.T.get(), drop=C.drop.get()/100, k=C.k.get();
+  var lc=-Math.log(1-pc)/T, lt=lc*hr, c=drop>0?-Math.log(1-drop):0;
+  function ev(l){ return n*l/(l+c)*(1-Math.exp(-(l+c)*T)); }
+  var Dc=ev(lc), Dt=ev(lt), se=Math.sqrt(1/Dc+1/Dt), lhr=Math.log(hr);
+  var lo=Math.exp(lhr-1.96*se), hi=Math.exp(lhr+1.96*se), z=Math.abs(lhr)/se, p=2*(1-Phi(z)), power=hr===1?0.05:Phi(z-1.96)+Phi(-z-1.96);
+  var rc=1-Math.exp(-lc*T), rt=1-Math.exp(-lt*T), arr=rc-rt, nnt=arr!==0?1/Math.abs(arr):Infinity, fwer=1-Math.pow(0.95,k);
+  /* draw */
+  svg.innerHTML="";
+  var X0=110,X1=610,Y0=34,Y1=270, ymin=Math.max(0,Math.floor((1-Math.max(rc,rt)*1.25)*10)/10);
+  if(ymin>0.9) ymin=0.9;
+  function X(t){ return X0+(t/T)*(X1-X0); } function Y(s){ return Y1-(s-ymin)/(1-ymin)*(Y1-Y0); }
+  tx(20,18,"Event-free survival",{a:"start",fs:13,fw:600});
+  for(var g=ymin;g<=1.0001;g+=(1-ymin)/5){ ln(X0,Y(g),X1,Y(g),"#EEEFF5"); tx(X0-8,Y(g)+4,(g*100).toFixed(0)+"%",{a:"end",fs:11,mono:true,fill:MUT}); }
+  ln(X0,Y1,X1,Y1,MUT); ln(X0,Y0,X0,Y1,MUT);
+  for(var y=0;y<=T+1e-9;y+=(T>3?1:0.5)){ tx(X(y),Y1+16,(y%1===0?y.toFixed(0):y.toFixed(1)),{fs:11,mono:true,fill:MUT}); }
+  tx((X0+X1)/2,Y1+32,"Years",{fs:11.5,fill:MUT});
+  [["Control",lc,"#9A9CB2"],["Treatment",lt,ACC]].forEach(function(a){
+    var d="M"+X(0)+" "+Y(1), steps=Math.round(T*12);
+    for(var i=1;i<=steps;i++){ var t=i/12, s=Math.exp(-a[1]*t); d+=" L"+X(t)+" "+Y(Math.exp(-a[1]*(i-1)/12))+" L"+X(t)+" "+Y(s); }
+    SV("path",{d:d,fill:"none",stroke:a[2],"stroke-width":a[2]===ACC?2.6:2},svg);
+    if(c>0){ var cens=n*(1-Math.exp(-c*T)), step=Math.max(1,cens/14); for(var j=1;j*step<cens&&j<16;j++){ var tc=-Math.log(1-j*step/n*1)/c; if(!(tc>0&&tc<T)) continue; var sc=Math.exp(-a[1]*tc); ln(X(tc),Y(sc)-5,X(tc),Y(sc)+5,a[2],1.4); } }
+  });
+  var yc=Y(1-rc), yt=Y(1-rt); ln(X1-6,yc,X1-6,yt,RED,2); tx(X1-12,(yc+yt)/2+4,"ARR "+(arr*100).toFixed(1)+"%",{a:"end",fs:11.5,fw:600,fill:RED});
+  SV("rect",{x:X0+12,y:Y1-60,width:200,height:46,rx:10,fill:"#fff",stroke:LINE},svg);
+  ln(X0+24,Y1-44,X0+44,Y1-44,ACC,2.6); tx(X0+50,Y1-40,"Treatment",{a:"start",fs:11.5});
+  ln(X0+24,Y1-26,X0+44,Y1-26,"#9A9CB2",2); tx(X0+50,Y1-22,"Control",{a:"start",fs:11.5});
+  tx(X0+120,Y1-40,"HR "+hr.toFixed(2),{a:"start",fs:11.5,mono:true});
+  tx(X0+120,Y1-22,"p "+pfmt(p),{a:"start",fs:11.5,mono:true,fill:p<0.05?TEAL:RED});
+  /* at risk */
+  var ty=Y1+56; tx(20,ty,"Number at risk",{a:"start",fs:12,fw:600});
+  [["Control",lc],["Treatment",lt]].forEach(function(a,i){ var yy=ty+20+i*20; tx(20,yy,a[0],{a:"start",fs:11.5,fill:i?ACC:MUT});
+    for(var t=0;t<=T+1e-9;t+=(T>3?1:0.5)){ var r=n*Math.exp(-(a[1]+c)*t); tx(X(t),yy,Math.round(r).toLocaleString("en-US"),{fs:11,mono:true}); } });
+  tx(20,ty+66,"Events: control "+Math.round(Dc)+", treatment "+Math.round(Dt)+"   SE(ln HR) = √(1/"+Math.round(Dc)+" + 1/"+Math.round(Dt)+") = "+se.toFixed(3),{a:"start",fs:11,mono:true,fill:MUT});
+  setRO(1,"HR (95% CI)",hr.toFixed(2)+" ("+lo.toFixed(2)+"–"+hi.toFixed(2)+")",hi<1?"ok":lo>1?"flag":null);
+  setRO(2,"p value",pfmt(p),p<0.05?"ok":"flag");
+  setRO(3,"Power (α 0.05)",(power*100).toFixed(0)+"%",power<0.8?"flag":"ok");
+  setRO(4,"Events รวม",Math.round(Dc+Dt).toLocaleString("en-US"),null);
+  setRO(5,"ARR ที่ "+T+" ปี",(arr*100).toFixed(1)+"%",null);
+  setRO(6,arr>=0?"NNT ใน "+T+" ปี":"NNH ใน "+T+" ปี",isFinite(nnt)&&nnt<100000?Math.ceil(nnt).toLocaleString("en-US"):"∞",arr<0?"flag":null);
+  Calc.renderSteps(document.getElementById("steps"),Calc.nnt({cer:rc,eer:rt}),{title:"Worked steps: ARR และ NNT ที่ "+T+" ปี"});
+  var m,bad=false;
+  if(k>1){ m="<b>ทดสอบ "+k+" endpoint</b> โอกาสพบ p < 0.05 โดยบังเอิญอย่างน้อย 1 ตัว "+(fwer*100).toFixed(0)+"% ใช้ primary endpoint ที่กำหนดล่วงหน้า หรือปรับ α (Bonferroni 0.05/"+k+" = "+(0.05/k).toFixed(4)+")"; bad=true; }
+  else if(p>=0.05&&hi>0.9&&lo<0.9){ m="<b>ไม่ significant แต่ CI ยังรวมผลที่มีความหมาย</b> ("+lo.toFixed(2)+"–"+hi.toFixed(2)+") สรุปว่าไม่มีผลไม่ได้ ต้องการ trial ใหญ่ขึ้น (power "+(power*100).toFixed(0)+"%)"; bad=true; }
+  else if(p>=0.05){ m="<b>ไม่ significant และ CI แคบรอบ 1</b> ค่อนข้างมั่นใจว่าไม่มีผลที่มีความหมายทางคลินิก"; }
+  else if(drop>=0.15){ m="<b>Censoring "+(drop*100).toFixed(0)+"% ต่อปี</b> ตรวจว่าเหตุที่ออกจากการศึกษาสัมพันธ์กับ prognosis หรือไม่ (informative censoring) และทำ sensitivity analysis"; bad=true; }
+  else if(nnt>50){ m="<b>NNT "+Math.ceil(nnt)+" ใน "+T+" ปี</b> relative effect ดีแต่ประโยชน์สัมบูรณ์น้อยเมื่อ baseline risk ต่ำ ชั่งกับราคาและผลข้างเคียง"; }
+  else m="<b>HR "+hr.toFixed(2)+" NNT "+Math.ceil(nnt)+" ใน "+T+" ปี</b> ประเมิน baseline risk ของผู้ป่วยตรงหน้าแล้วคำนวณ NNT เฉพาะราย (ARR = baseline risk x RRR)";
+  act(m,bad);
+}
+/* ---------- NI ---------- */
+function ni(){
+  var cr=C.cr.get()/100, d=C.diff.get()/100, n=C.nn.get(), M=C.margin.get();
+  var er=Math.min(0.99,Math.max(0.001,cr+d)), se=Math.sqrt(cr*(1-cr)/n+er*(1-er)/n)*100, dd=d*100, lo=dd-1.96*se, hi=dd+1.96*se;
+  var cls, col;
+  if(hi<0){ cls="Superior"; col=TEAL; } else if(hi<M&&lo>0){ cls="Non-inferior, but worse"; col="#A8842C"; } else if(hi<M){ cls="Non-inferior"; col=TEAL; } else if(lo>M){ cls="Inferior"; col=RED; } else cls="Inconclusive", col=RED;
+  svg.innerHTML="";
+  var R=Math.max(10,Math.ceil(Math.max(Math.abs(lo),Math.abs(hi),M)+2)), X0=200,X1=620;
+  function X(v){ return X0+(v+R)/(2*R)*(X1-X0); }
+  tx(20,18,"Difference in event rate, new − standard (percentage points)",{a:"start",fs:13,fw:600});
+  SV("rect",{x:X(M),y:34,width:X1-X(M),height:356,fill:"#FBE9EA",opacity:0.6},svg);
+  tx(X(M)+6,50,"Unacceptably worse",{a:"start",fs:11,fill:RED});
+  tx(X(0)-6,50,"New is better",{a:"end",fs:11,fill:TEAL});
+  ln(X(0),34,X(0),390,INK,1.4); ln(X(M),34,X(M),390,RED,1.6,"6 4");
+  tx(X(M),404,"Margin +"+M,{fs:11.5,fw:600,fill:RED}); tx(X(0),404,"0",{fs:11.5,mono:true});
+  for(var v=-R;v<=R;v+=(R>14?5:2)){ ln(X(v),390,X(v),395,MUT); tx(X(v),420,(v>0?"+":"")+v,{fs:10.5,mono:true,fill:MUT}); }
+  /* this trial */
+  var y=94; tx(20,y+4,"This trial",{a:"start",fs:12,fw:600});
+  ln(X(lo),y,X(hi),y,col,4); SV("circle",{cx:X(dd),cy:y,r:7,fill:col},svg);
+  tx(20,y+22,cls,{a:"start",fs:12.5,fw:600,fill:col});
+  tx(20,y+42,(dd>0?"+":"")+dd.toFixed(1)+" ("+lo.toFixed(1)+" to "+hi.toFixed(1)+")",{a:"start",fs:11.5,mono:true,fill:MUT});
+  /* reference patterns */
+  var ref=[["A",-6,-1.5,"Superior"],["B",-2.5,M-0.8,"Non-inferior"],["C",0.6,M-0.6,"Non-inferior, but worse"],["D",-1.5,M+2.5,"Inconclusive"],["E",M+0.5,M+4,"Inferior"]];
+  tx(20,170,"Reference patterns",{a:"start",fs:12,fw:600,fill:MUT});
+  ref.forEach(function(r,i){ var yy=196+i*36, a=Math.max(-R,r[1]), b=Math.min(R,r[2]);
+    tx(20,yy+4,r[0]+"  "+r[3],{a:"start",fs:11.5,fill:MUT}); ln(X(a),yy,X(b),yy,FAINT,3); SV("circle",{cx:X((a+b)/2),cy:yy,r:4.5,fill:FAINT},svg); });
+  setRO(1,"ผลต่าง (ใหม่ − เดิม)",(dd>0?"+":"")+dd.toFixed(1)+"%",null);
+  setRO(2,"95% CI",lo.toFixed(1)+" ถึง "+hi.toFixed(1),null);
+  setRO(3,"ขอบบนเทียบ margin",hi.toFixed(1)+(hi<M?" < ":" ≥ ")+M,hi<M?"ok":"flag");
+  setRO(4,"ข้อสรุป",cls,col===RED?"flag":col===TEAL?"ok":null);
+  setRO(5,"Event ใหม่ / เดิม",(er*100).toFixed(1)+" / "+(cr*100).toFixed(1)+"%",null);
+  var nNeed=Math.ceil(Math.pow(1.96+0.84,2)*(2*cr*(1-cr))/Math.pow(M/100,2));
+  setRO(6,"n ต่อกลุ่มที่ต้องการ*",nNeed.toLocaleString("en-US"),n<nNeed?"flag":"ok");
+  document.getElementById("steps").innerHTML='<ol class="steps"><li><b>SE = √(p1(1 − p1)/n + p2(1 − p2)/n)</b> = '+se.toFixed(2)+' percentage points</li><li><b>95% CI = difference ± 1.96 SE</b> = '+lo.toFixed(1)+' ถึง '+hi.toFixed(1)+'</li><li><b>Non-inferior เมื่อขอบบน &lt; margin</b> '+hi.toFixed(1)+(hi<M?' &lt; ':' ≥ ')+M+'</li><li><b>* n ต่อกลุ่ม</b> ถ้าผลต่างจริงเป็น 0 ที่ power 80% one-sided α 0.025 = (1.96 + 0.84)² × 2p(1 − p)/margin² = '+nNeed.toLocaleString("en-US")+'</li></ol>';
+  var m,bad=false;
+  if(cls==="Inconclusive"){ m="<b>Inconclusive</b> CI คร่อม margin สรุปว่า non-inferior ไม่ได้ ต้องเพิ่มขนาด (ต้องการราว "+nNeed.toLocaleString("en-US")+" ต่อกลุ่ม)"; bad=true; }
+  else if(cls==="Inferior"){ m="<b>Inferior</b> ยาใหม่แย่กว่าเกิน margin ไม่ควรใช้แทนยาเดิม"; bad=true; }
+  else if(cls==="Non-inferior, but worse"){ m="<b>Non-inferior แต่แย่กว่าอย่างมีนัยสำคัญ</b> ใช้เมื่อข้อดีอื่นคุ้มกับความแย่ที่เพิ่ม "+dd.toFixed(1)+"% และตรวจว่า margin สมเหตุสมผล"; }
+  else if(cls==="Superior") m="<b>Superior</b> ทดสอบ superiority ได้ถ้ากำหนด hierarchy ไว้ล่วงหน้า ตรวจผล per-protocol ให้สอดคล้อง";
+  else m="<b>Non-inferior</b> ตรวจว่า margin คงผลของยาเดิมเทียบ placebo ไว้ได้ และผล ITT กับ per-protocol สอดคล้องกัน";
+  act(m,bad);
+}
+/* ---------- Subgroup ---------- */
+function rng(seed){ var s=seed%2147483647; if(s<=0) s+=2147483646; return function(){ s=s*16807%2147483647; return (s-1)/2147483646; }; }
+function gauss(r){ var u=Math.max(1e-9,r()), v=r(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+function sg(){
+  var hr=C.shr.get(), n=C.sn.get(), rate=C.rate.get()/100, het=C.het.get(), r=rng(SEED*131+17);
+  var defs=[["Diabetes","Yes",0.45,"dm1"],["Diabetes","No",0.55,"dm0"],["eGFR","< 45",0.4,""],["eGFR","≥ 45",0.6,""],["Age","≥ 65",0.5,""],["Age","< 65",0.5,""]];
+  var D=n*rate, se0=Math.sqrt(4/D), lhr=Math.log(hr), rows=[];
+  var ob0=lhr;
+  defs.forEach(function(d){ var Di=D*d[2], se=Math.sqrt(4/Di), t=lhr; if(d[3]==="dm1") t=lhr-0.55*Math.log(het); if(d[3]==="dm0") t=lhr+0.45*Math.log(het);
+    var o=t+gauss(r)*se; rows.push({g:d[0],l:d[1],n:Math.round(n*d[2]),ev:Di,se:se,o:o}); });
+  svg.innerHTML="";
+  var X0=300,X1=500; function X(h){ var a=Math.log(0.25),b=Math.log(4); return X0+(Math.log(Math.max(0.25,Math.min(4,h)))-a)/(b-a)*(X1-X0); }
+  tx(20,22,"Subgroup",{a:"start",fs:12,fw:600,fill:MUT}); tx(196,22,"n",{a:"end",fs:12,fw:600,fill:MUT}); tx(400,22,"HR (95% CI)",{fs:12,fw:600,fill:MUT}); tx(580,22,"p int",{a:"middle",fs:12,fw:600,fill:MUT});
+  var y=52, minP=1, cross=0;
+  for(var i=0;i<rows.length;i+=2){
+    var a=rows[i], b=rows[i+1], zi=(a.o-b.o)/Math.sqrt(a.se*a.se+b.se*b.se), pint=2*(1-Phi(Math.abs(zi))); minP=Math.min(minP,pint);
+    tx(20,y,a.g,{a:"start",fs:12,fw:600}); tx(580,y,pfmt(pint),{fs:11.5,mono:true,fill:pint<0.05?RED:MUT});
+    y+=22;
+    [a,b].forEach(function(s){ var lo=Math.exp(s.o-1.96*s.se), hi=Math.exp(s.o+1.96*s.se); if(lo<1&&hi>1) cross++;
+      tx(34,y+4,s.l,{a:"start",fs:12}); tx(196,y+4,s.n.toLocaleString("en-US"),{a:"end",fs:11,mono:true,fill:MUT});
+      ln(X(lo),y,X(hi),y,INK,1.6); var sz=Math.max(5,Math.min(13,Math.sqrt(s.ev)/2.2)); SV("rect",{x:X(Math.exp(s.o))-sz/2,y:y-sz/2,width:sz,height:sz,fill:INK},svg);
+      tx(X1+12,y+4,Math.exp(s.o).toFixed(2)+" ("+lo.toFixed(2)+"–"+hi.toFixed(2)+")",{a:"start",fs:10.5,mono:true,fill:MUT});
+      y+=24; });
+    y+=8;
+  }
+  var w1=1/(rows[0].se*rows[0].se), w2=1/(rows[1].se*rows[1].se); ob0=(rows[0].o*w1+rows[1].o*w2)/(w1+w2); se0=Math.sqrt(1/(w1+w2));
+  var olo=Math.exp(ob0-1.96*se0), ohi=Math.exp(ob0+1.96*se0);
+  tx(20,y+4,"Overall",{a:"start",fs:12.5,fw:600}); tx(196,y+4,n.toLocaleString("en-US"),{a:"end",fs:11,mono:true,fill:MUT});
+  SV("path",{d:"M"+X(olo)+" "+y+" L"+X(Math.exp(ob0))+" "+(y-8)+" L"+X(ohi)+" "+y+" L"+X(Math.exp(ob0))+" "+(y+8)+" Z",fill:ACC},svg);
+  tx(X1+12,y+4,Math.exp(ob0).toFixed(2)+" ("+olo.toFixed(2)+"–"+ohi.toFixed(2)+")",{a:"start",fs:10.5,mono:true,fill:ACC});
+  ln(X(1),36,X(1),y+14,MUT,1.2); ln(X(Math.exp(ob0)),36,X(Math.exp(ob0)),y+14,ACC,1,"4 4");
+  var ay=y+30; ln(X0,ay,X1,ay,MUT);
+  [0.25,0.5,1,2,4].forEach(function(h){ ln(X(h),ay,X(h),ay+5,MUT); tx(X(h),ay+18,String(h),{fs:10.5,mono:true,fill:MUT}); });
+  tx(X(1)-6,ay+36,"Favors treatment",{a:"end",fs:11,fill:TEAL}); tx(X(1)+6,ay+36,"Favors control",{a:"start",fs:11,fill:RED});
+  svg.setAttribute("viewBox","0 0 640 "+Math.max(440,ay+48));
+  setRO(1,"Overall HR (95% CI)",Math.exp(ob0).toFixed(2)+" ("+olo.toFixed(2)+"–"+ohi.toFixed(2)+")",ohi<1?"ok":null);
+  setRO(2,"Events รวม",Math.round(D).toLocaleString("en-US"),null);
+  setRO(3,"Subgroup ที่ CI คร่อม 1",cross+" ใน 6",cross>0?"flag":null);
+  setRO(4,"p interaction ต่ำสุด",pfmt(minP),minP<0.05?"flag":"ok");
+  setRO(5,"True interaction",het<1.05?"ไม่มี":"x"+het.toFixed(2),null);
+  setRO(6,"Seed",String(SEED),null);
+  document.getElementById("steps").innerHTML='<ol class="steps"><li><b>SE(ln HR) ของ subgroup ≈ √(4/events)</b> subgroup ที่เล็กจึงมี CI กว้าง</li><li><b>Test for interaction: z = (ln HR₁ − ln HR₂)/√(SE₁² + SE₂²)</b> แล้วแปลงเป็น p</li><li><b>อย่าเทียบ</b> ว่า subgroup หนึ่ง significant อีก subgroup ไม่ significant</li></ol>';
+  var m,bad=false;
+  if(minP<0.05&&het>=1.3){ m="<b>Interaction มีแนวโน้มจริง</b> ตรวจว่ากำหนดล่วงหน้า มีเหตุผลทางชีววิทยา และพบซ้ำใน trial อื่นก่อนใช้แยกการรักษา"; }
+  else if(minP<0.05){ m="<b>p interaction < 0.05 แต่ไม่มี interaction จริง</b> เป็นผลจากการดูหลาย subgroup (false positive) ใช้ผล overall"; bad=true; }
+  else if(cross>0){ m="<b>บาง subgroup CI คร่อม 1</b> แต่ p interaction ไม่ significant ไม่ใช่หลักฐานว่า subgroup นั้นไม่ได้ประโยชน์ ใช้ผล overall"; bad=true; }
+  else m="<b>ผลสม่ำเสมอทุก subgroup</b> ใช้ผล overall กับผู้ป่วยทุกกลุ่ม ลองลด n หรือกดสุ่มใหม่เพื่อดูความแกว่งของ subgroup";
+  act(m,bad);
+}
+function update(){ svg.setAttribute("viewBox","0 0 640 440"); if(MODE==="km") km(); else if(MODE==="ni") ni(); else sg(); }
+Sim.mount({code:"MX-02", title:"Trial Reading Lab: KM, NNT, Non-inferiority and Subgroups", lead:"อ่าน trial แบบที่ข้อสอบถาม: ปรับขนาด trial, baseline risk, HR และ censoring แล้วดู KM, CI, power และ NNT สลับไปดู non-inferiority margin และ subgroup forest plot",
+  scenarios:S, order:ORDER, captureMs:600,
+  onChange:function(k,s){ var p=s.p; setMode(p.mode);
+    if(p.mode==="km") ["n","pc","hr","T","drop","k"].forEach(function(x){ C[x].set(p[x]); });
+    if(p.mode==="ni") ["cr","diff","nn","margin"].forEach(function(x){ C[x].set(p[x]); });
+    if(p.mode==="sg"){ ["shr","sn","rate","het"].forEach(function(x){ C[x].set(p[x]); }); SEED=p.seed; }
+    update(); },
+  refs:["Altman DG, Andersen PK. Calculating the number needed to treat for trials where the outcome is time to an event. BMJ 1999, 319(7223): 1492-1495",
+        "Schoenfeld DA. Sample-size formula for the proportional-hazards regression model. Biometrics 1983, 39(2): 499-503",
+        "Altman DG, Bland JM. Absence of evidence is not evidence of absence. BMJ 1995, 311(7003): 485",
+        "Piaggio G, Elbourne DR, Pocock SJ, et al. Reporting of noninferiority and equivalence randomized trials: extension of the CONSORT 2010 statement. JAMA 2012, 308(24): 2594-2604",
+        "Mauri L, D'Agostino RB. Challenges in the design and interpretation of noninferiority trials. N Engl J Med 2017, 377(14): 1357-1367",
+        "Wang R, Lagakos SW, Ware JH, et al. Statistics in medicine: reporting of subgroup analyses in clinical trials. N Engl J Med 2007, 357(21): 2189-2194",
+        "Sun X, Briel M, Walter SD, Guyatt GH. Is a subgroup effect believable? Updating criteria to evaluate the credibility of subgroup analyses. BMJ 2010, 340: c117"],
+  note:"Model เพื่อการสอน: KM ใช้ exponential survival (λ = −ln(1 − event ที่ T)/T) censoring แบบ exponential คงที่ ผู้ป่วยทุกคนติดตามครบ T ผล HR ที่สังเกตได้เท่ากับค่าจริง SE(ln HR) = √(1/Dc + 1/Dt) Power ใช้ Schoenfeld approximation Non-inferiority ใช้ normal approximation ของผลต่างสองสัดส่วน Subgroup forest สุ่มค่าที่สังเกตได้จาก normal รอบค่าจริงด้วย SE = √(4/events) (seed คงที่ต่อ scenario)"
+});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[MX-06] Onconephrology Map: Anticancer Drug Kidney Toxicity</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1fr 1.1fr}}
+.sel{display:grid;grid-template-columns:minmax(80px,140px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px;margin-bottom:8px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%;font:inherit;padding:6px 10px;border-radius:10px;border:1px solid var(--line-strong);background:#fff}
+.sites{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.sites span{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:3px 10px;color:var(--faint)}
+.sites span.on{border-color:var(--ink);color:#fff;background:var(--ink)}
+table.card2{width:100%;border-collapse:collapse;margin-top:12px;font-size:13.5px}
+table.card2 th{text-align:left;font-weight:500;color:var(--muted);width:26%;padding:7px 8px 7px 0;vertical-align:top;border-top:1px solid var(--line)}
+table.card2 td{padding:7px 0;border-top:1px solid var(--line)}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.split{display:grid;grid-template-columns:1fr;gap:8px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:14px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present #map svg{max-height:318px}
+body.present #lyte{max-height:64px}
+body.present table.card2{font-size:12px}
+body.present table.card2 th,body.present table.card2 td{padding:4px 0}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+body.present .sel{margin-bottom:4px;font-size:12.5px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>ตำแหน่งที่ยามะเร็งทำร้ายไต</h2>
+      <div class="split">
+        <div class="svgwrap" id="map"></div>
+        <div class="svgwrap"><svg id="lyte" viewBox="0 0 520 96" role="img" aria-label="Electrolyte effects of the selected drug"></svg></div>
+      </div>
+      <p class="hint no-present">ภาพเน้น segment ที่บาดเจ็บ (เหลือง) วงแดงที่ glomerulus = TMA หรือ podocytopathy ลูกศรแดง = hemodynamic สีม่วง = interstitial nephritis เพชรทอง = crystal ป้ายที่ PT ชี้ว่ายายับยั้งการ secrete creatinine (Cr ขึ้นโดย GFR ไม่ลด) แถบล่างคือผลต่อ electrolyte แตะ segment เพื่อดูยาทั้งหมดที่ทำร้าย segment นั้น</p>
+    </div>
+    <div class="card">
+      <h2>ยาและการจัดการ</h2>
+      <div class="sel"><label for="cat">หมวด</label><select id="cat"><option value="all">ทั้งหมด</option><option value="chemo">Cytotoxic</option><option value="target">Targeted therapy</option><option value="immuno">Immunotherapy และ cell therapy</option><option value="support">ยาประคับประคอง</option></select></div>
+      <div class="sel"><label for="drug">ยา</label><select id="drug"></select></div>
+      <div class="sites" id="sites"></div>
+      <table class="card2" id="dcard"></table>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/nephron.js"></script>
+<script>
+(function(){
+"use strict";
+/* sites: hemo, glom, tma, pt, distal, cd, crystal, ain, pseudo   ly: Na K Mg P Ca HCO3 (-1 down, 1 up) */
+var D={
+  cis:{n:"Cisplatin",cat:"chemo",seg:["PT","TAL","DCT"],site:["pt","distal"],ly:{Mg:-1,K:-1,Na:-1},mech:"เข้าเซลล์ทาง OCT2 ที่ S3 segment ทำให้ PT necrosis และทำลาย TAL/DCT จึงเสีย Mg",on:"3–5 วันหลังให้ Mg ต่ำอาจนานเป็นเดือนหรือปี",clue:"Cr ขึ้น Mg ต่ำเด่น K ต่ำ บางรายเกิด salt wasting",mgmt:"Hydration ด้วย NSS + Mg ก่อนให้ ลดขนาดหรือเปลี่ยนเป็น carboplatin เมื่อ CrCl < 60 ทดแทน Mg ระยะยาว"},
+  ifo:{n:"Ifosfamide",cat:"chemo",seg:["PT","CCD","OMCD"],site:["pt","cd"],ly:{P:-1,K:-1,HCO3:-1},mech:"Metabolite chloroacetaldehyde ทำลาย PT (Fanconi) และ collecting duct (NDI)",on:"ระหว่างให้ยาถึงหลายเดือนหลังจบ",clue:"glycosuria ที่ normoglycemia, P ต่ำ, normal AG acidosis, polyuria",mgmt:"ทดแทน phosphate, bicarbonate, K ติดตามการเจริญเติบโตของกระดูกในเด็ก"},
+  mtx:{n:"High-dose methotrexate",cat:"chemo",seg:["DCT","CCD","OMCD"],site:["crystal","pt"],ly:{},cr:["CCD","OMCD","DCT"],mech:"ตกผลึกใน urine กรด และพิษตรงต่อ PT ไตแย่ทำให้ MTX ค้าง",on:"24–48 ชม.",clue:"MTX level ค้างสูง Cr ขึ้นเร็ว mucositis myelosuppression",mgmt:"Alkalinize urine pH ≥ 7 + hydration ก่อนให้ leucovorin glucarpidase เมื่อ level สูงและไตแย่ เลี่ยง PPI, NSAID, TMP-SMX"},
+  pem:{n:"Pemetrexed",cat:"chemo",seg:["PT","CCD"],site:["pt","ain","cd"],ly:{HCO3:-1},mech:"สะสมใน PT ผ่าน folate pathway ทำให้ ATN และ interstitial fibrosis",on:"หลายรอบ สะสม",clue:"Cr ขึ้นช้า ๆ บางรายมี NDI หรือ dRTA",mgmt:"ห้ามให้เมื่อ CrCl < 45 หยุดยาเมื่อ Cr ขึ้นต่อเนื่อง หลีกเลี่ยง NSAID ช่วงให้ยา"},
+  gem:{n:"Gemcitabine",cat:"chemo",seg:[],site:["tma"],ly:{},mech:"Endothelial injury แบบสะสม เกิด TMA ที่มักมาช้า",on:"หลายเดือน สัมพันธ์กับขนาดรวม",clue:"HT ใหม่ Cr ขึ้น proteinuria schistocyte LDH สูง ADAMTS13 ไม่ต่ำ",mgmt:"หยุดยาถาวร คุม BP ด้วย RAASi C5 inhibitor ในรายที่รุนแรงหรือไม่ดีขึ้น (หลักฐานจำกัด)"},
+  mito:{n:"Mitomycin C",cat:"chemo",seg:[],site:["tma"],ly:{},mech:"Endothelial injury ขึ้นกับขนาดรวม",on:"สะสมหลายเดือน",clue:"TMA + AKI บางรายมี pulmonary edema",mgmt:"หยุดยา ประคับประคอง พิจารณา C5 inhibitor"},
+  cyc:{n:"Cyclophosphamide, vincristine",cat:"chemo",seg:["CCD","IMCD"],site:["cd"],ly:{Na:-1},mech:"เพิ่ม ADH หรือเสริมฤทธิ์ ADH ที่ collecting duct (SIAD) cyclophosphamide ทำให้ hemorrhagic cystitis",on:"ภายในวันหลังให้ยา",clue:"Na ต่ำ Uosm สูง euvolemia",mgmt:"จำกัดน้ำ ระวัง hydration ด้วยน้ำ hypotonic mesna และ hydration ป้องกัน cystitis"},
+  vegf:{n:"Bevacizumab และ anti-VEGF",cat:"target",seg:[],site:["tma","glom"],ly:{},mech:"ลด VEGF ที่ podocyte สร้าง endothelium ของ glomerulus เสีย เกิด TMA จำกัดที่ไต",on:"สัปดาห์ถึงเดือน",clue:"HT proteinuria บางราย nephrotic TMA ที่ไตโดยไม่มี hemolysis ในเลือด",mgmt:"คุม BP ด้วย ACEi/ARB ตรวจ UPCR ทุกรอบ hold เมื่อ proteinuria > 2–3 g/วัน หรือ TMA"},
+  tki:{n:"VEGFR TKI (sunitinib, lenvatinib)",cat:"target",seg:[],site:["tma","glom"],ly:{Na:-1},mech:"ยับยั้ง VEGF receptor ผลคล้าย anti-VEGF บางตัวทำให้ hypothyroidism",on:"สัปดาห์ถึงเดือน",clue:"HT สูงเร็ว proteinuria",mgmt:"คุม BP ลดขนาดหรือหยุดชั่วคราว ตรวจ TSH"},
+  egfr:{n:"Cetuximab, panitumumab (EGFR mAb)",cat:"target",seg:["DCT"],site:["distal"],ly:{Mg:-1,Ca:-1,K:-1},mech:"EGF กระตุ้น TRPM6 ที่ DCT ยาบล็อก EGFR จึงเสีย Mg ทางไต",on:"สัปดาห์ถึงเดือน มากขึ้นตามระยะเวลา",clue:"Mg ต่ำมาก FEMg > 4% ตามด้วย Ca และ K ต่ำ",mgmt:"Mg IV เป็นระยะ (oral ดูดซึมไม่พอ) แก้ Mg ก่อน K และ Ca"},
+  cdk:{n:"Abemaciclib, imatinib, crizotinib",cat:"target",seg:["PT"],site:["pseudo"],ly:{},mech:"ยับยั้ง creatinine secretion ที่ OCT2/MATE ทำให้ Cr ขึ้นโดย GFR จริงไม่เปลี่ยน crizotinib ทำให้เกิด renal cyst ได้",on:"สัปดาห์แรกหลังเริ่มยา คงที่ หายเมื่อหยุด",clue:"Cr ขึ้น 10–35% เร็วและคงที่ urine ปกติ cystatin C ปกติ",mgmt:"ตรวจ cystatin C หรือ measured GFR ก่อนลดขนาดหรือหยุดยา (pseudo-AKI)"},
+  braf:{n:"BRAF inhibitor (vemurafenib)",cat:"target",seg:["PT"],site:["pt","ain","pseudo"],ly:{P:-1},mech:"ATN หรือ AIN และลด creatinine secretion บางส่วน",on:"สัปดาห์แรก",clue:"Cr ขึ้นเล็กน้อยถึงปานกลาง บางรายมี Fanconi",mgmt:"ตรวจ cystatin C แยก pseudo-AKI ถ้าเป็น AKI จริงหยุดชั่วคราว"},
+  carf:{n:"Carfilzomib",cat:"target",seg:[],site:["tma","hemo"],ly:{},mech:"Proteasome inhibitor ทำให้ TMA และ prerenal จาก cardiotoxicity",on:"รอบแรก ๆ",clue:"HT, AKI, platelet ต่ำ",mgmt:"หยุดยา ประเมิน TMA และหัวใจ"},
+  ici:{n:"Immune checkpoint inhibitor",cat:"immuno",seg:[],site:["ain","glom"],ly:{Na:-1},mech:"เสีย T-cell tolerance เกิด AIN (มักร่วมกับ PPI หรือ NSAID) พบ GN น้อย Na ต่ำจาก hypophysitis หรือ adrenalitis",on:"3–10 สัปดาห์ หรือหลายเดือน",clue:"Cr ขึ้นช้า sterile pyuria อาจมี irAE อื่น",mgmt:"Hold ICI ให้ prednisone 0.5–1 mg/kg หยุด PPI ดื้อ steroid พิจารณา infliximab หรือ MMF rechallenge ได้ในบางราย (ดู AKI-08)"},
+  cart:{n:"CAR-T cell therapy",cat:"immuno",seg:["CCD","OMCD"],site:["hemo","crystal","ain"],ly:{K:1,P:1,Ca:-1,Na:-1},cr:["OMCD"],mech:"Cytokine release syndrome ทำให้ capillary leak และ prerenal บางรายเกิด TLS",on:"วันที่ 1–14 หลังให้",clue:"ไข้ hypotension Cr ขึ้นพร้อม CRS grade สูง K P urate สูง",mgmt:"รักษา CRS (tocilizumab, steroid) ป้องกัน TLS ระวังน้ำเกินเพราะ capillary leak"},
+  tls:{n:"Venetoclax และ TLS",cat:"target",seg:["CCD","OMCD","IMCD"],site:["crystal"],ly:{K:1,P:1,Ca:-1},cr:["CCD","OMCD","IMCD"],mech:"เซลล์มะเร็งแตกเร็ว urate และ calcium phosphate ตกผลึกในท่อไต",on:"6–72 ชม. หลังเริ่มยา",clue:"K, P, urate สูง Ca ต่ำ ตามเกณฑ์ Cairo-Bishop",mgmt:"Ramp-up dose, hydration, allopurinol หรือ rasburicase ตามความเสี่ยง (ดู AKI-06)"},
+  zol:{n:"Zoledronate",cat:"support",seg:["PT"],site:["pt"],ly:{Ca:-1,P:-1},mech:"พิษตรงต่อ PT (toxic ATN)",on:"หลายรอบ ขึ้นกับขนาดและความเร็ว",clue:"Cr ขึ้นหลังให้ยา",mgmt:"ปรับขนาดตาม CrCl ให้ ≥ 15 นาที ตรวจ Cr ก่อนทุกครั้ง หรือใช้ denosumab (ระวัง Ca ต่ำ)"},
+  pam:{n:"Pamidronate",cat:"support",seg:[],site:["glom"],ly:{Ca:-1},mech:"Podocyte toxicity ทำให้ collapsing FSGS หรือ MCD",on:"มักหลังใช้ขนาดสูงนาน",clue:"Nephrotic-range proteinuria Cr ขึ้น",mgmt:"หยุดยา biopsy ถ้า proteinuria มาก เปลี่ยนเป็นยาอื่น"},
+  ifn:{n:"Interferon",cat:"immuno",seg:[],site:["glom","tma"],ly:{},mech:"Podocytopathy (MCD, collapsing FSGS) และ TMA",on:"สัปดาห์ถึงเดือน",clue:"Nephrotic syndrome หลังเริ่มยา",mgmt:"หยุดยา biopsy ตามข้อบ่งชี้"}
+};
+var SITE={hemo:"Hemodynamic",glom:"Glomerular",tma:"TMA",pt:"Proximal tubule",distal:"Distal tubule",cd:"Collecting duct",crystal:"Crystal",ain:"AIN",pseudo:"Pseudo-AKI"};
+var S={
+  cis:{name:"Cisplatin Mg ต่ำ", d:"cis",
+    rows:[["ผู้ป่วย","head and neck cancer ได้ cisplatin รอบที่ 3"],["Lab","Cr 1.6 Mg 1.1 K 3.1"],["กลไก","OCT2 uptake ทำลาย PT และ TAL/DCT"]],
+    take:["Cisplatin เป็นยามะเร็งที่ทำร้าย PT บ่อยที่สุด Mg wasting อาจอยู่นานหลายปี","Hydration และ Mg ก่อนให้ลดความเสี่ยง","CrCl < 60 พิจารณาลดขนาดหรือเปลี่ยนเป็น carboplatin"]},
+  ifo:{name:"Ifosfamide Fanconi", d:"ifo",
+    rows:[["ผู้ป่วย","sarcoma ในวัยรุ่น ได้ ifosfamide"],["Lab","glycosuria, P 1.8, HCO3 16, polyuria"],["กลไก","chloroacetaldehyde ทำลาย PT และ collecting duct"]],
+    take:["Ifosfamide ทำให้ Fanconi syndrome และ NDI บางรายเป็นถาวร","ผลต่อการเจริญเติบโตของกระดูกในเด็กจาก phosphate ต่ำ","ตรวจ P, HCO3, urine glucose ระหว่างและหลังการรักษา"]},
+  gem:{name:"Gemcitabine TMA", d:"gem",
+    rows:[["ผู้ป่วย","pancreatic cancer ได้ gemcitabine 8 เดือน"],["Lab","BP 180/100 Cr 2.4 platelet 90 LDH สูง schistocyte"],["ADAMTS13","45% (ไม่ต่ำ)"]],
+    take:["Drug-induced TMA จาก chemotherapy มักเป็นแบบสะสมและมาช้า","ADAMTS13 ไม่ต่ำ แยกจาก TTP ได้ PLEX มักไม่ช่วย","หยุดยาถาวร คุม BP C5 inhibitor ในบางราย (ดู GN-05)"]},
+  vegf:{name:"Bevacizumab proteinuria", d:"vegf",
+    rows:[["ผู้ป่วย","colorectal cancer ได้ bevacizumab"],["Lab","BP สูง UPCR 2.8 g/g ไม่มี schistocyte"],["Biopsy","glomerular TMA จำกัดที่ไต"]],
+    take:["Anti-VEGF ทำให้ HT และ proteinuria บ่อย TMA ที่ไตอาจไม่มี hemolysis ในเลือด","ตรวจ BP และ UPCR ก่อนทุกรอบ","ACEi/ARB คุมทั้ง BP และ proteinuria hold ยาเมื่อ proteinuria มาก"]},
+  ici:{name:"ICI-AIN", d:"ici",
+    rows:[["ผู้ป่วย","melanoma ได้ pembrolizumab + omeprazole"],["Lab","Cr 1.0 → 2.3 ใน 10 สัปดาห์ sterile pyuria"],["รักษา","hold ICI, prednisone, หยุด PPI"]],
+    take:["AIN คือ ICI nephrotoxicity ที่พบบ่อยที่สุด มักร่วมกับยาที่เป็นตัวกระตุ้น AIN","ส่วนใหญ่ตอบสนองต่อ steroid","Na ต่ำในผู้ป่วย ICI ให้นึกถึง hypophysitis หรือ adrenalitis ด้วย"]},
+  egfr:{name:"Cetuximab Mg ต่ำ", d:"egfr",
+    rows:[["ผู้ป่วย","colorectal cancer ได้ panitumumab 4 เดือน"],["Lab","Mg 0.8 FEMg 8% Ca 7.6 K 3.0"],["กลไก","EGFR blockade ลด TRPM6 ที่ DCT"]],
+    take:["EGFR mAb ทำให้ Mg wasting ทางไต (FEMg สูง)","Mg ต่ำทำให้ Ca ต่ำ (กด PTH) และ K ต่ำดื้อการทดแทน","ต้องแก้ Mg ก่อน มักต้องใช้ IV"]},
+  cdk:{name:"Abemaciclib pseudo-AKI", d:"cdk",
+    rows:[["ผู้ป่วย","breast cancer เริ่ม abemaciclib"],["Lab","Cr 0.8 → 1.1 ใน 2 สัปดาห์ แล้วคงที่ urine ปกติ"],["Cystatin C","ปกติ eGFR cys ไม่เปลี่ยน"]],
+    take:["ยาหลายตัวบล็อก creatinine secretion ที่ OCT2/MATE ทำให้ Cr ขึ้นโดย GFR จริงคงที่","Cr ขึ้นเร็ว คงที่ ไม่มี urine abnormality หายเมื่อหยุดยา","ตรวจ cystatin C ก่อนลดขนาดยาที่มีประโยชน์ต่อมะเร็ง"]},
+  cart:{name:"CAR-T CRS และ TLS", d:"cart",
+    rows:[["ผู้ป่วย","DLBCL ได้ CAR-T วันที่ 3 CRS grade 3"],["Lab","Cr 2.1 K 5.8 P 6.5 Ca 7.2"],["กลไก","capillary leak + TLS"]],
+    take:["AKI หลัง CAR-T ส่วนใหญ่เป็น prerenal จาก CRS","TLS เกิดได้ใน tumor burden สูง","รักษาที่ CRS และระวังน้ำเกินเพราะ capillary leak"]},
+  pam:{name:"Pamidronate collapsing FSGS", d:"pam",
+    rows:[["ผู้ป่วย","myeloma ได้ pamidronate ขนาดสูงหลายปี"],["Lab","UPCR 6 g/g albumin 2.4"],["Biopsy","collapsing FSGS"]],
+    take:["Pamidronate ทำให้ podocytopathy ส่วน zoledronate ทำให้ toxic ATN","Bisphosphonate ทุกตัวต้องปรับตาม CrCl","ใน myeloma ที่ proteinuria มากต้องแยก cast nephropathy, AL amyloid, LCDD ด้วย"]}
+};
+var ORDER=["cis","ifo","gem","vegf","ici","egfr","cdk","cart","pam"];
+var ds=document.getElementById("drug"), cs=document.getElementById("cat");
+function fill(){ var c=cs.value, cur=ds.value; ds.innerHTML=""; Object.keys(D).forEach(function(k){ if(c==="all"||D[k].cat===c) ds.appendChild(Sim.h("option",{value:k,text:D[k].n})); }); if(D[cur]&&(c==="all"||D[cur].cat===c)) ds.value=cur; }
+cs.addEventListener("change",function(){ fill(); update(); }); ds.addEventListener("change",update); fill();
+var M=Nephron.map(document.getElementById("map"),{onSelect:function(seg){ segInfo(seg); }});
+var NS="http://www.w3.org/2000/svg", ov=document.createElementNS(NS,"g"); M.svg.appendChild(ov);
+function el(t,a,txt){ var e=document.createElementNS(NS,t); for(var k in a) e.setAttribute(k,a[k]); if(txt) e.textContent=txt; ov.appendChild(e); return e; }
+var MID={PT:[196,160],tDL:[215,350],tAL:[240,486],TAL:[265,270],DCT:[322,110],CNT:[396,97],CCD:[422,165],OMCD:[426,315],IMCD:[430,472]};
+var FT="IBM Plex Sans Thai, sans-serif";
+function overlay(d){
+  while(ov.firstChild) ov.removeChild(ov.firstChild);
+  if(d.site.indexOf("ain")>=0){ el("ellipse",{cx:300,cy:300,rx:200,ry:230,fill:"rgba(91,75,255,0.10)",stroke:"rgba(91,75,255,0.45)","stroke-dasharray":"6 5"});
+    for(var i=0;i<14;i++){ var a=i*2.4, r=60+(i*37)%150; el("circle",{cx:300+Math.cos(a)*r,cy:300+Math.sin(a)*r*1.1,r:4.5,fill:"#5B4BFF",opacity:0.7}); }
+    el("text",{x:470,y:552,"text-anchor":"end","font-size":12,"font-weight":600,fill:"#5B4BFF","font-family":FT},"Interstitial infiltrate"); }
+  if(d.site.indexOf("glom")>=0||d.site.indexOf("tma")>=0){ el("circle",{cx:90,cy:96,r:38,fill:"none",stroke:"#B4232A","stroke-width":4});
+    el("text",{x:90,y:48,"text-anchor":"middle","font-size":11.5,"font-weight":600,fill:"#B4232A","font-family":FT},d.site.indexOf("tma")>=0?"TMA":"Podocytopathy"); }
+  if(d.site.indexOf("hemo")>=0){ el("path",{d:"M20 70 L52 86",stroke:"#B4232A","stroke-width":5,"stroke-linecap":"round"}); el("path",{d:"M44 76 L54 87 L40 90",stroke:"#B4232A","stroke-width":3,fill:"none"});
+    el("text",{x:12,y:62,"font-size":11,"font-weight":600,fill:"#B4232A","font-family":FT},"Capillary leak"); }
+  if(d.site.indexOf("pseudo")>=0){ el("rect",{x:110,y:196,width:176,height:40,rx:10,fill:"#fff",stroke:"#A8842C","stroke-width":1.5});
+    el("text",{x:198,y:212,"text-anchor":"middle","font-size":11,"font-weight":600,fill:"#A8842C","font-family":FT},"OCT2/MATE blocked");
+    el("text",{x:198,y:228,"text-anchor":"middle","font-size":10.5,fill:"#5E6075","font-family":FT},"Cr rises, true GFR unchanged"); }
+  (d.cr||[]).forEach(function(s){ var m=MID[s]; for(var q=0;q<3;q++){ var x=m[0]-24+q*9, y=m[1]-10+q*12; el("path",{d:"M"+x+" "+(y-6)+" L"+(x+5)+" "+y+" L"+x+" "+(y+6)+" L"+(x-5)+" "+y+" Z",fill:"#A8842C",stroke:"#fff","stroke-width":1}); } });
+  if(d.cr&&d.cr.length) el("text",{x:470,y:534,"text-anchor":"end","font-size":12,"font-weight":600,fill:"#A8842C","font-family":FT},"Intratubular crystals");
+}
+var LY=["Na","K","Mg","P","Ca","HCO3"], LN={Na:"Na",K:"K",Mg:"Mg",P:"PO4",Ca:"Ca",HCO3:"HCO3"};
+function lyte(d){
+  var s=document.getElementById("lyte"); s.innerHTML="";
+  Sim.svg("text",{x:6,y:16,"font-family":FT,"font-size":12,"font-weight":600,fill:"#0B0B1F",text:"Electrolyte effect"},s);
+  LY.forEach(function(k,i){ var v=d.ly[k]||0, x=6+i*86, c=v<0?"#5B4BFF":v>0?"#B4232A":"#D3D5E2";
+    Sim.svg("rect",{x:x,y:26,width:78,height:62,rx:12,fill:v?"#fff":"#F4F5F9",stroke:c,"stroke-width":v?1.6:1},s);
+    Sim.svg("text",{x:x+39,y:50,"text-anchor":"middle","font-family":FT,"font-size":13,"font-weight":600,fill:v?"#0B0B1F":"#9A9CB2",text:LN[k]},s);
+    Sim.svg("text",{x:x+39,y:76,"text-anchor":"middle","font-family":FT,"font-size":18,"font-weight":700,fill:c,text:v<0?"↓":v>0?"↑":"–"},s); });
+}
+function segInfo(seg){
+  var list=Object.keys(D).filter(function(k){ return D[k].seg.indexOf(seg)>=0; }).map(function(k){ return D[k].n; });
+  var a=document.getElementById("act"); a.className="act";
+  a.innerHTML="<b>"+seg+":</b> "+(list.length?list.join(", "):"ไม่มียาในรายการที่เด่นที่ segment นี้");
+}
+function update(){
+  var k=ds.value, d=D[k]; if(!d) return;
+  M.highlight(d.seg,"#FFDE59"); overlay(d); lyte(d);
+  var st=document.getElementById("sites"); st.innerHTML="";
+  Object.keys(SITE).forEach(function(s){ st.appendChild(Sim.h("span",{class:d.site.indexOf(s)>=0?"on":"",text:SITE[s]})); });
+  var tbl=document.getElementById("dcard"); tbl.innerHTML="";
+  [["กลไก",d.mech],["เวลาเกิด",d.on],["Clue",d.clue],["จัดการ",d.mgmt]].forEach(function(r){ tbl.appendChild(Sim.h("tr",{},[Sim.h("th",{text:r[0]}),Sim.h("td",{text:r[1]})])); });
+  var m, bad=true;
+  if(d.site.indexOf("pseudo")>=0&&d.site.length===1){ m="ตรวจ cystatin C หรือ measured GFR และ urinalysis ถ้า GFR จริงไม่ลด ให้ยาต่อได้โดยไม่ต้องลดขนาด"; bad=false; }
+  else if(d.site.indexOf("tma")>=0) m="ตรวจ BP, UPCR, CBC, smear, LDH, haptoglobin, ADAMTS13 และ complement หยุดยาที่สงสัย biopsy ถ้า TMA จำกัดที่ไต (ดู GN-05)";
+  else if(d.site.indexOf("crystal")>=0) m="ประเมินความเสี่ยง TLS หรือระดับยา urine microscopy hydration และ alkalinize หรือลด urate ตามชนิดผลึก";
+  else if(d.site.indexOf("ain")>=0) m="ตรวจ urinalysis หา pyuria/WBC cast หยุดยาที่กระตุ้น AIN (PPI, NSAID) biopsy ถ้าไม่ชัด แล้วพิจารณา steroid";
+  else if(d.site.indexOf("glom")>=0) m="ตรวจ UPCR, albumin, biopsy เมื่อ proteinuria มาก หยุดยาที่สงสัย";
+  else if(d.site.indexOf("distal")>=0) m="ตรวจ Mg, FEMg, Ca, K ทดแทน Mg ก่อน (มักต้อง IV) แล้วแก้ K และ Ca";
+  else if(d.site.indexOf("cd")>=0) m="ตรวจ Na, Uosm, urine Na แยก SIAD กับ NDI ปรับน้ำและยาที่ใช้ร่วม";
+  else m="ปรับขนาดตาม CrCl ตรวจ Cr, Mg, K, P และ urine glucose ก่อนทุกรอบ ทดแทน electrolyte ที่เสีย";
+  if(d.site.indexOf("pseudo")>=0&&d.site.length>1) m="แยก pseudo-AKI ด้วย cystatin C ก่อน แล้ว "+m;
+  var a=document.getElementById("act"); a.innerHTML="<b>Next step:</b> "+m; a.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"MX-06", title:"Onconephrology Map: Anticancer Drug Kidney Toxicity", lead:"เลือกยามะเร็งหรือยาประคับประคองเพื่อดูตำแหน่งที่ทำร้ายไต ผลต่อ electrolyte เวลาเกิด clue และการจัดการ รวมถึงยาที่ทำให้ Cr ขึ้นโดย GFR ไม่ลด (pseudo-AKI)",
+  scenarios:S, order:ORDER, captureMs:600,
+  onChange:function(k,s){ cs.value="all"; fill(); ds.value=s.d; update(); },
+  refs:["Perazella MA, Shirali AC. Nephrotoxicity of cancer immunotherapies: past, present and future. J Am Soc Nephrol 2018, 29(8): 2039-2052",
+        "Izzedine H, Perazella MA. Anticancer drug-induced acute kidney injury. Kidney Int Rep 2017, 2(4): 504-514",
+        "Rosner MH, Perazella MA. Acute kidney injury in patients with cancer. N Engl J Med 2017, 376(18): 1770-1781",
+        "Vanhoutte T, Sprangers B. Pseudo-AKI associated with targeted anti-cancer agents: the truth is in the eye of the filtration marker. Clin Kidney J 2023, 16(4): 603-610",
+        "Cortazar FB, Kibbelaar ZA, Glezerman IG, et al. Clinical features and outcomes of immune checkpoint inhibitor-associated AKI: a multicenter study. J Am Soc Nephrol 2020, 31(2): 435-446",
+        "Izzedine H, Escudier B, Lhomme C, et al. Kidney diseases associated with anti-vascular endothelial growth factor (VEGF): an 8-year observational study at a single center. Medicine 2014, 93(24): 333-339",
+        "Groenestege WM, Thébault S, van der Wijst J, et al. Impaired basolateral sorting of pro-EGF causes isolated recessive renal hypomagnesemia. J Clin Invest 2007, 117(8): 2260-2267",
+        "Gupta S, Short SAP, Sise ME, et al. Acute kidney injury in patients treated with immune checkpoint inhibitors. J Immunother Cancer 2021, 9(10): e003467"],
+  note:"ข้อมูลสรุปเพื่อการสอน ตำแหน่งบน nephron เป็น schematic ขนาดยาและเกณฑ์ปรับยาให้ใช้ฉลากยาและแนวทางของโรงพยาบาลประกอบ"
+});
+})();
+</script>
+</body>
+</html>

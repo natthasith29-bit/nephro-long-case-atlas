@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[EL-08] Acid-Base Stepwise</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(110px,140px) 1fr 90px}
+#nomo{max-height:430px}
+.readout{grid-template-columns:repeat(3,1fr)}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,1fr)}}
+#roDx b{font-size:15px;line-height:1.35}
+.tools{margin-top:10px}
+body.present .bench{grid-template-columns:1.2fr 1fr}
+body.present #nomo{max-height:420px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:16px 20px}
+body.present .ctls{gap:2px}
+body.present .ro{padding:8px 12px}
+body.present #steps{display:none}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Acid-base map (pCO2 กับ HCO3)</h2>
+      <div class="svgwrap"><svg id="nomo" viewBox="0 0 580 440" role="img" aria-label="Acid-base nomogram with compensation bands"></svg></div>
+      <p class="hint no-present">แถบสีคือช่วงที่คาดไว้เมื่อร่างกาย compensate แบบปกติ เส้นบางคือ iso-pH จุดของผู้ป่วยที่อยู่นอกแถบบ่งชี้ mixed disorder ใช้สูตร Winter, 0.7 สำหรับ metabolic alkalosis และ 0.1/0.35, 0.2/0.4 สำหรับ respiratory acute/chronic</p>
+    </div>
+    <div class="card">
+      <h2>Blood gas และ electrolytes</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roPh"><b>-</b><span>pH จาก Henderson</span></div>
+        <div class="ro" id="roAG"><b>-</b><span>AG corrected</span></div>
+        <div class="ro" id="roDD"><b>-</b><span>Delta ratio</span></div>
+      </div>
+      <div class="readout" style="grid-template-columns:1fr;margin-top:1px"><div class="ro" id="roDx"><b>-</b><span>Diagnosis</span></div></div>
+      <div id="steps"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/calc.js"></script>
+<script>
+(function(){
+"use strict";
+function P(o){ var d={ph:7.40,pco2:40,hco3:24,na:140,cl:104,alb:4.0,chronic:false}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  dka:{name:"DKA (simple HAGMA)", p:P({ph:7.18,pco2:22,hco3:8,na:135,cl:98}),
+    rows:[["ผล","pH 7.18 pCO2 22 HCO3 8 AG 29"],["Compensation","Winter 20 ± 2 ได้ 22 เหมาะสม"],["Delta ratio","ราว 1.1 HAGMA อย่างเดียว"]],
+    take:["เริ่มจาก pH แล้วดู primary disorder จากทิศของ HCO3 และ pCO2","Metabolic acidosis ใช้ Winter: pCO2 = 1.5 × HCO3 + 8 ± 2","คำนวณ AG ทุกครั้ง แล้วดู delta ratio หา disorder ที่ซ่อน"]},
+  sal:{name:"Salicylate (HAGMA + resp alk)", p:P({ph:7.45,pco2:20,hco3:14,na:140,cl:102}),
+    rows:[["ผล","pH 7.45 แต่ HCO3 14 และ pCO2 20"],["Compensation","Winter คาด 29 ± 2 แต่ได้ 20 = respiratory alkalosis ร่วม"],["นัย","salicylate กระตุ้น respiratory center โดยตรง"]],
+    take:["pH ปกติหรือสูงทั้งที่ HCO3 ต่ำ = mixed disorder","pCO2 ต่ำกว่าที่ Winter ทำนาย = respiratory alkalosis ร่วม","Salicylate, sepsis, liver failure ทำให้เกิดคู่นี้"]},
+  vom:{name:"DKA + vomiting", p:P({ph:7.40,pco2:38,hco3:23,na:140,cl:85}),
+    rows:[["ผล","pH และ HCO3 เกือบปกติ แต่ AG 32"],["Delta ratio","ราว 20 = metabolic alkalosis ซ่อนอยู่"],["นัย","อาเจียนเสีย HCl หักล้าง HAGMA"]],
+    take:["AG สูงแม้ pH และ HCO3 ปกติ = มี HAGMA เสมอ","Delta ratio > 2 ชี้ metabolic alkalosis ร่วม","อย่าเชื่อ HCO3 ปกติจนกว่าจะดู AG"]},
+  diar:{name:"Diarrhea (NAGMA)", p:P({ph:7.28,pco2:30,hco3:14,na:138,cl:114}),
+    rows:[["ผล","AG 10 Cl สูง"],["Compensation","Winter 29 ± 2 ได้ 30 เหมาะสม"],["ต่อไป","urine AG ลบ (NH4+ ออกดี) ต่างจาก RTA"]],
+    take:["NAGMA = เสีย HCO3 (GI, proximal RTA) หรือขับ H+ ไม่ได้ (distal RTA, CKD)","ใช้ urine AG หรือ urine osmolal gap ประเมิน NH4+ (ดู EL-09)","Saline ปริมาณมากก็ทำให้ hyperchloremic acidosis"]},
+  copd:{name:"Chronic respiratory acidosis", p:P({ph:7.34,pco2:60,hco3:32,na:140,cl:96,chronic:true}),
+    rows:[["ผล","pCO2 60 HCO3 32"],["Compensation chronic","24 + 0.35 x 20 = 31 เหมาะสม"],["ถ้า acute","คาด HCO3 แค่ 26 ค่าที่ได้จะดูเหมือนมี metabolic alkalosis"]],
+    take:["Respiratory disorder ต้องระบุ acute หรือ chronic ก่อนประเมิน compensation","Chronic: ไตเพิ่ม HCO3 0.35 ต่อ pCO2 10 (acidosis) ลด 0.4 (alkalosis)","Post-hypercapnic alkalosis เกิดเมื่อลด pCO2 เร็วใน chronic CO2 retainer"]},
+  alb:{name:"Hypoalbuminemia ซ่อน AG", p:P({ph:7.30,pco2:30,hco3:15,na:138,cl:111,alb:1.8}),
+    rows:[["ผล","AG ที่วัดได้ 12 ดูเหมือน NAGMA"],["แก้ albumin","+2.5 x (4 − 1.8) = 17.5 HAGMA จริง (เช่น lactate) delta ratio 0.6 มี NAGMA ร่วม (เช่น saline)"],["นัย","sepsis/cirrhosis albumin ต่ำมาก"]],
+    take:["Albumin ลดทุก 1 g/dL ทำให้ AG ต่ำลงราว 2.5","แก้ AG ตาม albumin ก่อนแปลผลทุกครั้งใน ICU","HAGMA ที่ถูกซ่อนอาจเป็น lactate หรือ ketone"]},
+  triple:{name:"Triple disorder", p:P({ph:7.50,pco2:25,hco3:19,na:140,cl:90}),
+    rows:[["ผล","pH 7.50 HCO3 19 pCO2 25 AG 31"],["แยก","HAGMA (AG 31) + metabolic alkalosis (delta ratio ราว 4) + respiratory alkalosis (pCO2 ต่ำกว่าคาด)"],["ตัวอย่าง","DKA + อาเจียน + sepsis/pneumonia"]],
+    take:["Triple disorder = HAGMA + metabolic alkalosis + respiratory disorder","ไล่ทีละขั้น: primary, compensation, AG, delta ratio","มีได้เพียง respiratory disorder เดียวในเวลาเดียวกัน"]}
+};
+var ORDER=["dka","sal","vom","diar","copd","alb","triple"];
+var box=document.getElementById("ctls"), C={};
+function sl(k,o){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("ph",{label:"pH",min:6.9,max:7.7,step:0.01,value:7.4,fmt:function(v){ return v.toFixed(2); }});
+sl("pco2",{label:"pCO2",min:10,max:90,step:1,value:40,unit:"mmHg"});
+sl("hco3",{label:"HCO3",min:3,max:50,step:1,value:24,unit:"mmol/L"});
+sl("na",{label:"Na",min:115,max:165,step:1,value:140});
+sl("cl",{label:"Cl",min:70,max:130,step:1,value:104});
+sl("alb",{label:"Albumin",min:1,max:5,step:0.1,value:4,unit:"g/dL"});
+var tog=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:"Respiratory: chronic"}); tog.addEventListener("click",function(){ tog.setAttribute("aria-pressed",tog.getAttribute("aria-pressed")==="true"?"false":"true"); update(); });
+document.querySelector(".tools").appendChild(tog);
+
+var svg=document.getElementById("nomo"), F="IBM Plex Sans Thai, sans-serif", M="Geist Mono, monospace";
+var X0=60,X1=560,Y0=400,Y1=20, PX=function(p){ return X0+(p-10)/80*(X1-X0); }, PY=function(h){ return Y0-(h/50)*(Y0-Y1); };
+function el(t,a,p){ return Sim.svg(t,a,p||svg); }
+function poly(pts,fill,label,lx,ly){ el("path",{d:"M"+pts.map(function(q){ return PX(q[0]).toFixed(1)+" "+PY(q[1]).toFixed(1); }).join(" L")+" Z",fill:fill,opacity:0.32,stroke:fill,"stroke-width":1}); if(label) el("text",{x:PX(lx),y:PY(ly),"font-size":11.5,"font-weight":600,fill:"#0B0B1F","font-family":F,text:label}); }
+function band(fn,a,b,w,axis){ /* axis "p": band around pCO2 = fn(HCO3) for HCO3 in [a,b]; "h": band around HCO3 = fn(pCO2) */
+  var up=[],dn=[],i,v;
+  for(i=0;i<=20;i++){ v=a+(b-a)*i/20; if(axis==="p"){ up.push([fn(v)+w,v]); dn.push([fn(v)-w,v]); } else { up.push([v,fn(v)+w]); dn.push([v,fn(v)-w]); } }
+  return up.concat(dn.reverse());
+}
+function drawBase(){
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  el("rect",{x:X0,y:Y1,width:X1-X0,height:Y0-Y1,fill:"#FFFFFF",stroke:"#E6E7F0"});
+  for(var p=10;p<=90;p+=10){ el("line",{x1:PX(p),y1:Y1,x2:PX(p),y2:Y0,stroke:"#F0F1F6"}); el("text",{x:PX(p),y:Y0+16,"text-anchor":"middle","font-size":11,fill:"#5E6075","font-family":M,text:String(p)}); }
+  for(var h=0;h<=50;h+=10){ el("line",{x1:X0,y1:PY(h),x2:X1,y2:PY(h),stroke:"#F0F1F6"}); el("text",{x:X0-8,y:PY(h)+4,"text-anchor":"end","font-size":11,fill:"#5E6075","font-family":M,text:String(h)}); }
+  el("text",{x:(X0+X1)/2,y:Y0+34,"text-anchor":"middle","font-size":12,fill:"#5E6075","font-family":F,text:"pCO2 (mmHg)"});
+  el("text",{x:16,y:(Y0+Y1)/2,"text-anchor":"middle","font-size":12,fill:"#5E6075","font-family":F,transform:"rotate(-90 16 "+((Y0+Y1)/2)+")",text:"HCO3 (mmol/L)"});
+  /* iso-pH */
+  [7.0,7.1,7.2,7.3,7.4,7.5,7.6,7.7].forEach(function(ph){ var k=0.03*Math.pow(10,ph-6.1), x2=Math.min(90,50/k);
+    el("line",{x1:PX(10),y1:PY(Math.min(50,k*10)),x2:PX(x2),y2:PY(k*x2),stroke:"#C9CBDA","stroke-width":ph===7.4?1.6:0.8,"stroke-dasharray":ph===7.4?"none":"3 3"});
+    var lx=Math.min(88,50/k-2), ly=k*lx; if(ly>48){ ly=48; lx=48/k; } el("text",{x:PX(lx)+3,y:PY(ly)-3,"font-size":10.5,fill:"#9A9CB2","font-family":M,text:ph.toFixed(1)}); });
+  poly(band(function(h){ return 1.5*h+8; },4,22,2,"p"),"#B4232A","Metabolic acidosis",11,6);
+  poly(band(function(h){ return 40+0.7*(h-24); },26,46,5,"p"),"#5B4BFF","Metabolic alkalosis",47,44);
+  poly(band(function(p){ return 24+0.1*(p-40); },42,85,2,"h"),"#E8A33D","Acute resp acidosis",66,25);
+  poly(band(function(p){ return 24+0.35*(p-40); },42,80,2,"h"),"#A8842C","Chronic resp acidosis",60,38.5);
+  poly(band(function(p){ return 24-0.2*(40-p); },15,38,2,"h"),"#19C8E6","Acute resp alk",14,22.5);
+  poly(band(function(p){ return 24-0.4*(40-p); },15,38,2,"h"),"#1F7A72","Chronic resp alk",14,10);
+  el("circle",{cx:PX(40),cy:PY(24),r:5,fill:"none",stroke:"#0B0B1F","stroke-width":1.5});
+  el("text",{x:PX(40)+8,y:PY(24)+14,"font-size":10.5,fill:"#5E6075","font-family":F,text:"Normal"});
+}
+function params(){ var o={}; for(var k in C) o[k]=C[k].get(); o.chronic=tog.getAttribute("aria-pressed")==="true"; return o; }
+function update(){
+  var p=params();
+  drawBase();
+  var phH=6.1+Math.log(p.hco3/(0.03*p.pco2))/Math.LN10;
+  el("circle",{cx:PX(p.pco2),cy:PY(p.hco3),r:9,fill:"#0B0B1F",stroke:"#fff","stroke-width":2.5});
+  el("text",{x:PX(p.pco2)+13,y:PY(p.hco3)-10,"font-size":12.5,"font-weight":600,fill:"#0B0B1F","font-family":M,text:"pH "+p.ph.toFixed(2)});
+  var r=Calc.acidBase({ph:p.ph,pco2:p.pco2,hco3:p.hco3,na:p.na,cl:p.cl,alb:p.alb,chronic:p.chronic});
+  Calc.renderSteps("steps",r,{title:"Stepwise"});
+  var agc=p.na-p.cl-p.hco3+2.5*(4-p.alb), dd=agc>12&&p.hco3<24?(agc-12)/(24-p.hco3):null;
+  Sim.ro("roPh",phH.toFixed(2),Math.abs(phH-p.ph)>0.04?"flag":"ok");
+  Sim.ro("roAG",agc.toFixed(1),agc>12?"flag":"ok");
+  Sim.ro("roDD",dd===null?(agc>12?"HCO3 ≥ 24":"-"):dd.toFixed(1),dd!==null&&(dd<1||dd>2)?"flag":false);
+  var dx=(r.disorders||[]).join(" + ")||"ไม่พบความผิดปกติชัดเจน";
+  if(Math.abs(phH-p.ph)>0.04) dx+="  (ค่าไม่สอดคล้องกัน ตรวจ lab ซ้ำ)";
+  Sim.ro("roDx",dx,(r.disorders||[]).length>1?"flag":false);
+}
+Sim.mount({code:"EL-08", title:"Acid-Base Stepwise", lead:"ใส่ pH, pCO2, HCO3, Na, Cl และ albumin ดูจุดของผู้ป่วยบน acid-base map ว่าอยู่ในแถบ compensation หรือไม่ แล้วไล่ AG และ delta ratio หา mixed หรือ triple disorder",
+  scenarios:S, order:ORDER, captureMs:1000,
+  onChange:function(k,s){ var p=s.p; ["ph","pco2","hco3","na","cl","alb"].forEach(function(x){ C[x].set(p[x]); }); tog.setAttribute("aria-pressed",p.chronic?"true":"false"); update(); },
+  refs:["Berend K, de Vries APJ, Gans ROB. Physiological approach to assessment of acid-base disturbances. N Engl J Med 2014, 371(15): 1434-1445",
+        "Seifter JL. Integration of acid-base and electrolyte disorders. N Engl J Med 2014, 371(19): 1821-1831",
+        "Figge J, Jabor A, Kazda A, Fencl V. Anion gap and hypoalbuminemia. Crit Care Med 1998, 26(11): 1807-1810",
+        "Albert MS, Dell RB, Winters RW. Quantitative displacement of acid-base equilibrium in metabolic acidosis. Ann Intern Med 1967, 66(2): 312-322"],
+  note:"แถบ compensation เป็นค่าประมาณจากสูตร bedside AG ปกติคิด 12 (ขึ้นกับห้องปฏิบัติการ) albumin correction 2.5 ต่อ 1 g/dL delta ratio ใช้ได้เมื่อ AG สูงและ HCO3 < 24 pH ที่คำนวณจาก Henderson ช่วยตรวจความสอดคล้องของ blood gas"
+});
+})();
+</script>
+</body>
+</html>

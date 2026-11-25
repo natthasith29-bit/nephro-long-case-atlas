@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[HT-01] RAAS Cascade and Blockade</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.3fr 1fr}}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:12px}
+.sub{font-size:12.5px;color:var(--muted);margin:14px 0 4px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:14px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .ro{padding:6px 12px}
+body.present .ro b{font-size:19px}
+body.present .ctls{gap:2px}
+body.present .ctl{font-size:13px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .tools{margin-top:4px;gap:5px}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+body.present .sub{margin:6px 0 2px}
+body.present .svgwrap svg{max-height:236px}
+body.present #live{display:none}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>RAAS cascade</h2>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 680 300" role="img" aria-label="Renin angiotensin aldosterone cascade with drug blockade sites"></svg></div>
+      <div id="live"></div>
+      <details class="more"><summary>กราฟ Ang II, aldosterone และ K ตามสัปดาห์</summary><div class="more-body"><div id="chart"></div></div></details>
+      <p class="hint no-present">ตัวเลขในกล่องคือระดับเทียบกับก่อนให้ยา (x1.00) ✕ แดงคือจุดที่ยาออกฤทธิ์ เส้นประบนสุดคือ short-loop feedback ที่ Ang II กด renin กราฟล่างจำลอง 52 สัปดาห์หลังเริ่มยา เพื่อดู ACE escape และ aldosterone breakthrough</p>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วยและยา</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="sub">ยา (กดเปิด/ปิด ใช้ร่วมกันได้)</div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roPRA"><b>-</b><span>PRA (เทียบเดิม)</span></div>
+        <div class="ro" id="roA2"><b>-</b><span>Ang II (เทียบเดิม)</span></div>
+        <div class="ro" id="roAldo"><b>-</b><span>Aldosterone สัปดาห์ 52</span></div>
+        <div class="ro" id="roK"><b>-</b><span>K (mmol/L)</span></div>
+        <div class="ro" id="roSBP"><b>-</b><span>SBP (mmHg)</span></div>
+        <div class="ro" id="roGFR"><b>-</b><span>eGFR acute dip</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/live.js"></script>
+<script>
+(function(){
+"use strict";
+function SV(t,a,p){ var b={}; for(var k in a) if(a[k]!==null&&a[k]!==undefined) b[k]=a[k]; return Sim.svg(t,b,p); }
+var RX={acei:{name:"ACEi"},arb:{name:"ARB"},dri:{name:"Aliskiren (DRI)"},mra:{name:"MRA"},arni:{name:"ARNI"},thz:{name:"Thiazide"}};
+function P(o){ var d={na:150,gfr:90,sbp:158,rx:[]}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  base:{name:"ไม่ได้รับยา", p:P({}),
+    rows:[["ภาวะ","essential HT กินเค็มปานกลาง Na 150 mmol/วัน"],["RAAS","renin, Ang II และ aldosterone อยู่ในสมดุลกับ volume"],["ลองทำ","เปิดยาทีละตัวแล้วดูว่า renin ขึ้นหรือลง"]],
+    take:["Renin เป็นตัวกำหนดอัตราของทั้ง cascade และถูกกดโดย volume และ Ang II ผ่าน AT1R (short-loop feedback)","ยาที่ตัด Ang II ทุกตัวทำให้ renin concentration สูงขึ้น ต่างกันที่ PRA และ Ang II ปลายทาง","Aldosterone ถูกกระตุ้นทั้งจาก Ang II และ K ในเลือด"]},
+  lowNa:{name:"Low salt diet", p:P({na:50}),
+    rows:[["ภาวะ","จำกัดเกลือเหลือ Na 50 mmol/วัน"],["RAAS","renin และ aldosterone สูงขึ้นชดเชย volume ที่ลด"],["ผล","BP ลดเล็กน้อย ระบบที่ไวต่อ Ang II มากขึ้น"]],
+    take:["Low salt diet กระตุ้น RAAS ทำให้ BP พึ่ง Ang II มากขึ้น RAAS blocker จึงได้ผลดีขึ้นเมื่อจำกัดเกลือ","ในทางกลับกันกินเค็มมากทำให้ ACEi และ ARB ลด BP และ proteinuria ได้น้อยลง","ควรประเมิน urine Na 24 ชม. ในผู้ป่วยที่ตอบสนองต่อ RAAS blocker ไม่ดี"]},
+  acei:{name:"ACEi", p:P({rx:["acei"]}),
+    rows:[["ยา","ACEi ขนาดเต็ม"],["ผล","Ang II ลด renin และ PRA สูงขึ้น bradykinin สะสม"],["ข้างเคียง","ไอแห้ง angioedema K สูง eGFR ลดช่วงแรก"]],
+    take:["ACEi ลด Ang II และเพิ่ม bradykinin ซึ่งเป็นที่มาของไอแห้งและ angioedema","PRA สูงขึ้นจากการเสีย feedback เป็นหลักฐานว่าได้ยาจริง","eGFR ลดไม่เกินราว 30% ในช่วงแรกเป็นผลทาง hemodynamic ให้ยาต่อได้"]},
+  escape:{name:"Escape และ breakthrough", p:P({rx:["acei"],gfr:45,na:220}),
+    rows:[["ภาวะ","CKD G3a + proteinuria กินเค็ม ได้ ACEi มา 1 ปี"],["กลไก","Ang II กลับขึ้นผ่าน chymase และ ACE ที่เพิ่ม aldosterone กลับขึ้นจาก K และ non-Ang II stimuli"],["ผล","BP และ proteinuria กลับขึ้นบางส่วน"]],
+    take:["ACE escape: Ang II กลับขึ้นได้แม้ใช้ ACEi ต่อเนื่อง เพราะมีเส้นทางที่ไม่ผ่าน ACE","Aldosterone breakthrough เกิดได้ในราวหนึ่งในสามของผู้ป่วยที่ได้ ACEi หรือ ARB ระยะยาว","การเพิ่ม MRA หรือ finerenone ร่วมกับจำกัดเกลือ ตอบโจทย์ breakthrough ได้ตรงกว่าการเพิ่ม ACEi + ARB"]},
+  arbMra:{name:"ARB + MRA ใน CKD", p:P({rx:["arb","mra"],gfr:32,sbp:150}),
+    rows:[["ภาวะ","CKD G3b ได้ ARB แล้วเพิ่ม spironolactone"],["ผล","aldosterone สูงแต่ MR ถูกปิด K สูงขึ้นชัด"],["ต้องทำ","ตรวจ K ภายใน 1 สัปดาห์และ 4 สัปดาห์"]],
+    take:["RAAS blocker + MRA ลด BP และ albuminuria ได้เพิ่ม แต่ K สูงคือข้อจำกัดหลักเมื่อ eGFR ต่ำ","เริ่มเมื่อ K ≤ 4.8 ตรวจซ้ำภายใน 1–4 สัปดาห์ ใช้ K binder เพื่อให้ยาต่อได้","Finerenone เลือกในผู้ป่วยเบาหวานที่มี albuminuria ส่วน spironolactone ใช้ใน resistant HT"]},
+  dual:{name:"ACEi + ARB", p:P({rx:["acei","arb"],gfr:50}),
+    rows:[["ยา","dual RAAS blockade"],["ผล","Ang II action ต่ำมาก BP ลดเพิ่มเพียงเล็กน้อย"],["ข้างเคียง","K สูงและ AKI เพิ่มขึ้นโดยไม่ลด kidney หรือ CV outcome"]],
+    take:["ACEi + ARB หรือ aliskiren + ACEi/ARB ไม่แนะนำ เพิ่ม hyperkalemia และ AKI โดยไม่ได้ประโยชน์","ผลต่อ BP เพิ่มน้อยเพราะ renin ที่สูงขึ้นชดเชยบางส่วน","ถ้าต้องการลด albuminuria เพิ่ม ให้ใช้ SGLT2i หรือ MRA แทน"]},
+  dri:{name:"Aliskiren", p:P({rx:["dri"]}),
+    rows:[["ยา","direct renin inhibitor"],["ผล","renin concentration สูงขึ้นมาก แต่ PRA ต่ำ"],["อ่านผล","ต้องรู้ว่าวัด PRA หรือ DRC เมื่อแปลผล ARR"]],
+    take:["DRI เป็นยาตัวเดียวที่ลด PRA ขณะที่ renin concentration สูงขึ้น","ระหว่างใช้ aliskiren ARR ที่ใช้ DRC จะต่ำผิด และที่ใช้ PRA จะสูงผิด","ไม่ใช้ร่วมกับ ACEi หรือ ARB ในผู้ป่วยเบาหวานหรือ CKD"]},
+  arni:{name:"ARNI", p:P({rx:["arni"],sbp:140}),
+    rows:[["ยา","sacubitril + valsartan"],["ผล","AT1R ถูกบล็อก natriuretic peptide สูงขึ้นจากการยับยั้ง neprilysin"],["ห้าม","ใช้ร่วม ACEi ต้องหยุด ACEi อย่างน้อย 36 ชม."]],
+    take:["ARNI รวม ARB กับ neprilysin inhibitor เพิ่ม natriuretic peptide และ bradykinin บางส่วน","ห้ามใช้ร่วม ACEi เพราะ bradykinin สะสมจนเกิด angioedema ต้องเว้น 36 ชม.","ระหว่างใช้ ARNI BNP สูงขึ้นจากยา ใช้ NT-proBNP ติดตาม HF แทน"]},
+  thzAce:{name:"Thiazide + ACEi", p:P({rx:["thz","acei"]}),
+    rows:[["ยา","thiazide เดี่ยวทำให้ renin และ aldosterone สูง K ต่ำ"],["คู่กับ ACEi","ACEi ตัด compensation ของ RAAS"],["ผล","BP ลดมากขึ้น K เป็นกลาง"]],
+    take:["Thiazide กระตุ้น RAAS จาก volume ที่ลด การจับคู่กับ ACEi หรือ ARB จึงเสริมฤทธิ์กันลด BP","ผลต่อ K หักล้างกัน thiazide ทำให้ K ต่ำ ส่วน RAAS blocker ทำให้ K สูง","คู่นี้เป็น single-pill combination ที่ใช้บ่อย"]}
+};
+var ORDER=["base","lowNa","acei","escape","arbMra","dual","dri","arni","thzAce"];
+var box=document.getElementById("ctls"), C={};
+function sl(k,o){ o.id="s"+k; o.onInput=function(){ update(true); }; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("na",{label:"Na intake",min:30,max:300,step:10,value:150,unit:" mmol/d"});
+sl("gfr",{label:"eGFR",min:15,max:120,step:1,value:90,unit:""});
+sl("sbp",{label:"SBP ก่อนยา",min:120,max:190,step:1,value:158,unit:" mmHg"});
+var T={}, tb=document.getElementById("tools");
+Object.keys(RX).forEach(function(k){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:RX[k].name}); b.addEventListener("click",function(){ b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); tb.appendChild(b); T[k]=b; });
+function on(k){ return T[k].getAttribute("aria-pressed")==="true"; }
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?175:220,aria:"Angiotensin II, aldosterone and potassium over fifty-two weeks of treatment",
+  x:{min:0,max:52,step:8,label:"Weeks on treatment"},y:{min:0,max:3,step:0.5,label:"Level vs untreated (x)"},y2:{min:3,max:7,step:1,label:"K (mmol/L)"},
+  series:[{id:"a2",name:"Ang II",color:A.accent,data:[],width:2.4},{id:"al",name:"Aldosterone",color:A.gold,data:[],width:2.4},{id:"k",name:"K",color:A.red,data:[],width:1.6,dash:[5,3],axis:"y2"}],
+  hlines:[{y:1,label:"Untreated",color:A.muted,dash:[3,3]},{y:5.5,label:"K 5.5",color:A.red,dash:[2,4],axis:"y2"}],legend:true});
+var live=Live.player(chart,{mount:"live"}), LAST=null;
+/* ---------- model ---------- */
+function state(o,t){
+  var vs=Math.pow(o.na/150,-0.45)*(o.thz?1.7:1);
+  var aceRes=o.acei?0.3+0.35*(1-Math.exp(-t/12)):1;
+  var arbF=(o.arb||o.arni)?0.25:1;
+  var driF=o.dri?0.25:1;
+  var s=1, rc=1, pra=1, a1=1, a2=1;
+  for(var i=0;i<60;i++){ rc=vs*Math.pow(Math.max(0.03,s),-1); pra=rc*driF; a1=pra; a2=a1*aceRes; var sN=a2*arbF; s=s*0.5+sN*0.5; }
+  var brk=(o.acei||o.arb||o.dri||o.arni)?1+0.3*(1-Math.exp(-t/20)):1;
+  var k=4.2, aldo=1, mr=1;
+  for(var j=0;j<60;j++){ aldo=(0.3+0.7*Math.pow(Math.max(0.02,s),0.8))*Math.pow(k/4.2,4)*brk; mr=aldo*(o.mra?0.3:1);
+    var kN=4.2+0.55*(1-mr)*Math.pow(60/Math.max(10,o.gfr),0.6)+(o.gfr<30?0.25:0)-(o.thz?0.25:0);
+    kN=Math.max(2.8,Math.min(7.5,kN)); k=k*0.6+kN*0.4; }
+  var bk=(o.acei?3:1)*(o.arni?1.5:1), np=o.arni?1.8:1;
+  var rd=Math.max(0.6,Math.min(1.6,Math.sqrt(vs)));
+  var fr=0.45*(1-Math.min(1,s))*rd+0.15*(1-Math.min(1,mr))+(o.arni?0.07:0)+(o.thz?0.13:0);
+  fr=Math.min(0.75,fr);
+  var sbp=o.sbp-(o.sbp-105)*fr;
+  var dip=-(16*(1-Math.min(1,s))+(o.mra?4:0)+(o.thz?3:0))*(o.thz&&(o.acei||o.arb||o.arni)?1.3:1)*(o.gfr<45?1.2:1);
+  return {rc:rc,pra:pra,a1:a1,a2:a2,s:s,aldo:aldo,mr:mr,k:k,bk:bk,np:np,sbp:sbp,dip:dip};
+}
+function opts(){ var o={na:C.na.get(),gfr:C.gfr.get(),sbp:C.sbp.get()}; Object.keys(RX).forEach(function(k){ o[k]=on(k); }); return o; }
+/* ---------- drawing ---------- */
+var svg=document.getElementById("vis");
+var INK="#0B0B1F", ACC="#5B4BFF", RED="#B4232A", TEAL="#1F7A72", MUT="#5E6075", LINE="#D3D5E2", GOLD="#A8842C";
+function tx(x,y,s,o){ o=o||{}; return SV("text",{x:x,y:y,"text-anchor":o.a||"middle","font-family":o.mono?"Geist Mono, monospace":"IBM Plex Sans Thai, sans-serif","font-size":o.fs||12,"font-weight":o.fw||400,fill:o.fill||INK,text:s},svg); }
+function tint(v){ var t=Math.max(0,Math.min(1,Math.log(Math.max(0.05,v))/Math.log(4)*0.5+0.5)); return "rgba(91,75,255,"+(0.06+0.5*Math.abs(t-0.5)*2*(t>0.5?1:0.6)).toFixed(3)+")"; }
+function node(x,y,w,label,v,sub){ var col=v>1.15?ACC:v<0.87?TEAL:LINE;
+  SV("rect",{x:x,y:y,width:w,height:46,rx:12,fill:v===null?"#fff":tint(v),stroke:v===null?LINE:col,"stroke-width":v===null?1.2:1.8},svg);
+  tx(x+w/2,y+19,label,{fs:12.5,fw:600});
+  if(v!==null) tx(x+w/2,y+36,"x"+v.toFixed(2),{fs:12,mono:true,fw:600,fill:v>1.15?ACC:v<0.87?TEAL:MUT});
+  else if(sub) tx(x+w/2,y+36,sub,{fs:10.5,fill:MUT}); }
+function arrow(x1,y1,x2,y2,o){ o=o||{}; SV("path",{d:"M"+x1+" "+y1+" L"+x2+" "+y2,stroke:o.c||MUT,"stroke-width":o.w||1.6,fill:"none","stroke-dasharray":o.dash||null,"marker-end":"url(#ah"+(o.m||"")+")"},svg); }
+function block(x,y,lbl){ SV("circle",{cx:x,cy:y,r:11,fill:RED,stroke:"#fff","stroke-width":2},svg); tx(x,y+4.5,"✕",{fs:12,fw:700,fill:"#fff"}); if(lbl) tx(x,y-16,lbl,{fs:10.5,fw:600,fill:RED}); }
+function draw(st,o){
+  svg.innerHTML="";
+  var defs=SV("defs",{},svg);
+  [["",MUT],["r",RED],["t",TEAL]].forEach(function(m){ var mk=SV("marker",{id:"ah"+m[0],viewBox:"0 0 10 10",refX:9,refY:5,markerWidth:7,markerHeight:7,orient:"auto-start-reverse"},defs); SV("path",{d:"M0 0 L10 5 L0 10 z",fill:m[1]},mk); });
+  /* feedback line */
+  var fbW=1.2+2.2*Math.min(1,st.s);
+  SV("path",{d:"M610 52 L610 14 L145 14 L145 150",stroke:TEAL,"stroke-width":fbW,fill:"none","stroke-dasharray":"5 4","marker-end":"url(#aht)"},svg);
+  tx(380,10,"Short-loop feedback (AT1R inhibits renin)",{fs:10.5,fill:TEAL});
+  /* chymase bypass */
+  var chy=o.acei?Math.min(1,(st.a2/st.a1-0.3)/0.35):0.15;
+  SV("path",{d:"M300 52 Q370 24 440 52",stroke:o.acei?GOLD:LINE,"stroke-width":1+2*chy,fill:"none","stroke-dasharray":"3 3","marker-end":"url(#ah)"},svg);
+  tx(370,34,"Chymase",{fs:10,fill:o.acei?GOLD:MUT});
+  node(20,52,104,"Angiotensinogen",null,"Liver");
+  node(220,52,100,"Ang I",st.a1);
+  node(420,52,100,"Ang II",st.a2);
+  node(560,52,104,"AT1R",st.s);
+  node(95,150,100,"Renin",st.rc);
+  tx(145,212,"PRA x"+st.pra.toFixed(2),{fs:11,mono:true,fill:o.dri?RED:MUT,fw:o.dri?600:400});
+  node(300,150,100,"ACE",null,"Lung endothelium");
+  node(560,150,104,"Aldosterone",st.aldo);
+  node(560,240,104,"MR activity",st.mr);
+  node(220,240,100,"Bradykinin",st.bk);
+  node(390,240,120,"Natriuretic pep.",st.np);
+  arrow(124,75,218,75); arrow(320,75,418,75); arrow(520,75,558,75);
+  arrow(145,150,160,80,{}); arrow(350,150,360,80,{});
+  arrow(612,98,612,148); arrow(612,196,612,238);
+  arrow(320,262,388,262,{dash:"3 3"});
+  arrow(270,240,320,198,{dash:"3 3"});
+  tx(210,232,"ACE degrades",{fs:9.5,fill:MUT,a:"end"});
+  tx(450,232,"Neprilysin degrades",{fs:9.5,fill:MUT});
+  tx(560,128,"Vasoconstriction, PT Na",{fs:10,fill:MUT,a:"end"});
+  tx(560,292,"ENaC, K and H secretion",{fs:10,fill:MUT,a:"end"});
+  /* K and BP badges */
+  tx(20,252,"K "+st.k.toFixed(1),{a:"start",fs:13,fw:600,mono:true,fill:st.k>5.5?RED:st.k<3.5?RED:TEAL});
+  tx(20,272,"SBP "+st.sbp.toFixed(0),{a:"start",fs:13,fw:600,mono:true,fill:INK});
+  if(st.bk>2.5) tx(20,292,"Cough, angioedema risk",{a:"start",fs:10.5,fill:RED,fw:600});
+  /* blockade marks */
+  if(o.dri) block(145,140,"DRI");
+  if(o.acei) block(350,140,"ACEi");
+  if(o.arb||o.arni) block(540,75,o.arni?"Valsartan":"ARB");
+  if(o.mra) block(612,220,"MRA");
+  if(o.arni) block(450,286,"Sacubitril");
+  if(o.thz){ tx(20,120,"Thiazide: volume down, renin up",{a:"start",fs:10.5,fill:ACC,fw:600}); }
+}
+function update(deb){
+  var o=opts(), T52=[], A2=[], AL=[], K=[], ev=[];
+  for(var w=0;w<=52;w+=0.5){ var s=state(o,w); A2.push([w,s.a2]); AL.push([w,s.aldo]); K.push([w,s.k]); }
+  var s0=state(o,0), s52=state(o,52), any=Object.keys(RX).some(function(k){ return o[k]; });
+  /* aldosterone breakthrough detection: nadir then rise above 0.9 of untreated */
+  var nadir=AL[0][1], tB=null; for(var i=1;i<AL.length;i++){ nadir=Math.min(nadir,AL[i][1]); if(tB===null&&AL[i][1]>Math.max(0.9,nadir*1.25)&&nadir<0.85) tB=AL[i][0]; }
+  if(any) ev.push({t:0,kind:"rx",text:"เริ่ม "+Object.keys(RX).filter(function(k){ return o[k]; }).map(function(k){ return RX[k].name; }).join(" + ")});
+  else ev.push({t:0,kind:"phys",text:"ไม่ได้ให้ยา RAAS อยู่ในสมดุล"});
+  if(o.acei&&o.arni) ev.push({t:0,kind:"warn",text:"ACEi + ARNI ห้ามใช้ร่วม เสี่ยง angioedema"});
+  if(s0.k>5.5) ev.push({t:1,kind:"warn",text:"K "+s0.k.toFixed(1)+" ตั้งแต่สัปดาห์แรก"});
+  if(o.acei){ var tE=Live.cross(A2,s0.a2*1.5,1); if(tE!==null) ev.push({t:tE,kind:"phys",text:"ACE escape: Ang II กลับขึ้นผ่าน chymase"}); }
+  if(tB!==null) ev.push({t:tB,kind:"warn",text:"Aldosterone breakthrough: กลับสู่ระดับเดิม"});
+  ev.push({t:52,kind:s52.sbp<130?"ok":"warn",text:"สัปดาห์ 52 SBP "+s52.sbp.toFixed(0)+" mmHg K "+s52.k.toFixed(1)});
+  var m, bad=true;
+  if(o.acei&&o.arni) m="<b>ห้ามใช้ ACEi ร่วมกับ ARNI</b> หยุด ACEi รอ 36 ชม. ก่อนเริ่ม sacubitril/valsartan";
+  else if((o.acei&&o.arb)||(o.dri&&(o.acei||o.arb||o.arni))) m="<b>Dual RAAS blockade</b> BP ลดเพิ่มเพียง "+(state(Object.assign({},o,{arb:false,dri:false}),52).sbp-s52.sbp).toFixed(0)+" mmHg แต่ K "+s52.k.toFixed(1)+" เลือก RAAS blocker ตัวเดียวขนาดเต็ม แล้วเพิ่ม SGLT2i, MRA หรือ thiazide แทน";
+  else if(s52.k>5.5) m="<b>Hyperkalemia</b> K "+s52.k.toFixed(1)+" จำกัด K ในอาหาร ทบทวนยาที่เพิ่ม K เพิ่ม loop/thiazide หรือ K binder เพื่อคง RAAS blocker ไว้ ลดขนาด MRA ถ้า K > 5.5";
+  else if(tB!==null&&!o.mra) m="<b>Aldosterone breakthrough</b> จำกัดเกลือ (urine Na < 100 mmol/วัน) แล้วพิจารณาเพิ่ม MRA หรือ finerenone ถ้า K ≤ 4.8 ไม่เพิ่ม ARB ซ้อน ACEi";
+  else if(!any){ bad=false; m="<b>ยังไม่ได้ให้ยา</b> ลองเปิด ACEi แล้วดู renin ขึ้น Ang II ลง จากนั้นเปิด Aliskiren แทนเพื่อเทียบ PRA กับ renin concentration"; }
+  else if(o.dri){ bad=false; m="<b>DRI</b> renin concentration x"+s0.rc.toFixed(1)+" แต่ PRA x"+s0.pra.toFixed(2)+" ถ้าจะตรวจ ARR ระหว่างใช้ยานี้ต้องระวังการแปลผล"; }
+  else if(s52.sbp>=130){ bad=false; m="<b>BP ยังไม่ถึงเป้า</b> เพิ่มยาต่างกลไก (CCB หรือ thiazide) และจำกัดเกลือ ดู HT-06"; }
+  else { bad=false; m="<b>คุม BP ได้</b> ตรวจ Cr และ K ที่ 1–2 สัปดาห์หลังเริ่มหรือเพิ่มยา eGFR dip "+Math.abs(s0.dip).toFixed(0)+"% ยอมรับได้ถ้าไม่เกินราว 30%"; }
+  LAST={o:o,A2:A2,AL:AL,K:K,s0:s0,s52:s52,tB:tB,act:"<b>Next step:</b> "+m,actCls:"act"+(bad?" bad":"")};
+  chart.setSeries("a2",A2); chart.setSeries("al",AL); chart.setSeries("k",K);
+  var mx=Math.max(1.2,Math.max.apply(null,AL.map(function(p){ return p[1]; })),Math.max.apply(null,A2.map(function(p){ return p[1]; })));
+  var ymax=Math.min(6,Math.ceil(mx*1.15*2)/2);
+  chart.update({y:{min:0,max:ymax,step:ymax>3?1:0.5,label:"Level vs untreated (x)"}});
+  live.load({tMax:52,unit:"สัปดาห์",ms:7000,debounce:deb===true,num:function(x){ return x.toFixed(0); },events:ev.sort(function(a,b){ return a.t-b.t; }),onFrame:onFrame,
+    cursorLabel:function(t){ return "Week "+t.toFixed(0); }});
+}
+function onFrame(t,done){
+  var M=LAST, st=state(M.o,t);
+  draw(st,M.o);
+  Sim.ro("roPRA",st.pra.toFixed(2),st.pra>1.3?"flag":st.pra<0.7?"ok":null);
+  Sim.ro("roA2",st.a2.toFixed(2),st.a2<0.7?"ok":st.a2>1.3?"flag":null);
+  Sim.ro("roAldo",done?M.s52.aldo.toFixed(2):"…",done?(M.tB!==null?"flag":M.s52.aldo<0.85?"ok":null):null);
+  Sim.ro("roK",st.k.toFixed(1),st.k>5.5||st.k<3.5?"flag":"ok");
+  Sim.ro("roSBP",st.sbp.toFixed(0),st.sbp>=140?"flag":st.sbp<130?"ok":null);
+  Sim.ro("roGFR",(st.dip>=-0.5?"0":st.dip.toFixed(0))+"%",st.dip<-30?"flag":null);
+  var a=document.getElementById("act");
+  if(done){ a.innerHTML=M.act; a.className=M.actCls; } else { a.innerHTML="<b>กำลังจำลอง</b> สัปดาห์ที่ "+t.toFixed(0)+" Ang II x"+st.a2.toFixed(2)+" aldosterone x"+st.aldo.toFixed(2); a.className="act"; }
+}
+Sim.mount({code:"HT-01", title:"RAAS Cascade and Blockade", lead:"เปิด ACEi, ARB, aliskiren, MRA, ARNI และ thiazide ทีละตัวหรือร่วมกัน ดู renin, PRA, Ang II, aldosterone, K และ BP เปลี่ยนตาม feedback จริง แล้วเล่นเวลา 52 สัปดาห์เพื่อดู escape และ breakthrough",
+  scenarios:S, order:ORDER, captureMs:1200,
+  onChange:function(k,s){ ["na","gfr","sbp"].forEach(function(x){ C[x].set(s.p[x]); }); Object.keys(T).forEach(function(x){ T[x].setAttribute("aria-pressed",s.p.rx.indexOf(x)>=0?"true":"false"); }); update(); },
+  refs:["Te Riet L, van Esch JHM, Roks AJM, et al. Hypertension: renin-angiotensin-aldosterone system alterations. Circ Res 2015, 116(6): 960-975",
+        "Bomback AS, Klemmer PJ. The incidence and implications of aldosterone breakthrough. Nat Clin Pract Nephrol 2007, 3(9): 486-492",
+        "Yusuf S, Teo KK, Pogue J, et al (ONTARGET). Telmisartan, ramipril, or both in patients at high risk for vascular events. N Engl J Med 2008, 358(15): 1547-1559",
+        "Fried LF, Emanuele N, Zhang JH, et al (VA NEPHRON-D). Combined angiotensin inhibition for the treatment of diabetic nephropathy. N Engl J Med 2013, 369(20): 1892-1903",
+        "Parving HH, Brenner BM, McMurray JJV, et al (ALTITUDE). Cardiorenal end points in a trial of aliskiren for type 2 diabetes. N Engl J Med 2012, 367(23): 2204-2213",
+        "McMurray JJV, Packer M, Desai AS, et al (PARADIGM-HF). Angiotensin-neprilysin inhibition versus enalapril in heart failure. N Engl J Med 2014, 371(11): 993-1004",
+        "Kidney Disease: Improving Global Outcomes (KDIGO) Blood Pressure Work Group. KDIGO 2021 clinical practice guideline for the management of blood pressure in CKD. Kidney Int 2021, 99(3S): S1-S87"],
+  note:"Model เพื่อการสอน: renin = volume signal x (AT1R stimulation)^−1 (volume signal ∝ Na intake^−0.45, thiazide x1.7) PRA = renin x 0.25 เมื่อใช้ DRI, ACEi ลด Ang I → Ang II เหลือ 30% แล้วกลับขึ้นเป็น 65% ใน τ 12 สัปดาห์ (escape), ARB ลด AT1R stimulation เหลือ 25% aldosterone = (0.3 + 0.7 x AT1^0.8) x (K/4.2)^4 x breakthrough (เพิ่ม 30% τ 20 สัปดาห์) K ขึ้นตาม MR activity ที่ลดและ eGFR SBP ลดตามสัดส่วนของ AT1R และ MR ที่ถูกบล็อก ค่าทั้งหมดเป็นค่าสัมพัทธ์"
+});
+})();
+</script>
+</body>
+</html>

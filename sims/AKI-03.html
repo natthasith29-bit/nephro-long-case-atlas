@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[AKI-03] Urine Indices: Prerenal vs ATN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.15fr 1fr}}
+.sel{display:grid;grid-template-columns:minmax(80px,170px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px;margin-top:4px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.verdict{display:flex;gap:10px;align-items:center;margin:10px 0 0;font-size:14px}
+.verdict .pill{font-size:13px;padding:3px 12px}
+.pill.pre{border-color:var(--teal);color:var(--teal)}
+.pill.atn{border-color:var(--red);color:var(--red)}
+.pill.ind{border-color:var(--gold);color:var(--gold)}
+details{margin-top:10px;font-size:13.5px}
+summary{cursor:pointer;color:var(--accent);font-weight:500}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present details{display:none}
+body.present .card{padding:14px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .ro{padding:6px 12px}
+body.present .ro b{font-size:19px}
+body.present .ctls{gap:2px}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+body.present .svgwrap svg{max-height:400px}
+body.present .ctl{grid-template-columns:120px 1fr 104px;font-size:13px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Index meter และ urine sediment</h2>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 620 400" role="img" aria-label="Urine index scales and sediment"></svg></div>
+      <div class="verdict" id="verdict"></div>
+      <p class="hint no-present">แถบเขียวคือช่วงที่เข้าได้กับ prerenal แดงคือ ATN ตัวชี้วัดหลายตัวไปทางเดียวกันจึงน่าเชื่อ ส่วน sediment มักแยกได้ดีกว่าตัวเลข</p>
+    </div>
+    <div class="card">
+      <h2>Lab sheet</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roFENa"><b>-</b><span>FENa (%)</span></div>
+        <div class="ro" id="roFEU"><b>-</b><span>FEUrea (%)</span></div>
+        <div class="ro" id="roBC"><b>-</b><span>BUN/Cr</span></div>
+        <div class="ro" id="roUP"><b>-</b><span>U/P Cr</span></div>
+        <div class="ro" id="roUosm"><b>-</b><span>Uosm (mOsm/kg)</span></div>
+        <div class="ro" id="roUNa"><b>-</b><span>UNa (mmol/L)</span></div>
+      </div>
+      <div class="act" id="act"></div>
+      <details><summary>Worked steps</summary><div id="steps"></div></details>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/calc.js"></script>
+<script>
+(function(){
+"use strict";
+var CTX={none:"ไม่มีปัจจัยรบกวน",diur:"ได้ loop/thiazide ภายใน 24 ชม.",ckd:"CKD เดิม (eGFR < 30)",contrast:"หลังได้ contrast",pigment:"Rhabdomyolysis/hemolysis",cirr:"Cirrhosis + ascites",agn:"Acute GN",obst:"Early obstruction"};
+var SED={bland:"Bland",hyal:"Hyaline casts",muddy:"Muddy brown granular casts",rte:"RTE cells/casts",rbc:"Dysmorphic RBC + RBC casts",wbc:"WBC casts",pig:"Pigmented granular casts"};
+function P(o){ var d={una:20,pna:138,ucr:100,pcr:2.0,uun:500,bun:50,uosm:550,ctx:"none",sed:"hyal"}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  pre:{name:"Prerenal ชัดเจน", p:P({una:10,ucr:120,pcr:2.0,uun:700,bun:60,uosm:620,sed:"hyal"}),
+    rows:[["ผู้ป่วย","อาเจียน 3 วัน BUN 60 Cr 2.0"],["Urine","UNa 10 Uosm 620 hyaline casts"],["แปลผล","ทุก index ไปทาง prerenal ท่อไตยังเก็บ Na และ concentrate ได้"]],
+    take:["FENa < 1% และ Uosm > 500 บอกว่าท่อไตยังทำงาน (tubular integrity)","BUN/Cr > 20 จาก urea reabsorption ที่เพิ่มขึ้นใน proximal และ ADH","ยืนยันด้วยการตอบสนองต่อ volume ไม่ใช่ตัวเลขอย่างเดียว"]},
+  atn:{name:"ATN ชัดเจน", p:P({una:62,ucr:28,pcr:4.2,uun:180,bun:58,uosm:310,sed:"muddy"}),
+    rows:[["ผู้ป่วย","septic shock 2 วัน Cr 4.2"],["Urine","UNa 62 Uosm 310 (isosthenuria) muddy brown casts"],["แปลผล","ท่อไตเสีย reabsorb Na และ concentrate ไม่ได้"]],
+    take:["FENa > 2% และ Uosm ใกล้ plasma บอกว่าท่อไตเสียหน้าที่","Muddy brown granular casts และ RTE cells มี specificity สูงสำหรับ ATN","Sepsis-AKI ระยะแรกอาจมี FENa ต่ำได้ทั้งที่เป็น intrinsic injury"]},
+  diur:{name:"Prerenal ที่ได้ diuretic", p:P({una:58,ucr:80,pcr:2.0,uun:520,bun:55,uosm:450,ctx:"diur",sed:"hyal"}),
+    rows:[["ผู้ป่วย","HF ได้ furosemide แล้ว volume ลดเกิน"],["FENa","สูงปลอมจาก diuretic"],["FEUrea","< 35% ยังบอก prerenal เพราะ urea reabsorb ที่ proximal ไม่ถูกยาบล็อก"]],
+    take:["Diuretic ทำให้ FENa สูงปลอม ใช้ FEUrea < 35% แทน","FEUrea ใช้ไม่ได้ดีใน sepsis, osmotic diuresis, acetazolamide และผู้สูงอายุ","ประวัติยาภายใน 24 ชม. ต้องถามทุกครั้งก่อนแปลผล FENa"]},
+  contrast:{name:"Contrast/pigment FENa ต่ำ", p:P({una:14,ucr:55,pcr:2.6,uun:300,bun:40,uosm:380,ctx:"contrast",sed:"rte"}),
+    rows:[["ผู้ป่วย","หลัง CT contrast 48 ชม. Cr ขึ้น"],["FENa","ต่ำ < 1% แม้เป็น tubular injury"],["Sediment","RTE cells บอก intrinsic injury"]],
+    take:["FENa < 1% พบได้ใน intrinsic AKI: contrast, pigment, early obstruction, AGN, HRS, early sepsis","Sediment และบริบทสำคัญกว่าตัวเลขเดียว","Uosm ต่ำร่วมกับ FENa ต่ำ ให้สงสัยว่าไม่ใช่ prerenal ล้วน"]},
+  hrs:{name:"Cirrhosis: HRS-AKI", p:P({una:4,ucr:90,pcr:2.4,uun:250,bun:35,uosm:480,ctx:"cirr",sed:"bland"}),
+    rows:[["ผู้ป่วย","cirrhosis ascites Cr 0.9 → 2.4 หลังเจาะท้อง"],["Urine","UNa 4 sediment bland ไม่มี proteinuria"],["แปลผล","FENa ต่ำมากจาก splanchnic vasodilation ไม่ใช่ volume depletion จริง"]],
+    take:["HRS-AKI: FENa มักต่ำกว่า 0.2% และ sediment bland","FENa ต่ำไม่แยก HRS จาก prerenal ต้องดูการตอบสนองต่อ albumin","Biomarker (NGAL) สูงช่วยบอกว่าเป็น ATN มากกว่า HRS"]},
+  agn:{name:"Acute GN", p:P({una:12,ucr:70,pcr:3.0,uun:350,bun:50,uosm:450,ctx:"agn",sed:"rbc"}),
+    rows:[["ผู้ป่วย","ไอเป็นเลือด Cr 3.0 HT บวม"],["Urine","FENa ต่ำ RBC casts dysmorphic RBC"],["แปลผล","glomerulus อักเสบ ท่อไตยังเก็บ Na ได้ จึงเหมือน prerenal ทางตัวเลข"]],
+    take:["AGN มี FENa ต่ำได้ เพราะ GFR ลดแต่ tubule ยังดี","RBC casts หรือ dysmorphic RBC = glomerular disease ต้องตรวจ ANCA, anti-GBM, complement เร็ว","Urine microscopy ต้องดูเองทุกเคส AKI ที่ไม่ชัด"]},
+  ckd:{name:"Prerenal บน CKD", p:P({una:40,ucr:60,pcr:3.5,uun:280,bun:70,uosm:340,ctx:"ckd",sed:"hyal"}),
+    rows:[["ผู้ป่วย","CKD G4 baseline Cr 2.8 ท้องเสีย Cr 3.5"],["FENa","ราว 1.7% สูงเพราะ nephron ที่เหลือขับ Na มากขึ้นอยู่แล้ว"],["Uosm","concentrate ได้จำกัดจาก CKD"]],
+    take:["CKD ขั้นสูงมี FENa baseline สูง ใช้ cut-off 1% ไม่ได้","ดูการเปลี่ยนแปลงเทียบ baseline และการตอบสนองต่อสารน้ำแทน","Uosm และ BUN/Cr แปลผลยากใน CKD"]}
+};
+var ORDER=["pre","atn","diur","contrast","hrs","agn","ckd"];
+var box=document.getElementById("ctls"), C={};
+function sl(k,o){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("una",{label:"Urine Na",min:2,max:120,step:1,value:20,unit:" mmol/L"});
+sl("pna",{label:"Plasma Na",min:120,max:155,step:1,value:138,unit:" mmol/L"});
+sl("ucr",{label:"Urine Cr",min:10,max:250,step:1,value:100,unit:" mg/dL"});
+sl("pcr",{label:"Plasma Cr",min:0.8,max:10,step:0.1,value:2,unit:" mg/dL",fmt:function(v){ return v.toFixed(1); }});
+sl("uun",{label:"Urine urea N",min:50,max:1200,step:10,value:500,unit:" mg/dL"});
+sl("bun",{label:"BUN",min:10,max:150,step:1,value:50,unit:" mg/dL"});
+sl("uosm",{label:"Urine osm",min:150,max:1000,step:10,value:550,unit:" mOsm"});
+function sel(id,lab,obj){ var s=Sim.h("select",{id:id},Object.keys(obj).map(function(k){ return Sim.h("option",{value:k,text:obj[k]}); })); s.addEventListener("change",update); box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":id,text:lab}),s])); return s; }
+var cx=sel("ctx","บริบท",CTX), sd=sel("sed","Sediment",SED);
+var svg=document.getElementById("vis");
+function tx(x,y,s,o){ o=o||{}; return Sim.svg("text",{x:x,y:y,"text-anchor":o.a||"start","font-family":o.mono?"Geist Mono, monospace":"IBM Plex Sans Thai, sans-serif","font-size":o.fs||12,"font-weight":o.fw||400,fill:o.fill||"#0B0B1F",text:s},svg); }
+/* scales: [label, value, min, max, log, preZone [a,b], atnZone [a,b], fmt] */
+function scale(y,lab,v,mn,mx,log,pz,az,unit){
+  var x0=150,x1=600; function X(q){ q=Math.max(mn,Math.min(mx,q)); return log? x0+(Math.log(q)-Math.log(mn))/(Math.log(mx)-Math.log(mn))*(x1-x0) : x0+(q-mn)/(mx-mn)*(x1-x0); }
+  tx(10,y+5,lab,{fs:14,fw:600});
+  Sim.svg("rect",{x:x0,y:y-5,width:x1-x0,height:10,rx:5,fill:"#E6E7F0"},svg);
+  Sim.svg("rect",{x:X(pz[0]),y:y-5,width:X(pz[1])-X(pz[0]),height:10,rx:5,fill:"rgba(31,122,114,.45)"},svg);
+  Sim.svg("rect",{x:X(az[0]),y:y-5,width:X(az[1])-X(az[0]),height:10,rx:5,fill:"rgba(180,35,42,.40)"},svg);
+  var mx_=X(v); Sim.svg("path",{d:"M"+mx_+" "+(y-11)+" L"+(mx_-6)+" "+(y-20)+" L"+(mx_+6)+" "+(y-20)+" Z",fill:"#0B0B1F"},svg);
+  Sim.svg("line",{x1:mx_,y1:y-10,x2:mx_,y2:y+8,stroke:"#0B0B1F","stroke-width":2},svg);
+  var lbl=(Math.abs(v)<10?v.toFixed(v<1?2:1):v.toFixed(0))+unit, right=mx_>520;
+  tx(right?mx_-8:mx_+8,y-14,lbl,{a:right?"end":"start",mono:true,fs:13.5,fw:600});
+  tx(x0,y+22,String(mn),{fs:10,fill:"#9A9CB2",mono:true}); tx(x1,y+22,String(mx),{fs:10,fill:"#9A9CB2",mono:true,a:"end"});
+}
+function sediment(kind){
+  var ox=10, oy=262, w=600, h=130;
+  Sim.svg("rect",{x:ox,y:oy,width:w,height:h,rx:14,fill:"#FBFAF4",stroke:"#E6E7F0"},svg);
+  tx(ox+12,oy+20,"Urine microscopy (x400): "+({bland:"bland",hyal:"hyaline casts",muddy:"muddy brown granular casts",rte:"renal tubular epithelial cells",rbc:"RBC cast + dysmorphic RBC",wbc:"WBC cast",pig:"pigmented granular casts"})[kind],{fs:12,fw:600});
+  var rnd=(function(){ var s=7; return function(){ s=(s*9301+49297)%233280; return s/233280; }; })();
+  function cast(x,y,len,fill,stroke,dots,dotc){ Sim.svg("rect",{x:x,y:y,width:len,height:22,rx:11,fill:fill,stroke:stroke,"stroke-width":1.4},svg); for(var i=0;i<dots;i++) Sim.svg("circle",{cx:x+10+rnd()*(len-20),cy:y+5+rnd()*12,r:2+rnd()*2.5,fill:dotc},svg); }
+  function cell(x,y,r,fill,stroke,nuc){ Sim.svg("circle",{cx:x,cy:y,r:r,fill:fill,stroke:stroke,"stroke-width":1.2},svg); if(nuc) Sim.svg("circle",{cx:x+2,cy:y-1,r:r*0.38,fill:nuc},svg); }
+  if(kind==="bland"){ for(var i=0;i<5;i++) cell(80+i*110+rnd()*30,oy+70+rnd()*40,9,"#F3EFE3","#D9D2BC"); }
+  if(kind==="hyal"){ cast(70,oy+55,180,"rgba(220,230,240,.35)","#B9C3D0",0); cast(330,oy+85,150,"rgba(220,230,240,.35)","#B9C3D0",0); }
+  if(kind==="muddy"){ cast(50,oy+50,170,"#9C7A54","#6E5235",22,"#5A3F22"); cast(270,oy+88,190,"#A4825C","#6E5235",26,"#5A3F22"); cast(470,oy+50,110,"#9C7A54","#6E5235",14,"#5A3F22"); }
+  if(kind==="pig"){ cast(70,oy+55,180,"#8E3B2E","#5E2318",22,"#4A170E"); cast(320,oy+85,180,"#9A4535","#5E2318",22,"#4A170E"); }
+  if(kind==="rte"){ for(var j=0;j<6;j++) cell(70+j*90+rnd()*20,oy+60+rnd()*50,15,"#EADFC8","#B39B70","#7A6440"); cast(330,oy+95,150,"rgba(234,223,200,.6)","#B39B70",0); for(var k=0;k<5;k++) cell(350+k*26,oy+106,8,"#EADFC8","#B39B70","#7A6440"); }
+  if(kind==="rbc"){ cast(60,oy+60,200,"rgba(214,120,110,.35)","#B4232A",0); for(var a=0;a<8;a++) cell(75+a*23,oy+71,8,"#E89A90","#B4232A");
+    for(var b=0;b<7;b++){ var x=320+b*38+rnd()*10, y=oy+60+rnd()*50; cell(x,y,9,"#F2B6AE","#B4232A"); Sim.svg("circle",{cx:x+7,cy:y-6,r:3,fill:"#F2B6AE",stroke:"#B4232A"},svg); } }
+  if(kind==="wbc"){ cast(60,oy+60,210,"rgba(200,210,230,.35)","#7A86A8",0); for(var c=0;c<8;c++) cell(78+c*24,oy+71,9,"#E4E8F4","#7A86A8","#5E6A90"); for(var d=0;d<5;d++) cell(340+d*50,oy+70+rnd()*30,10,"#E4E8F4","#7A86A8","#5E6A90"); }
+}
+function update(){
+  var v={}; Object.keys(C).forEach(function(k){ v[k]=C[k].get(); });
+  var ctx=cx.value, sed=sd.value;
+  var fena=Calc.fena({una:v.una,pna:v.pna,ucr:v.ucr,pcr:v.pcr}), feu=Calc.feurea({uurea:v.uun,bun:v.bun,ucr:v.ucr,pcr:v.pcr});
+  var bc=v.bun/v.pcr, up=v.ucr/v.pcr;
+  svg.innerHTML="";
+  tx(150,16,"Prerenal",{fs:12.5,fill:"#1F7A72",fw:600}); tx(600,16,"ATN",{fs:12.5,fill:"#B4232A",fw:600,a:"end"});
+  scale(44,"FENa (%)",fena.value,0.05,20,true,[0.05,1],[2,20],"%");
+  scale(88,"FEUrea (%)",feu.value,5,80,false,[5,35],[50,80],"%");
+  scale(132,"BUN/Cr",bc,2,60,false,[20,60],[2,15],"");
+  scale(176,"U/P Cr",up,2,200,true,[40,200],[2,20],"");
+  scale(220,"Uosm",v.uosm,150,1000,false,[500,1000],[150,350],"");
+  sediment(sed);
+  Sim.ro("roFENa",Calc.f(fena.value,2),fena.value<1?"ok":fena.value>2?"flag":null);
+  Sim.ro("roFEU",Calc.f(feu.value,1),feu.value<35?"ok":feu.value>50?"flag":null);
+  Sim.ro("roBC",bc.toFixed(0),bc>20?"ok":bc<15?"flag":null);
+  Sim.ro("roUP",up.toFixed(0),up>40?"ok":up<20?"flag":null);
+  Sim.ro("roUosm",v.uosm,v.uosm>500?"ok":v.uosm<350?"flag":null);
+  Sim.ro("roUNa",v.una,v.una<20?"ok":v.una>40?"flag":null);
+  /* score: + prerenal, − ATN */
+  var sc=0, useFENa=!(ctx==="diur"||ctx==="ckd");
+  if(useFENa) sc+=fena.value<1?2:fena.value>2?-2:0;
+  sc+=feu.value<35?(ctx==="diur"?2:1):feu.value>50?-1:0;
+  if(ctx!=="ckd"){ sc+=v.uosm>500?1:v.uosm<350?-1:0; sc+=up>40?1:up<20?-1:0; } sc+=bc>20?0.5:bc<15?-0.5:0;
+  var sedAtn=(sed==="muddy"||sed==="rte"||sed==="pig"), sedGN=(sed==="rbc"), sedAIN=(sed==="wbc");
+  var lowFENaIntrinsic=(ctx==="contrast"||ctx==="pigment"||ctx==="agn"||ctx==="obst");
+  var verdict, cls;
+  if(sedGN){ verdict="Glomerular (AGN)"; cls="atn"; }
+  else if(sedAIN){ verdict="Interstitial (AIN/pyelonephritis)"; cls="atn"; }
+  else if(ctx==="cirr"&&fena.value<0.5&&sed==="bland"){ verdict="Prerenal หรือ HRS-AKI"; cls="ind"; }
+  else if(sedAtn||(sc<=-2)){ verdict=lowFENaIntrinsic&&fena.value<1?"Intrinsic injury แม้ FENa ต่ำ":"ATN"; cls="atn"; }
+  else if(sc>=2.5){ verdict="Prerenal"; cls="pre"; }
+  else { verdict="ก้ำกึ่ง แปลผลจาก index ไม่ได้"; cls="ind"; }
+  var vd=document.getElementById("verdict"); vd.innerHTML="";
+  vd.appendChild(Sim.h("span",{text:"แปลผลรวม"})); vd.appendChild(Sim.h("span",{class:"pill "+cls,text:verdict}));
+  var m, bad=cls!=="pre";
+  if(sedGN) m="<b>RBC casts</b> ส่ง ANCA, anti-GBM, C3/C4, ANA, UPCR และปรึกษาทำ kidney biopsy เร็ว ไม่รอผลตัวเลข";
+  else if(sedAIN) m="<b>WBC casts</b> ทบทวนยา (PPI, β-lactam, NSAID) ส่ง urine culture และพิจารณา biopsy ถ้าสงสัย AIN";
+  else if(cls==="pre"&&ctx==="diur") m="<b>Prerenal แม้ FENa สูง</b> FEUrea "+Calc.f(feu.value,0)+"% หยุดหรือลด diuretic ประเมิน volume แล้วติดตาม Cr";
+  else if(cls==="pre") m="<b>Prerenal</b> ให้สารน้ำหรือแก้สาเหตุ (หยุด ACEi/NSAID) ติดตาม Cr ใน 24–48 ชม. ถ้าไม่ลงทบทวนการวินิจฉัย";
+  else if(cls==="ind"&&ctx==="cirr") m="<b>Cirrhosis AKI</b> หยุด diuretic และ nephrotoxin ให้ albumin ตาม volume status ถ้าไม่ตอบสนองและเข้าเกณฑ์ HRS-AKI เริ่ม terlipressin + albumin (ดู AKI-05)";
+  else if(cls==="atn"&&lowFENaIntrinsic) m="<b>FENa ต่ำแต่ไม่ใช่ prerenal</b> เชื่อ sediment และบริบท หยุด nephrotoxin "+(ctx==="obst"?"ทำ ultrasound หา obstruction":"ประคับประคองและติดตาม Cr");
+  else if(cls==="atn") m="<b>ATN</b> หยุด nephrotoxin หลีกเลี่ยงสารน้ำเกิน ปรับ dose ยา ติดตาม K, HCO3 และน้ำ วางแผน KRT ตามข้อบ่งชี้";
+  else m="<b>ก้ำกึ่ง</b> "+(ctx==="ckd"?"CKD ทำให้ FENa สูง ":"")+"ดู urine microscopy เอง ประเมิน volume ทางคลินิก หรือ fluid challenge อย่างระวัง แล้วดูการตอบสนอง";
+  var a=document.getElementById("act"); a.innerHTML="<b>Next step:</b> "+m; a.className="act"+(bad?" bad":"");
+  var st=document.getElementById("steps"); st.innerHTML=""; Calc.renderSteps(st,fena,{title:"FENa"}); Calc.renderSteps(st,feu,{title:"FEUrea"});
+}
+Sim.mount({code:"AKI-03", title:"Urine Indices: Prerenal vs ATN", lead:"กรอก lab sheet และบริบทของผู้ป่วย ดู FENa, FEUrea, BUN/Cr, U/P Cr และ Uosm บนแถบ prerenal vs ATN พร้อม urine sediment แล้วฝึกแปลผลในสถานการณ์ที่ตัวเลขหลอก",
+  scenarios:S, order:ORDER, captureMs:600,
+  onChange:function(k,s){ Object.keys(C).forEach(function(x){ C[x].set(s.p[x]); }); cx.value=s.p.ctx; sd.value=s.p.sed; update(); },
+  refs:["KDIGO Clinical Practice Guideline for Acute Kidney Injury. Kidney Int Suppl 2012, 2(1): 1-138",
+        "Carvounis CP, Nisar S, Guro-Razuman S. Significance of the fractional excretion of urea in the differential diagnosis of acute renal failure. Kidney Int 2002, 62(6): 2223-2229",
+        "Perazella MA, Coca SG, Kanbay M, et al. Diagnostic value of urine microscopy for differential diagnosis of acute kidney injury in hospitalized patients. Clin J Am Soc Nephrol 2008, 3(6): 1615-1619",
+        "Perazella MA, Coca SG, Hall IE, et al. Urine microscopy is associated with severity and worsening of acute kidney injury in hospitalized patients. Clin J Am Soc Nephrol 2010, 5(3): 402-408",
+        "Schrier RW. Diagnostic value of urinary sodium, chloride, urea, and flow. J Am Soc Nephrol 2011, 22(9): 1610-1613",
+        "Nadim MK, Kellum JA, Forni L, et al (ADQI-ICA). Acute kidney injury in patients with cirrhosis. J Hepatol 2024, 81(1): 163-183"],
+  note:"ช่วง prerenal/ATN ในแถบเป็น cut-off ที่ใช้ทั่วไป (FENa < 1% vs > 2%, FEUrea < 35% vs > 50%, BUN/Cr > 20, U/P Cr > 40 vs < 20, Uosm > 500 vs < 350) การแปลผลรวมเป็นคะแนนเพื่อการสอน ถ่วงน้ำหนักตามบริบทที่ทำให้แต่ละ index เชื่อไม่ได้ และให้ sediment มีน้ำหนักเหนือตัวเลข"
+});
+})();
+</script>
+</body>
+</html>

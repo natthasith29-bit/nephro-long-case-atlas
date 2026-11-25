@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[CKD-04] CKD-MBD Loop: FGF23, Klotho, PTH and Calcitriol</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(110px,140px) 1fr 100px}
+.sel{display:grid;grid-template-columns:minmax(110px,140px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:10px}
+body.present .bench{grid-template-columns:1.25fr 1fr}
+body.present .find .card,body.present #curveCard{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:14px 18px}
+body.present .ctls{gap:1px}
+body.present .ctl,body.present .sel{font-size:13px}
+body.present .tools{margin-top:6px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .ro{padding:6px 10px}
+body.present .ro b{font-size:18px}
+body.present .readout{margin-top:8px}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+body.present .take li{font-size:14px}
+body.present .svgwrap svg{max-height:440px;width:auto;margin:0 auto}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>วงจร gut, kidney, parathyroid, bone</h2>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 640 430" role="img" aria-label="CKD-MBD hormone loop"></svg></div>
+      <p class="hint no-present">ความหนาของลูกศรตามระดับฮอร์โมนหรือ flux เทียบกับคนปกติ เมื่อ GFR ลด Klotho ลดก่อน FGF23 จึงต้องสูงขึ้นเพื่อขับ P ให้ได้เท่าเดิม FGF23 ที่สูงกด calcitriol ทำให้ PTH ขึ้นตาม P สูงขึ้นจริงเมื่อ FEPO4 ถึงเพดานแล้วเท่านั้น</p>
+    </div>
+    <div class="card">
+      <h2>ระยะโรคและการรักษา</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roP"><b>-</b><span>Phosphate (mg/dL)</span></div>
+        <div class="ro" id="roC"><b>-</b><span>Total Ca (mg/dL)</span></div>
+        <div class="ro" id="roH"><b>-</b><span>PTH (pg/mL, x ULN)</span></div>
+        <div class="ro" id="roF"><b>-</b><span>FGF23 (RU/mL)</span></div>
+        <div class="ro" id="roD"><b>-</b><span>1,25(OH)2D (pg/mL)</span></div>
+        <div class="ro" id="roE"><b>-</b><span>FEPO4</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+  <section class="bench one" id="curveCard">
+    <div class="card">
+      <h2>ลำดับการเปลี่ยนแปลงตาม eGFR (ใช้การรักษาเดียวกัน ไม่รวม dialysis)</h2>
+      <div id="chart"></div>
+      <p class="hint">FGF23 ขึ้นตั้งแต่ G2–G3a ตามด้วย PTH ส่วน phosphate คงที่จน G4 นี่คือเหตุผลที่ P ปกติใน CKD ระยะต้นไม่ได้แปลว่าไม่มีความผิดปกติของ mineral metabolism</p>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script>
+(function(){
+"use strict";
+var ULN=65;
+function mbd(o){
+  var k=Math.min(1,Math.max(0.04,Math.pow(o.gfr/90,0.7)));
+  var gland=o.ptx?0.04:(1+3.0*Math.pow(1-k,2.6));
+  var P=3.5,FGF=60,PTH=45,D=40,iCa=1.2,FEP=0.15,abs=0,renal=0,bone=0;
+  var D25=Math.min(1,Math.pow(o.d25/30,0.6)), dial=o.dial?320:0, hb=o.ptx?260:0, bind=o.binder?0.25:0;
+  for(var it=0;it<400;it++){
+    var fa=0.6*Math.pow(D/40,0.25);
+    bone=o.ptx?0:45*Math.log(Math.max(PTH,10)/45)*(o.gfr<25?1:0.4);
+    abs=o.intake*fa*(1-bind);
+    var FGFt=55*Math.pow(P/3.5,2.4)*Math.pow(D/40,0.4)*Math.pow(1/k,1.5);
+    FGF+=0.2*(FGFt-FGF);
+    FEP=Math.min(0.9,Math.max(0.03,0.13*Math.pow(FGF*Math.sqrt(k)/55,0.62)*Math.pow(PTH/45,0.15)));
+    renal=o.gfr*14.4*FEP;
+    var Pt=Math.max(1.0,(abs-hb+bone-dial)/renal);
+    P+=0.1*(Pt-P);
+    var Dt=40*D25*Math.pow(k,0.55)*Math.pow(PTH/45,0.3)*Math.pow(55/FGF,0.3)+60*o.ctrl;
+    D+=0.2*(Dt-D);
+    var iCat=1.19+0.12*Math.log(Math.max(D,4)/40)+0.04*Math.log(PTH/45)*(o.ptx?0.3:1)-0.03*(P-3.5)+(o.binder===1?0.06:0)+0.08*o.ctrl-(o.ptx?0.28:0);
+    iCa+=0.2*(iCat-iCa);
+    var sp=o.cina?1.07:1.2;
+    var PTHt=gland*(5+95/(1+Math.pow(iCa/sp,30)))*Math.pow(P/3.5,0.6)*Math.pow(40/Math.max(D,5),0.55);
+    PTH+=0.15*(PTHt-PTH);
+  }
+  return {P:P,FGF:FGF,PTH:PTH,D:D,iCa:iCa,Ca:iCa*8,FEP:FEP,k:k,gland:gland,abs:abs,renalP:renal*P,dial:dial,bone:bone,hb:hb};
+}
+function P_(o){ var d={gfr:50,dial:false,intake:1000,binder:0,ctrl:0,cina:false,d25:30,ptx:false}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  early:{name:"G3a P ปกติ", p:P_({gfr:50}),
+    rows:[["ผู้ป่วย","eGFR 50 ไม่มีอาการ P 3.9 Ca 9.4"],["FGF23","สูงราว 2 เท่า Klotho ลด"],["PTH","เริ่มสูงกว่า ULN เล็กน้อย 1,25D เริ่มลด"]],
+    take:["FGF23 เป็นฮอร์โมนแรกที่ผิดปกติ ขึ้นตั้งแต่ CKD G2–G3 เพื่อรักษา P ให้ปกติ","P ปกติในระยะนี้ไม่ต้องให้ binder ป้องกัน","Klotho ที่ลดลงทำให้ไตดื้อต่อ FGF23 จึงต้องใช้ระดับสูงขึ้นเรื่อยๆ"]},
+  shpt:{name:"G4 + vitamin D ต่ำ", p:P_({gfr:20,d25:12}),
+    rows:[["ผู้ป่วย","eGFR 20 25(OH)D 12 ng/mL PTH ขึ้นต่อเนื่อง"],["กลไก","calcitriol ต่ำจาก substrate น้อย + FGF23 สูง + renal mass ลด"],["ทำ","เติม native vitamin D, คุม P ไม่ใช้ calcitriol เป็นประจำ"]],
+    take:["PTH ที่สูงขึ้นต่อเนื่องใน CKD ที่ยังไม่ dialysis ให้แก้ปัจจัยที่แก้ได้ก่อน: P สูง, Ca ต่ำ, 25(OH)D ต่ำ","Calcitriol หรือ analog สำรองไว้สำหรับ SHPT รุนแรงและเพิ่มขึ้นต่อเนื่อง เพราะเพิ่มความเสี่ยง hypercalcemia","ไม่มีค่า PTH เป้าหมายที่ชัดเจนใน CKD ก่อน dialysis ดูแนวโน้มเป็นหลัก"]},
+  hd:{name:"HD ไม่คุม P", p:P_({gfr:3,dial:true,intake:1100}),
+    rows:[["ผู้ป่วย","HD 3 ครั้ง/สัปดาห์ P intake 1,100 mg/วัน ไม่มี binder"],["ผล","P 6.8 FGF23 หลายพัน PTH เกิน 9 เท่า ULN"],["เหตุ","dialysis เอา P ออกได้ราว 300 mg/วัน น้อยกว่าที่ดูดซึม"]],
+    take:["Dialysis มาตรฐานเอา P ออกได้น้อยกว่าที่ร่างกายดูดซึม ต้องใช้ diet และ binder ร่วม","P สูงกระตุ้น PTH โดยตรงและผ่าน FGF23 ที่กด calcitriol","PTH ใน dialysis ควรอยู่ราว 2–9 เท่าของ ULN"]},
+  hdrx:{name:"HD + non-Ca binder + calcimimetic", p:P_({gfr:3,dial:true,intake:1100,binder:2,cina:true}),
+    rows:[["การรักษา","sevelamer หรือ lanthanum + cinacalcet"],["ผล","P ลด PTH เข้าเป้า"],["ระวัง","iCa ต่ำลงจาก calcimimetic ปรับ dialysate Ca หรือเพิ่ม vitamin D"]],
+    take:["Calcimimetic เลื่อน set point ของ CaSR ลง PTH ลดโดยไม่เพิ่ม Ca และ P","ผลข้างเคียงสำคัญคือ hypocalcemia และคลื่นไส้","Non-calcium binder เลี่ยง Ca load ที่ทำให้ vascular calcification"]},
+  over:{name:"Calcitriol overshoot", p:P_({gfr:3,dial:true,intake:1100,binder:1,ctrl:1}),
+    rows:[["การรักษา","calcitriol 1 µg/วัน + Ca carbonate"],["ผล","Ca 10.5 P สูงขึ้น PTH ต่ำกว่า 2 เท่า ULN"],["เสี่ยง","adynamic bone disease และ vascular calcification"]],
+    take:["Calcitriol เพิ่มการดูดซึมทั้ง Ca และ P จาก gut อาจทำให้ P แย่ลง","PTH ต่ำกว่า 2 เท่า ULN ใน dialysis ร่วมกับ Ca สูงชวนคิดถึง adynamic bone","ลดหรือหยุด calcitriol และ Ca-based binder ให้ PTH กลับเข้าเป้า"]},
+  ptx:{name:"หลัง parathyroidectomy (hungry bone)", p:P_({gfr:3,dial:true,intake:1100,ptx:true}),
+    rows:[["ผู้ป่วย","HD ผ่าตัด parathyroidectomy เพราะ PTH 2,000 ดื้อยา"],["ผล","Ca ลดเหลือราว 6 mg/dL P ต่ำ ใน 24–72 ชม."],["กลไก","กระดูกที่ turnover สูงดึง Ca และ P กลับอย่างรวดเร็ว"]],
+    take:["Hungry bone เกิดเมื่อ PTH สูงมากหยุดทันที กระดูกดูดเก็บ Ca, P และ Mg","ALP สูงก่อนผ่าตัดทำนายความรุนแรงได้","ต้องให้ Ca ทางหลอดเลือด, calcitriol ขนาดสูง และติดตาม iCa ถี่ใน 72 ชม. แรก"]}
+};
+var ORDER=["early","shpt","hd","hdrx","over","ptx"];
+var box=document.getElementById("ctls"), C={}, ST={dial:false,cina:false,ptx:false};
+function sl(k,o){ o.id="s"+k; o.onInput=function(){ update(); }; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("gfr",{label:"eGFR",min:3,max:100,step:1,value:50,unit:"mL/min"});
+sl("intake",{label:"P intake",min:500,max:1800,step:50,value:1000,unit:"mg/วัน"});
+sl("d25",{label:"25(OH)D",min:6,max:50,step:1,value:30,unit:"ng/mL"});
+sl("ctrl",{label:"Calcitriol",min:0,max:1,step:0.25,value:0,unit:"µg/วัน",fmt:function(v){ return v.toFixed(2); }});
+var bs=Sim.h("select",{id:"bind"},[["0","ไม่มี binder"],["1","Ca-based (carbonate, acetate)"],["2","Non-Ca (sevelamer, lanthanum, iron-based)"]].map(function(o){ return Sim.h("option",{value:o[0],text:o[1]}); }));
+bs.addEventListener("change",function(){ update(); });
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"bind",text:"Binder"}),bs]));
+var tb=document.getElementById("tools"), BT={};
+[["dial","Dialysis"],["cina","Calcimimetic"],["ptx","Parathyroidectomy"]].forEach(function(t){ BT[t[0]]=Sim.toggle(t[1],function(on){ ST[t[0]]=on; update(); },false); tb.appendChild(BT[t[0]]); });
+function v(k){ return C[k].get(); }
+function opts(gfr){ return {gfr:gfr,dial:ST.dial,intake:v("intake"),binder:+bs.value,ctrl:v("ctrl"),cina:ST.cina,d25:v("d25"),ptx:ST.ptx}; }
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:260,aria:"FGF23, PTH and phosphate across eGFR",
+  x:{min:5,max:100,step:10,label:"eGFR (mL/min/1.73 m²)"},y:{min:10,max:10000,log:true,label:"FGF23 (RU/mL) and PTH (pg/mL)"},y2:{min:2,max:9,step:1,label:"Phosphate (mg/dL)"},
+  series:[{id:"f",name:"FGF23",color:A.accent,data:[],width:2.4},{id:"h",name:"PTH",color:A.red,data:[],width:2.4},{id:"p",name:"Phosphate",color:A.teal,data:[],width:2,axis:"y2"}],
+  legend:true});
+var svg=document.getElementById("vis");
+function T(x,y,s,o){ o=o||{}; var a={x:x,y:y,"font-size":o.fs||12,fill:o.c||"#0B0B1F","text-anchor":o.a||"middle",text:s}; if(o.w) a["font-weight"]=o.w; if(o.mono) a["font-family"]="Geist Mono, monospace"; return Sim.svg("text",a,svg); }
+function node(x,y,w,h,title,sub,col){ Sim.svg("rect",{x:x,y:y,width:w,height:h,rx:14,fill:"#fff",stroke:col||"#D3D5E2","stroke-width":1.6},svg); T(x+w/2,y+24,title,{fs:13.5,w:600}); (sub||[]).forEach(function(s,i){ T(x+w/2,y+44+i*17,s,{fs:11.5,c:"#5E6075",mono:true}); }); }
+function arrow(d,w,col,label,lx,ly,la){ Sim.svg("path",{d:d,stroke:col,"stroke-width":w,fill:"none","stroke-linecap":"round","marker-end":"url(#m_"+col.slice(1)+")",opacity:0.85},svg); if(label) T(lx,ly,label,{fs:11.5,c:col,w:600,a:la||"middle"}); }
+function W(r){ return Sim.clamp(2+2.2*Math.log2(Math.max(r,0.1)+1),1.5,11); }
+function draw(M){
+  svg.innerHTML="";
+  var defs=Sim.svg("defs",{},svg);
+  ["5B4BFF","B4232A","1F7A72","A8842C","5E6075"].forEach(function(c){ var m=Sim.svg("marker",{id:"m_"+c,viewBox:"0 0 10 10",refX:6,refY:5,markerWidth:3.2,markerHeight:3.2,orient:"auto"},defs); Sim.svg("path",{d:"M0 0L10 5L0 10z",fill:"#"+c},m); });
+  node(240,20,160,74,"Parathyroid",["PTH "+Math.round(M.PTH)+" pg/mL","gland x"+M.gland.toFixed(1)],M.PTH>9*ULN?"#B4232A":null);
+  node(240,170,160,80,"Serum",["P "+M.P.toFixed(1)+" mg/dL","Ca "+M.Ca.toFixed(1)+" mg/dL"],(M.P>5.5||M.Ca>10.2||M.Ca<8)?"#B4232A":null);
+  node(20,170,150,80,"Gut",["P absorbed","~"+Math.round(M.abs)+" mg/d"]);
+  node(470,170,150,80,"Bone",["Osteocyte FGF23",M.bone>=0?"P release "+Math.round(Math.max(0,M.bone)):"",""]);
+  node(240,320,160,84,"Kidney",["Klotho "+Math.round(M.k*100)+"%","FEPO4 "+Math.round(M.FEP*100)+"%","P out "+Math.round(M.renalP)+" mg/d"]);
+  // flows
+  arrow("M170 210 L232 210",W(M.abs/600),"#1F7A72","",0,0);
+  arrow("M320 250 L320 312",W(M.renalP/600),"#1F7A72","P excreted",350,284,"start");
+  arrow("M545 252 C545 330 470 362 408 362",W(M.FGF/55),"#5B4BFF","FGF23 "+(M.FGF>9999?">9999":Math.round(M.FGF)),520,345,"start");
+  arrow("M240 60 C120 60 110 330 232 350",W(M.PTH/45),"#B4232A","PTH",120,140);
+  arrow("M400 60 C500 60 545 110 545 162",W(M.PTH/45),"#B4232A","PTH",520,80);
+  arrow("M240 395 C110 410 70 330 95 258",W(M.D/40),"#A8842C","1,25(OH)2D "+Math.round(M.D),118,410);
+  arrow("M300 168 L300 102",W(M.iCa/1.2),"#5E6075","iCa via CaSR",292,140,"end");
+  arrow("M470 210 L408 210",W(Math.max(0.2,M.bone/50+0.5)),"#5E6075","",0,0);
+  if(M.dial){ Sim.svg("rect",{x:420,y:390,width:200,height:30,rx:10,fill:"#EFEDFF",stroke:"#5B4BFF"},svg); T(520,410,"Dialysis removes "+M.dial+" mg/d",{fs:11.5,c:"#5B4BFF",w:600}); }
+  if(M.binder) T(95,268,(M.binder===1?"Ca-based":"Non-Ca")+" binder −25%",{fs:11,c:"#1F7A72",w:600});
+  if(M.cina) T(320,112,"Calcimimetic shifts set point",{fs:11,c:"#5B4BFF",w:600});
+  if(M.ptx) T(320,112,"Glands removed",{fs:11,c:"#B4232A",w:600});
+  if(M.ptx) T(545,268,"Hungry bone uptake",{fs:11,c:"#B4232A",w:600});
+  if(M.ctrl>0) T(118,426,"+ calcitriol "+M.ctrl.toFixed(2)+" µg/d",{fs:10.5,c:"#A8842C"});
+}
+function update(){
+  var gfr=ST.dial?Math.min(v("gfr"),8):v("gfr");
+  var M=mbd(opts(gfr)); M.dial=ST.dial?320:0; M.binder=+bs.value; M.cina=ST.cina; M.ptx=ST.ptx; M.ctrl=v("ctrl");
+  draw(M);
+  var xU=M.PTH/ULN;
+  Sim.ro("roP",M.P.toFixed(1),M.P>(ST.dial?5.5:4.5)||M.P<2.5?"flag":"ok");
+  Sim.ro("roC",M.Ca.toFixed(1),M.Ca>10.2||M.Ca<8.4?"flag":"ok");
+  Sim.ro("roH",Math.round(M.PTH)+" ("+xU.toFixed(1)+"x)",ST.dial?(xU>9||xU<2?"flag":"ok"):(xU>1.5?"flag":null));
+  Sim.ro("roF",M.FGF>9999?">9999":String(Math.round(M.FGF)),M.FGF>150?"flag":null);
+  Sim.ro("roD",Math.round(M.D),M.D<20?"flag":M.D>65?"flag":null);
+  Sim.ro("roE",Math.round(M.FEP*100)+"%",M.FEP>0.6?"flag":null);
+  var f=[],h=[],p=[];
+  for(var g=5;g<=100;g+=2.5){ var r=mbd(Object.assign(opts(g),{dial:false,ptx:false})); f.push([g,Math.min(9999,r.FGF)]); h.push([g,r.PTH]); p.push([g,r.P]); }
+  chart.update({vlines:ST.dial?[]:[{x:gfr,label:"Now"}],hlines:[{y:ULN,label:"PTH ULN",color:A.red,dash:[3,3]},{y:4.5,label:"P 4.5",color:A.teal,dash:[3,3],axis:"y2"}]});
+  chart.setSeries("f",f); chart.setSeries("h",h); chart.setSeries("p",p);
+  var m,bad=true;
+  if(ST.ptx) m="<b>Hungry bone</b> ให้ Ca gluconate IV ต่อเนื่อง ปรับตาม iCa ทุก 4–6 ชม., calcitriol 2–4 µg/วัน, Ca carbonate ทางปาก, ใช้ dialysate Ca สูง ตรวจ Mg ให้ P ทดแทนเฉพาะเมื่อต่ำมาก";
+  else if(ST.dial){
+    if(M.Ca>10.2) m="<b>Ca "+M.Ca.toFixed(1)+"</b> หยุด Ca-based binder ลดหรือหยุด calcitriol ใช้ dialysate Ca ปกติ แล้วคุม PTH ด้วย calcimimetic แทน";
+    else if(xU<2) m="<b>PTH ต่ำกว่า 2 เท่า ULN</b> เสี่ยง adynamic bone ลดหรือหยุด calcitriol, calcimimetic และ Ca-based binder ให้ PTH กลับเข้า 2–9 เท่า";
+    else if(M.P>5.5) m="<b>P "+M.P.toFixed(1)+"</b> จำกัด P จากอาหารแปรรูป (สารเติมแต่ง P), ใช้ binder ตามมื้อ (เลือก non-Ca ถ้า Ca สูงหรือมี calcification), ตรวจ Kt/V และพิจารณาเพิ่มเวลาฟอก"+(xU>9?" PTH สูงร่วมด้วย คุม P ก่อนแล้วเพิ่ม calcimimetic":"");
+    else if(xU>9) m="<b>PTH "+xU.toFixed(1)+" เท่า ULN</b> เพิ่ม calcimimetic หรือ active vitamin D (เลือกตาม Ca และ P) ถ้าดื้อยา พิจารณา parathyroidectomy";
+    else if(M.Ca<8.4) m="<b>Ca ต่ำ</b> จาก calcimimetic ไม่มีอาการ ปรับ dialysate Ca หรือเพิ่ม vitamin D ขนาดน้อย ลดขนาด calcimimetic ถ้ามีอาการ";
+    else { bad=false; m="<b>อยู่ในเป้า</b> P ใกล้ปกติ Ca ปกติ PTH 2–9 เท่า ULN ตรวจ Ca, P ทุก 1–3 เดือน PTH ทุก 3–6 เดือน ดูแนวโน้มมากกว่าค่าเดียว"; }
+  } else {
+    if(M.P>4.5) m="<b>P "+M.P.toFixed(1)+" สูงต่อเนื่อง</b> ลด P ไปทางค่าปกติด้วยการจำกัด P (ลดอาหารแปรรูป) ก่อน แล้วใช้ binder ถ้ายังสูง จำกัด Ca-based binder";
+    else if(v("d25")<20&&xU>1) m="<b>25(OH)D "+v("d25")+" ng/mL</b> เติม native vitamin D (cholecalciferol) ติดตาม PTH แนวโน้ม ไม่ใช้ calcitriol เป็นประจำ";
+    else if(v("ctrl")>0&&M.Ca>10) m="<b>Calcitriol ทำให้ Ca สูง</b> ใน CKD ที่ยังไม่ dialysis ใช้เฉพาะ SHPT รุนแรงและเพิ่มขึ้นเรื่อยๆ ลดหรือหยุดยา";
+    else if(xU>2.5) m="<b>PTH สูงขึ้นต่อเนื่อง</b> ตรวจ P, Ca, 25(OH)D และแก้ก่อน ถ้ายังสูงมากและเพิ่มขึ้นจึงพิจารณา calcitriol ขนาดต่ำ";
+    else { bad=false; m="<b>FGF23 ชดเชยอยู่</b> P และ Ca ยังปกติ ไม่ต้องให้ binder ป้องกัน ติดตาม Ca, P, PTH ตาม stage (G3 ทุก 6–12 เดือน, G4 ทุก 3–6 เดือน)"; }
+  }
+  var a=document.getElementById("act"); a.innerHTML="<b>Next step:</b> "+m; a.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"CKD-04", title:"CKD-MBD Loop: FGF23, Klotho, PTH and Calcitriol", lead:"ลด eGFR หรือเปิด dialysis แล้วปรับ P intake, vitamin D, binder, calcitriol, calcimimetic ดูว่าแต่ละฮอร์โมนในวงจรตอบสนองอย่างไร และทำไมการแก้จุดหนึ่งไปกระทบอีกจุด",
+  scenarios:S, order:ORDER, captureMs:800,
+  onChange:function(kk,s){ var p=s.p; C.gfr.set(p.gfr); C.intake.set(p.intake); C.d25.set(p.d25); C.ctrl.set(p.ctrl); bs.value=String(p.binder);
+    ["dial","cina","ptx"].forEach(function(x){ ST[x]=!!p[x]; BT[x].setState(ST[x]); }); update(); },
+  refs:["KDIGO 2017 Clinical Practice Guideline Update for CKD-MBD. Kidney Int Suppl 2017, 7(1): 1-59",
+        "Isakova T, Wahl P, Vargas GS, et al. Fibroblast growth factor 23 is elevated before parathyroid hormone and phosphate in CKD. Kidney Int 2011, 79(12): 1370-1378",
+        "Hu MC, Kuro-o M, Moe OW. Renal and extrarenal actions of Klotho. Semin Nephrol 2013, 33(2): 118-129",
+        "Wolf M. Update on fibroblast growth factor 23 in CKD. Kidney Int 2012, 82(7): 737-747",
+        "EVOLVE Trial Investigators. Effect of cinacalcet on cardiovascular disease in patients undergoing dialysis. N Engl J Med 2012, 367(26): 2482-2494",
+        "Block GA, Wheeler DC, Persky MS, et al. Effects of phosphate binders in moderate CKD. J Am Soc Nephrol 2012, 23(8): 1407-1415",
+        "Witteveen JE, van Thiel S, Romijn JA, Hamdy NA. Hungry bone syndrome. Eur J Endocrinol 2013, 168(3): R45-R53"],
+  note:"Model เพื่อการสอน (steady state แบบวนซ้ำ): Klotho = (eGFR/90)^0.7, FGF23 ∝ (P/3.5)^2.4 x (1,25D/40)^0.4 x Klotho^−1.5, FEPO4 ∝ (FGF23 x √Klotho)^0.62 x PTH^0.15 เพดาน 90%, 1,25D ∝ 25(OH)D x Klotho^0.55 x PTH^0.3 x FGF23^−0.3 + 60 x calcitriol, PTH = gland mass x sigmoid ของ iCa (Hill 30, set point 1.20 หรือ 1.07 เมื่อได้ calcimimetic) x P^0.6 x 1,25D^−0.55 binder ลดการดูดซึม 25% dialysis เอา P ออก 320 mg/วัน ULN PTH 65 pg/mL"
+});
+})();
+</script>
+</body>
+</html>

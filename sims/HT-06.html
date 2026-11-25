@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[HT-06] Resistant Hypertension Stepwise</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.25fr 1fr}}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:12px}
+.sub{font-size:12.5px;color:var(--muted);margin:14px 0 4px}
+.row2{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px;font-size:13.5px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:14px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .ro{padding:6px 12px}
+body.present .ro b{font-size:18px}
+body.present .ctls{grid-template-columns:1fr 1fr;column-gap:18px;gap:2px 18px}
+body.present .ctl{font-size:12.5px;grid-template-columns:minmax(80px,112px) 1fr 70px;gap:6px}
+body.present .tog{padding:3px 8px;font-size:11.5px}
+body.present .tools{margin-top:4px;gap:5px}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+body.present .sub{margin:6px 0 2px}
+body.present .row2{margin-top:4px}
+body.present #live{display:none}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>24 สัปดาห์ของการปรับยา</h2>
+      <div id="chart"></div>
+      <div id="live"></div>
+      <p class="hint no-present">ยาที่เลือกจะถูกเพิ่มทีละตัวทุก 4 สัปดาห์ตามลำดับ A → C → D → spironolactone → ตัวอื่น เส้นม่วงคือ office SBP เส้นเขียวคือ home SBP เส้นประแดงคือเป้า แถบเทาคือช่วงที่ยังมียาไม่ถึง 3 ตัว</p>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วย ปัจจัยรบกวน และยา</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="row2"><label for="tgt">เป้า SBP</label><select id="tgt"><option value="130">&lt; 130 (ทั่วไป)</option><option value="120">&lt; 120 (CKD, standardized office)</option></select></div>
+      <div class="sub">ปัจจัยที่ทำให้ดื้อยา (กดเปิด/ปิด)</div>
+      <div class="tools" id="tools1"></div>
+      <div class="sub">ยาที่จะเพิ่มตามลำดับ (กดเปิด/ปิด)</div>
+      <div class="tools" id="tools2"></div>
+      <div class="readout">
+        <div class="ro" id="roOff"><b>-</b><span>Office SBP สัปดาห์ 24</span></div>
+        <div class="ro" id="roHome"><b>-</b><span>Home SBP สัปดาห์ 24</span></div>
+        <div class="ro" id="roN"><b>-</b><span>จำนวนยา</span></div>
+        <div class="ro" id="roK"><b>-</b><span>K (mmol/L)</span></div>
+        <div class="ro" id="roGFR"><b>-</b><span>eGFR</span></div>
+        <div class="ro" id="roCls"><b>-</b><span>สถานะ</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/live.js"></script>
+<script>
+(function(){
+"use strict";
+var FX={nsaid:{name:"NSAID หรือ decongestant"},osa:{name:"OSA ยังไม่รักษา"},pa:{name:"Primary aldosteronism (ยังไม่รู้)"},cpap:{name:"CPAP"}};
+var DR={A:{name:"ACEi/ARB",full:"ACEi/ARB ขนาดสูงสุด"},C:{name:"Amlodipine",full:"amlodipine 10 mg"},D:{name:"Chlorthalidone",full:"chlorthalidone 12.5–25 mg"},S:{name:"Spironolactone",full:"spironolactone 25–50 mg"},L:{name:"Loop diuretic",full:"loop diuretic"},B:{name:"β-blocker",full:"β-blocker"},X:{name:"α-blocker",full:"doxazosin"},R:{name:"Renal denervation",full:"renal denervation"}};
+var SEQ=["A","C","D","S","L","B","X","R"];
+function P(o){ var d={sbp:168,gfr:70,adh:95,na:150,wc:8,tgt:"130",fx:[],dr:["A","C","D"]}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  adh:{name:"Pseudo: adherence", p:P({adh:45}),
+    rows:[["ยา","A + C + D ขนาดเต็ม"],["ปัญหา","กินยาจริงราว 45% (ตรวจระดับยาในปัสสาวะ)"],["ผล","ดูเหมือนดื้อยาแต่ไม่ใช่ resistant HT"]],
+    take:["Non-adherence เป็นสาเหตุของ apparent resistant HT ที่พบบ่อยที่สุด","ใช้ single-pill combination วันละครั้ง ลดจำนวนเม็ด และตรวจระดับยาเมื่อทำได้","ยืนยัน adherence ก่อนเพิ่มยาตัวที่ 4"]},
+  wc:{name:"Pseudo: white coat", p:P({wc:24,sbp:160}),
+    rows:[["ยา","A + C + D"],["Office","ยังสูงกว่าเป้า"],["Home/ABPM","ถึงเป้าแล้ว"]],
+    take:["ต้องยืนยันด้วย ABPM หรือ HBPM ก่อนเรียกว่า resistant HT","White-coat effect ในผู้ป่วยที่ได้ยาหลายตัวพบได้บ่อย","เพิ่มยาตาม office BP อย่างเดียวเสี่ยง hypotension และ falls"]},
+  salt:{name:"กินเค็มมาก", p:P({na:260}),
+    rows:[["ยา","A + C + D"],["ปัญหา","urine Na 260 mmol/วัน"],["ผล","diuretic และ RAAS blocker ได้ผลน้อยลง"]],
+    take:["Na intake สูงทำให้ BP ดื้อยา ตรวจ urine Na 24 ชม. ในทุกราย","ลดเกลือในผู้ป่วย resistant HT ลด SBP ได้มากใกล้เคียงยาหนึ่งตัว","ถ้าลดเกลือไม่ได้ เพิ่ม diuretic หรือ MRA"]},
+  true:{name:"True resistant + spironolactone", p:P({sbp:164,dr:["A","C","D","S"]}),
+    rows:[["ยืนยัน","adherence ดี HBPM สูง เกลือพอเหมาะ"],["ยาตัวที่ 4","spironolactone"],["ผล","SBP ลดชัดกว่า β-blocker หรือ α-blocker"]],
+    take:["Resistant HT คือ BP ไม่ถึงเป้าทั้งที่ได้ยา 3 กลุ่มขนาดเต็มรวม diuretic และยืนยัน adherence กับ out-of-office BP แล้ว","Spironolactone คือยาตัวที่ 4 ที่ได้ผลดีที่สุด เพราะ resistant HT ส่วนใหญ่มี volume เกินและ aldosterone สูง","ตรวจ K และ Cr ภายใน 1–4 สัปดาห์หลังเริ่ม"]},
+  pa:{name:"PA ซ่อนอยู่", p:P({fx:["pa"],dr:["A","C","D","S"],sbp:166}),
+    rows:[["Lab","K 3.4 แม้ได้ ACEi"],["ยาตัวที่ 4","spironolactone ได้ผลมาก"],["ต้องทำ","screen PA ด้วย aldosterone/renin"]],
+    take:["Resistant HT ทุกรายควร screen PA ไม่ว่า K จะต่ำหรือไม่","ผู้ป่วย PA ตอบสนองต่อ MRA ดีมาก ส่วน ACEi ได้ผลน้อย","ถ้าเป็น unilateral การผ่าตัดอาจลดจำนวนยาได้มาก"]},
+  ckd4:{name:"CKD G4 + chlorthalidone", p:P({gfr:24,tgt:"120",sbp:162}),
+    rows:[["ภาวะ","eGFR 24"],["ยา","A + C + chlorthalidone"],["ผล","chlorthalidone ยังลด BP ได้ใน G4"]],
+    take:["Chlorthalidone ลด BP ได้แม้ eGFR 15–30 ความเชื่อว่า thiazide ใช้ไม่ได้ใน CKD G4 ไม่เป็นจริงเสมอ","ติดตาม K, Na, urate, eGFR (Cr ขึ้นเล็กน้อยจาก volume ที่ลด)","Spironolactone ใน eGFR ต่ำเสี่ยง K สูง ใช้ K binder ช่วยได้"]},
+  refr:{name:"Refractory", p:P({sbp:194,dr:["A","C","D","S","B","X"],na:140}),
+    rows:[["ยา","5 กลุ่มขึ้นไปรวม chlorthalidone และ spironolactone"],["ผล","ยังไม่ถึงเป้า"],["ต่อ","ทบทวนสาเหตุรอง พิจารณา renal denervation"]],
+    take:["Refractory HT คือไม่ถึงเป้าแม้ได้ยา 5 กลุ่มรวม chlorthalidone และ MRA","ทบทวน secondary HT (PA, OSA, renovascular, pheochromocytoma) และ adherence อีกครั้ง","Renal denervation ลด BP ได้ปานกลางในผู้ป่วยที่เลือกแล้ว"]},
+  fx:{name:"NSAID + OSA", p:P({fx:["nsaid","osa"]}),
+    rows:[["ปัจจัย","กิน NSAID ปวดเข่า และ OSA"],["ผล","BP ดื้อยา 3 ตัว"],["แก้","หยุด NSAID รักษา OSA"]],
+    take:["ทบทวนยาที่เพิ่ม BP: NSAID, decongestant, OCP, CNI, steroid, VEGF inhibitor, ชะเอม, สารกระตุ้น","OSA พบบ่อยมากใน resistant HT และทำให้ non-dipping","แก้ปัจจัยรบกวนก่อนเพิ่มยา"]}
+};
+var ORDER=["adh","wc","salt","true","pa","ckd4","refr","fx"];
+var box=document.getElementById("ctls"), C={};
+function sl(k,o){ o.id="s"+k; o.onInput=function(){ update(true); }; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("sbp",{label:"Office SBP ก่อนยา",min:140,max:200,step:1,value:168,unit:""});
+sl("gfr",{label:"eGFR",min:15,max:100,step:1,value:70,unit:""});
+sl("adh",{label:"Adherence",min:20,max:100,step:5,value:95,unit:" %"});
+sl("na",{label:"Na intake",min:60,max:300,step:10,value:150,unit:" mmol/d"});
+sl("wc",{label:"Office − home",min:0,max:30,step:1,value:8,unit:" mmHg"});
+var tgtSel=document.getElementById("tgt"); tgtSel.addEventListener("change",function(){ update(); });
+function mk(id,lib){ var T={}, tb=document.getElementById(id); Object.keys(lib).forEach(function(k){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:lib[k].name}); b.addEventListener("click",function(){ b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); tb.appendChild(b); T[k]=b; }); return T; }
+var TF=mk("tools1",FX), TD=mk("tools2",DR);
+function on(T,k){ return T[k].getAttribute("aria-pressed")==="true"; }
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?300:300,aria:"Office and home systolic blood pressure over twenty-four weeks as drugs are added",
+  x:{min:0,max:24,step:4,label:"Weeks"},y:{min:100,max:200,step:20,label:"SBP (mmHg)"},
+  series:[{id:"off",name:"Office SBP",color:A.accent,data:[],width:2.6},{id:"home",name:"Home SBP",color:A.teal,data:[],width:2,dash:[6,4]}],legend:true});
+var live=Live.player(chart,{mount:"live"}), LAST=null;
+function opts(){ var o={sbp:C.sbp.get(),gfr:C.gfr.get(),adh:C.adh.get()/100,na:C.na.get(),wc:C.wc.get(),tgt:+tgtSel.value,fx:{},dr:[]};
+  Object.keys(FX).forEach(function(k){ o.fx[k]=on(TF,k); }); SEQ.forEach(function(k){ if(on(TD,k)) o.dr.push(k); }); return o; }
+function effect(k,o){
+  var hiNa=o.na>180, pa=o.fx.pa;
+  switch(k){
+    case "A": return 9*(pa?0.55:1)*(hiNa?0.65:1);
+    case "C": return 10;
+    case "D": return (o.gfr>=30?9:10)*(hiNa?0.75:1);
+    case "S": return 9*(pa?2.2:1)*(hiNa?1.25:1)*(o.gfr<30?0.9:1);
+    case "L": return o.gfr<30?6:2.5;
+    case "B": return 4;
+    case "X": return 4;
+    case "R": return 5;
+  }
+  return 0;
+}
+function model(o){
+  var start={}, ev=[], extra=(o.na-100)*0.06+(o.fx.nsaid?5:0)+(o.fx.osa&&!o.fx.cpap?6:0)+(o.fx.pa?4:0);
+  o.dr.forEach(function(k,i){ start[k]=i*4; });
+  var OFF=[],HOME=[], k=4.2+(o.fx.pa?-0.7:0), dGfr=0;
+  var nAt=function(t){ return o.dr.filter(function(k){ return start[k]<=t; }).length; };
+  for(var t=0;t<=24;t+=0.25){
+    var red=0, n=0;
+    o.dr.forEach(function(d){ if(t<start[d]) return; n++; var f=1-Math.exp(-(t-start[d])/(d==="R"?3:1.1)); red+=effect(d,o)*f*Math.pow(0.93,n-1); });
+    var adhF=d=>1;
+    var off=o.sbp+extra-red*o.adh;
+    OFF.push([t,off]); HOME.push([t,off-o.wc]);
+  }
+  /* K and eGFR at week 24 */
+  var has=function(d){ return o.dr.indexOf(d)>=0; }, ad=o.adh;
+  k+=(has("A")?0.2*Math.sqrt(60/o.gfr):0)*ad+(has("S")?0.45*Math.sqrt(60/o.gfr)*(o.fx.pa?0.6:1):0)*ad-(has("D")?0.35:0)*ad-(has("L")?0.2:0)*ad;
+  dGfr=-((has("A")?6:0)+(has("D")?5:0)+(has("S")?5:0)+(has("L")?3:0))*ad*(o.gfr<30?1.2:1);
+  o.dr.forEach(function(d){ ev.push({t:start[d],kind:"rx",text:"สัปดาห์ "+start[d]+" เพิ่ม "+DR[d].full}); });
+  if(o.fx.nsaid) ev.push({t:0,kind:"warn",text:"ยังกิน NSAID หรือ decongestant อยู่"});
+  if(o.fx.osa&&!o.fx.cpap) ev.push({t:0,kind:"warn",text:"OSA ยังไม่ได้รักษา"});
+  if(o.adh<0.8) ev.push({t:2,kind:"warn",text:"กินยาจริง "+Math.round(o.adh*100)+"% ของที่สั่ง"});
+  var t3=o.dr.length>=3?start[o.dr[2]]+3:null;
+  if(t3!==null&&t3<=24) ev.push({t:t3,kind:Live.valueAt(HOME,t3)<o.tgt?"ok":"warn",text:"ครบ 3 ตัว: home SBP "+Live.valueAt(HOME,t3).toFixed(0)});
+  var tc=Live.cross(HOME,o.tgt,-1); if(tc!==null) ev.push({t:tc,kind:"ok",text:"Home SBP ถึงเป้า < "+o.tgt});
+  if(k>5.5) ev.push({t:Math.min(24,(start.S!==undefined?start.S:20)+2),kind:"warn",text:"K "+k.toFixed(1)+" หลังเพิ่มยา"});
+  return {OFF:OFF,HOME:HOME,ev:ev,k:k,gfr:Math.max(8,o.gfr*(1+dGfr/100)),dg:dGfr,start:start,n:o.dr.length};
+}
+function update(deb){
+  var o=opts(), M=model(o);
+  var ymin=Math.min(100,Math.floor((Math.min.apply(null,M.HOME.map(function(p){ return p[1]; }))-10)/10)*10);
+  var ymax=Math.max(180,Math.ceil((Math.max.apply(null,M.OFF.map(function(p){ return p[1]; }))+10)/10)*10);
+  var x3=o.dr.length>=3?M.start[o.dr[2]]:24;
+  chart.update({y:{min:ymin,max:ymax,step:20,label:"SBP (mmHg)"},hlines:[{y:o.tgt,label:"Target "+o.tgt,color:A.red,dash:[5,4]}],xbands:[{x0:0,x1:Math.min(24,x3),label:"< 3 drugs",color:"rgba(11,11,31,0.05)"}]});
+  chart.setSeries("off",M.OFF); chart.setSeries("home",M.HOME);
+  var off=M.OFF[M.OFF.length-1][1], home=M.HOME[M.HOME.length-1][1], hasD=o.dr.indexOf("D")>=0||o.dr.indexOf("L")>=0, hasS=o.dr.indexOf("S")>=0;
+  var cls, m, bad=true;
+  var unctrlOff=off>=o.tgt, unctrlHome=home>=o.tgt;
+  if(!unctrlHome&&(!unctrlOff||o.wc<10)){ cls="Controlled"; bad=false; }
+  else if(!unctrlHome){ cls="White-coat effect"; }
+  else if(M.n<3||!hasD){ cls="Not yet resistant"; }
+  else if(o.adh<0.8){ cls="Pseudo (adherence)"; }
+  else if(o.na>180){ cls="Excess salt"; }
+  else if(o.fx.nsaid||(o.fx.osa&&!o.fx.cpap)){ cls="Interfering factors"; }
+  else if(M.n>=5&&hasS) cls="Refractory";
+  else cls="True resistant";
+  if(cls==="White-coat effect") m="<b>Pseudo-resistance จาก white-coat</b> home SBP "+home.toFixed(0)+" ถึงเป้าแล้ว ไม่ต้องเพิ่มยา ยืนยันด้วย ABPM ใช้ HBPM ติดตาม";
+  else if(cls==="Pseudo (adherence)") m="<b>Pseudo-resistance จาก adherence</b> เปลี่ยนเป็น single-pill combination วันละครั้ง ตรวจระดับยาในเลือดหรือปัสสาวะ คุยเรื่องผลข้างเคียงและค่าใช้จ่าย ก่อนเพิ่มยา";
+  else if(cls==="Excess salt") m="<b>เกลือทำให้ดื้อยา</b> urine Na "+o.na+" mmol/วัน ตั้งเป้า Na < 90 mmol/วัน (NaCl < 5 g) ปรึกษานักโภชนาการ ถ้ายังไม่ถึงเป้าเพิ่ม spironolactone";
+  else if(cls==="Interfering factors") m="<b>มีปัจจัยรบกวน</b> "+(o.fx.nsaid?"หยุด NSAID หรือ decongestant ใช้ paracetamol หรือ topical NSAID แทน ":"")+(o.fx.osa&&!o.fx.cpap?"ส่ง sleep study และรักษา OSA ด้วย CPAP ":"")+"แล้วประเมิน BP ใหม่ก่อนเพิ่มยาตัวที่ 4";
+  else if(cls==="Not yet resistant") m="<b>ยังไม่ครบนิยาม resistant HT</b> ให้ A + C + D ขนาดเต็ม (thiazide-like diuretic) ก่อน ใน CKD G4 ใช้ chlorthalidone หรือ loop diuretic";
+  else if(cls==="True resistant"&&!hasS) m="<b>True resistant HT</b> เพิ่ม spironolactone 25–50 mg (ถ้า K ≤ 4.5 และ eGFR > 30 หรือใช้ร่วม K binder) screen PA และ OSA ตรวจ urine Na 24 ชม.";
+  else if(cls==="True resistant") m="<b>ยังไม่ถึงเป้าแม้มี spironolactone</b> ทบทวน secondary HT (PA, renovascular, pheochromocytoma, Cushing), เพิ่ม β-blocker หรือ α-blocker หรือ hydralazine, ส่งต่อ hypertension specialist";
+  else if(cls==="Refractory") m="<b>Refractory HT</b> ยืนยัน adherence และ ABPM อีกครั้ง ค้น secondary HT อย่างเป็นระบบ พิจารณา renal denervation ในศูนย์ที่มีประสบการณ์";
+  else if(o.fx.nsaid||(o.fx.osa&&!o.fx.cpap)) m="<b>ถึงเป้าแล้ว</b> แต่ยังมีปัจจัยรบกวน หยุด NSAID รักษา OSA อาจลดยาได้";
+  else m="<b>ถึงเป้า</b> office "+off.toFixed(0)+" home "+home.toFixed(0)+" ติดตาม K, Cr และ BP ทุก 3–6 เดือน";
+  if(M.k>5.5) { m+=" <b>K "+M.k.toFixed(1)+"</b> ลดหรือหยุด spironolactone ชั่วคราว จำกัด K เพิ่ม K binder หรือ loop/thiazide"; bad=true; }
+  if(o.fx.pa&&!hasS&&cls!=="Controlled") m+=" K ต่ำแม้ได้ ACEi ชวนสงสัย PA";
+  LAST={M:M,o:o,off:off,home:home,cls:cls,act:"<b>Next step:</b> "+m,actCls:"act"+(bad?" bad":"")};
+  live.load({tMax:24,unit:"สัปดาห์",ms:8000,debounce:deb===true,num:function(x){ return x.toFixed(0); },events:M.ev.sort(function(a,b){ return a.t-b.t; }),onFrame:onFrame,
+    cursorLabel:function(t){ return "Home "+Live.valueAt(M.HOME,t).toFixed(0); }});
+}
+function onFrame(t,done){
+  var L=LAST, M=L.M, o=L.o;
+  var off=Live.valueAt(M.OFF,t), home=Live.valueAt(M.HOME,t), n=o.dr.filter(function(d){ return M.start[d]<=t; }).length;
+  Sim.ro("roOff",off.toFixed(0),off>=o.tgt?"flag":"ok");
+  Sim.ro("roHome",home.toFixed(0),home>=o.tgt?"flag":"ok");
+  Sim.ro("roN",String(n),n>=5?"flag":null);
+  Sim.ro("roK",done?M.k.toFixed(1):"…",done?(M.k>5.5||M.k<3.5?"flag":"ok"):null);
+  Sim.ro("roGFR",done?M.gfr.toFixed(0)+" ("+M.dg.toFixed(0)+"%)":"…",done?(M.dg<-25?"flag":null):null);
+  Sim.ro("roCls",done?L.cls:"…",done?(L.cls==="Controlled"?"ok":"flag"):null);
+  var a=document.getElementById("act");
+  if(done){ a.innerHTML=L.act; a.className=L.actCls; } else { a.innerHTML="<b>กำลังจำลอง</b> สัปดาห์ที่ "+t.toFixed(0)+" ยา "+n+" ตัว office "+off.toFixed(0)+" home "+home.toFixed(0); a.className="act"; }
+}
+Sim.mount({code:"HT-06", title:"Resistant Hypertension Stepwise", lead:"ตั้งค่าผู้ป่วย adherence เกลือ และ white-coat effect เลือกยาที่จะเพิ่มทีละตัวทุก 4 สัปดาห์ แล้วดูว่า BP ถึงเป้าหรือไม่ แยก pseudo-resistance จาก true resistant และ refractory HT",
+  scenarios:S, order:ORDER, captureMs:1200,
+  onChange:function(k,s){ ["sbp","gfr","adh","na","wc"].forEach(function(x){ C[x].set(s.p[x]); }); tgtSel.value=s.p.tgt;
+    Object.keys(TF).forEach(function(x){ TF[x].setAttribute("aria-pressed",s.p.fx.indexOf(x)>=0?"true":"false"); });
+    Object.keys(TD).forEach(function(x){ TD[x].setAttribute("aria-pressed",s.p.dr.indexOf(x)>=0?"true":"false"); }); update(); },
+  refs:["Carey RM, Calhoun DA, Bakris GL, et al. Resistant hypertension: detection, evaluation, and management: a scientific statement from the American Heart Association. Hypertension 2018, 72(5): e53-e90",
+        "Williams B, MacDonald TM, Morant S, et al (PATHWAY-2). Spironolactone versus placebo, bisoprolol, and doxazosin to determine the optimal treatment for drug-resistant hypertension. Lancet 2015, 386(10008): 2059-2068",
+        "Agarwal R, Sinha AD, Cramer AE, et al (CLICK). Chlorthalidone for hypertension in advanced chronic kidney disease. N Engl J Med 2021, 385(27): 2507-2519",
+        "Agarwal R, Rossignol P, Romero A, et al (AMBER). Patiromer versus placebo to enable spironolactone use in patients with resistant hypertension and chronic kidney disease. Lancet 2019, 394(10208): 1540-1550",
+        "Pimenta E, Gaddam KK, Oparil S, et al. Effects of dietary sodium reduction on blood pressure in subjects with resistant hypertension. Hypertension 2009, 54(3): 475-481",
+        "Mancia G, Kreutz R, Brunström M, et al. 2023 ESH Guidelines for the management of arterial hypertension. J Hypertens 2023, 41(12): 1874-2071",
+        "Jones DW, Ferdinand KC, Taler SJ, et al. 2025 AHA/ACC and multisociety guideline for the prevention, detection, evaluation and management of high blood pressure in adults. Hypertension 2025, 82(10): e212-e316"],
+  note:"Model เพื่อการสอน: ฤทธิ์ลด office SBP ที่ adherence 100% ACEi/ARB 9 (PA x0.55, Na > 180 x0.65), amlodipine 10, chlorthalidone 9–10 (Na สูง x0.75), spironolactone 9 (PA x2.2, Na สูง x1.25), loop 6 เมื่อ eGFR < 30 มิฉะนั้น 2.5, β-blocker 4, α-blocker 4, renal denervation 5 mmHg ยาแต่ละตัวเริ่มทุก 4 สัปดาห์และถึงฤทธิ์เต็มใน τ ราว 1 สัปดาห์ ตัวหลังได้ผลลดลง 7% ต่อจำนวนยาที่มีอยู่ ฤทธิ์รวมคูณ adherence Na intake เพิ่ม 6 mmHg ต่อ 100 mmol ที่เกิน 100 NSAID +5, OSA +6 home = office − (office − home)"
+});
+})();
+</script>
+</body>
+</html>

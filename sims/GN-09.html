@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[GN-09] Lupus Nephritis: Class, Activity and Response</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.2fr 1fr}}
+.gl{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px}
+.gl svg{border-radius:8px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px;align-items:start}
+@media (max-width:560px){.pair{grid-template-columns:1fr}}
+.cls{display:flex;gap:6px;margin-top:10px}
+.cls div{flex:1;text-align:center;padding:7px 2px;border-radius:9px;background:var(--canvas);font:600 13px var(--mono);color:var(--muted)}
+.cls div.on{background:var(--ink);color:#fff}
+.sel{display:grid;grid-template-columns:minmax(90px,120px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px;margin:6px 0}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.readout{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:520px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.readout .ro b{font-size:clamp(18px,2vw,24px)}
+.act{margin-top:10px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .act,body.present .tools{display:none}
+body.present .card{padding:14px 18px}
+body.present .ctls{grid-template-columns:1fr 1fr;column-gap:22px}
+body.present .readout .ro{padding:6px 10px}
+body.present .pair svg{max-height:200px}
+body.present .gl{grid-template-columns:repeat(12,minmax(0,1fr))}
+body.present .sel{margin:2px 0}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Biopsy: 12 glomeruli และ ISN/RPS class</h2>
+      <div class="gl" id="gl"></div>
+      <div class="cls" id="cls"></div>
+      <div class="svgwrap" style="margin-top:10px"><div id="chart"></div></div>
+      <p class="hint no-present">ภาพบนคือ glomeruli ตัวอย่าง 12 อันจาก biopsy สัดส่วนที่มี endocapillary lesion แบ่ง class III (&lt; 50%) และ IV (≥ 50%) global sclerosis ≥ 90% คือ class VI กราฟล่างคือ UPCR และ eGFR 24 เดือนหลัง induction</p>
+      <details class="more"><summary>ภาพตำแหน่ง deposit บน capillary wall</summary><div class="more-body"><div class="svgwrap"><svg id="loop" aria-label="Deposit location"></svg></div></div></details>
+    </div>
+    <div class="card">
+      <h2>Histology และการรักษา</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools"></div>
+      <div class="sel"><label for="sTx">Induction</label><select id="sTx">
+        <option value="gc">Glucocorticoid อย่างเดียว</option><option value="mmf">GC + MMF</option><option value="cyc">GC + low-dose IV CYC</option>
+        <option value="bel">GC + MMF + belimumab</option><option value="voc">GC + MMF + voclosporin</option><option value="obi">GC + MMF + obinutuzumab</option>
+        <option value="tac">GC + tacrolimus</option><option value="sup">RAASi + HCQ อย่างเดียว</option></select></div>
+      <div class="readout" style="margin-top:10px">
+        <div class="ro" id="roAI"><b>-</b><span>Activity index /24</span></div>
+        <div class="ro" id="roCI"><b>-</b><span>Chronicity index /12</span></div>
+        <div class="ro" id="roR6"><b>-</b><span>UPCR 6 mo</span></div>
+        <div class="ro" id="roR12"><b>-</b><span>Response 12 mo</span></div>
+        <div class="ro" id="roE"><b>-</b><span>eGFR 24 mo</span></div>
+        <div class="ro" id="roFl"><b>-</b><span>Flare</span></div>
+        <div class="ro" id="roUp"><b>-</b><span>UPCR baseline</span></div>
+        <div class="ro" id="roE0"><b>-</b><span>eGFR baseline</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/patho.js"></script>
+<script>
+(function(){
+"use strict";
+/* Class (ISN/RPS 2018): VI if global sclerosis >= 90%, IV if endocapillary lesions >= 50% of glomeruli, III if 1-49%, V if subepithelial deposits (alone or with III/IV),
+   II if mesangial hypercellularity only, I otherwise. Podocytopathy = diffuse effacement with LM minimal or mesangial only.
+   NIH activity (0-24): endocapillary, neutrophils/karyorrhexis, fibrinoid necrosis x2, hyaline deposits, cellular crescents x2, interstitial inflammation (each 0-3).
+   NIH chronicity (0-12): glomerulosclerosis, fibrous crescents, tubular atrophy, interstitial fibrosis. Score 1 < 25%, 2 25-50%, 3 > 50%.
+   Response model: activity A decays at a regimen rate (per month) after 0.5 month, UPCR target = floor + (UPCR0 - floor) x A, floor = 0.2 + 0.08 x CI (x0.7 with RAASi),
+   tau 2 months. eGFR = Emax x (1 - 0.35 x active fraction x A) - 0.03 x CI per month, Emax = baseline recovered potential reduced 4% per CI point.
+   Flare: maintenance stopped at month 12 -> activity rebounds to 0.6 (0.3 with HCQ) from month 15. */
+var RATE = {
+  prolif:{gc:0.12, mmf:0.26, cyc:0.26, bel:0.33, voc:0.38, obi:0.34, tac:0.24, sup:0.02},
+  v:{gc:0.08, mmf:0.18, cyc:0.18, bel:0.2, voc:0.3, obi:0.24, tac:0.3, sup:0.03},
+  podo:{gc:0.55, mmf:0.3, cyc:0.3, bel:0.3, voc:0.45, obi:0.35, tac:0.45, sup:0.04},
+  mild:{gc:0.15, mmf:0.15, cyc:0.15, bel:0.15, voc:0.15, obi:0.15, tac:0.15, sup:0.1}
+};
+function sc(p){ return p <= 0 ? 0 : p < 25 ? 1 : p <= 50 ? 2 : 3; }
+function scC(p){ return p < 10 ? 0 : p < 25 ? 1 : p <= 50 ? 2 : 3; }
+function klass(p){
+  if(p.scl >= 90) return {c:"VI", t:"Class VI advanced sclerosing"};
+  if(p.podo && p.act === 0) return {c:"POD", t:"Lupus podocytopathy"};
+  var b = p.act >= 50 ? "IV" : p.act > 0 ? "III" : p.subepi ? "V" : p.mes ? "II" : "I";
+  if((b === "III" || b === "IV") && p.subepi) return {c:b + "+V", t:"Class " + b + " + V"};
+  return {c:b, t:"Class " + b};
+}
+function indices(p){
+  var ai = sc(p.act) + (p.act > 0 ? Math.min(3, sc(p.act) - 1 + (p.neut ? 1 : 0)) : 0) + 2 * (p.nec ? sc(Math.max(10, p.act * 0.4)) : 0) + (p.wire ? sc(Math.max(10, p.act * 0.5)) : 0) + 2 * sc(p.cres) + sc(p.ii);
+  var ci = scC(p.scl) + scC(p.fcres) + scC(p.ifta) + scC(p.ifta);
+  return {ai:Math.min(24, ai), ci:Math.min(12, ci)};
+}
+function simulate(p, k, tx, ix){
+  var group = k.c === "POD" ? "podo" : (k.c === "V") ? "v" : (k.c === "I" || k.c === "II" || k.c === "VI") ? "mild" : "prolif";
+  var r = RATE[group][tx];
+  if(k.c === "VI") r *= 0.3;
+  if(k.c.indexOf("+V") > 0 && tx === "tac") r *= 1.15;
+  var floor = (0.2 + 0.08 * ix.ci) * (p.raasi ? 0.7 : 1), actFrac = p.act / 100;
+  var Emax = Math.min(120, p.e0 / (1 - 0.35 * actFrac)) * (1 - 0.04 * ix.ci);
+  var A = 1, U = p.up0, out = {U:[], E:[], flare:false}, dt = 0.05;
+  for(var i = 0; i <= 480; i++){
+    var t = i * dt;
+    var E = Math.max(5, Emax * (1 - 0.35 * actFrac * A) - 0.03 * ix.ci * t);
+    if(i === 0) E = p.e0;
+    if(i % 5 === 0){ out.U.push([+t.toFixed(2), +U.toFixed(2)]); out.E.push([+t.toFixed(2), +E.toFixed(1)]); }
+    var rate = t >= 0.5 ? r : 0;
+    if(p.stop && t >= 15 && t < 17){ var tgtA = p.hcq ? 0.3 : 0.6; A += (tgtA - A) * dt * 1.5; out.flare = true; rate = 0; }
+    else if(p.stop && t >= 17) rate = r;
+    A *= Math.exp(-rate * dt);
+    var tgt = floor + (p.up0 - floor) * A;
+    if(p.raasi) tgt *= 0.9;
+    U += (tgt - U) / 2 * dt;
+    if(Math.abs(t - 6) < dt / 2) out.u6 = U;
+    if(Math.abs(t - 12) < dt / 2){ out.u12 = U; out.e12 = E; }
+    out.e24 = E;
+  }
+  return out;
+}
+var S = {
+  iv:{name:"Class IV active", p:{act:70, scl:5, cres:20, fcres:0, ifta:5, ii:20, mes:true, subepi:false, podo:false, nec:true, wire:true, neut:true, raasi:true, hcq:true, stop:false, up0:3.2, e0:62, tx:"bel"},
+    rows:[["Clinical","หญิง 24 ปี ผื่น ข้ออักเสบ hematuria RBC cast Cr 1.3"],["Serology","dsDNA สูง, C3 และ C4 ต่ำ"],["Biopsy","Endocapillary 70% ของ glomeruli, wire loop, cellular crescent 20%"],["Class","IV (A) activity สูง chronicity ต่ำ"]],
+    take:["Class IV = endocapillary lesion ≥ 50% ของ glomeruli ต้อง induction ทันที","Activity สูงแต่ chronicity ต่ำ ไตฟื้นได้มาก","Triple therapy เพิ่มโอกาส complete response เทียบ GC + MMF"]},
+  iii:{name:"Class III focal", p:{act:30, scl:5, cres:5, fcres:0, ifta:5, ii:10, mes:true, subepi:false, podo:false, nec:false, wire:false, neut:false, raasi:true, hcq:true, stop:false, up0:1.6, e0:90, tx:"mmf"},
+    rows:[["Clinical","หญิง 30 ปี proteinuria 1.6 g/g hematuria eGFR 90"],["Biopsy","Endocapillary 30% ของ glomeruli"],["Class","III (A)"],["Plan","GC + MMF + HCQ + RAASi"]],
+    take:["Class III และ IV รักษาเหมือนกัน","GC ลดขนาดเร็วได้เมื่อใช้ร่วม MMF","HCQ ให้ทุกรายถ้าไม่มีข้อห้าม"]},
+  ivv:{name:"Class IV + V", p:{act:55, scl:10, cres:10, fcres:5, ifta:10, ii:15, mes:true, subepi:true, podo:false, nec:false, wire:true, neut:false, raasi:true, hcq:true, stop:false, up0:5.5, e0:70, tx:"voc"},
+    rows:[["Clinical","หญิง 28 ปี nephrotic + active sediment"],["Biopsy","Endocapillary 55% + subepithelial deposits กว้าง"],["Class","IV + V"],["Plan","GC + MMF + CNI (voclosporin) หรือ triple therapy อื่น"]],
+    take:["Class IV + V มีทั้ง proliferative และ membranous component","CNI ช่วยลด proteinuria จาก podocyte (membranous) ได้เร็ว","ติดตาม eGFR และระดับยาเมื่อใช้ CNI"]},
+  v:{name:"Class V nephrotic", p:{act:0, scl:5, cres:0, fcres:0, ifta:5, ii:5, mes:true, subepi:true, podo:false, nec:false, wire:false, neut:false, raasi:true, hcq:true, stop:false, up0:6, e0:95, tx:"tac"},
+    rows:[["Clinical","หญิง 35 ปี nephrotic sediment ไม่ active"],["Serology","dsDNA ต่ำหรือลบ PLA2R ลบ"],["Biopsy","Subepithelial deposits + mesangial, full-house IF"],["Class","V"]],
+    take:["Class V ที่ proteinuria ไม่ถึง nephrotic ใช้ RAASi และ HCQ ได้","Class V nephrotic ให้ GC ร่วม MMF, CNI หรือ rituximab","PLA2R ลบและ full-house IF ช่วยแยกจาก primary MN"]},
+  podo:{name:"Lupus podocytopathy", p:{act:0, scl:0, cres:0, fcres:0, ifta:0, ii:0, mes:false, subepi:false, podo:true, nec:false, wire:false, neut:false, raasi:false, hcq:true, stop:false, up0:8, e0:85, tx:"gc"},
+    rows:[["Clinical","หญิง 22 ปี nephrotic ฉับพลัน"],["Biopsy","LM ปกติหรือ mesangial EM effacement กระจาย ไม่มี subendothelial/subepithelial deposit"],["Class","Lupus podocytopathy (ไม่อยู่ใน ISN/RPS)"],["Plan","Glucocorticoid ตอบสนองเร็ว"]],
+    take:["Lupus podocytopathy คล้าย MCD และตอบสนองต่อ steroid ดี","ไม่ต้องใช้ induction แบบ class IV","Relapse ได้ ใช้ MMF หรือ CNI เป็น steroid-sparing"]},
+  chronic:{name:"Class IV high chronicity", p:{act:55, scl:40, cres:5, fcres:30, ifta:45, ii:20, mes:true, subepi:false, podo:false, nec:false, wire:false, neut:false, raasi:true, hcq:true, stop:false, up0:3.5, e0:32, tx:"mmf"},
+    rows:[["Clinical","หญิง 40 ปี lupus มา 10 ปี ขาดยา Cr 2.1"],["Biopsy","Endocapillary 55% แต่ sclerosis 40%, fibrous crescent, IFTA 45%"],["Class","IV (A/C)"],["Plan","Induction ยังให้ได้ แต่ไตฟื้นจำกัด"]],
+    take:["Chronicity index สูงทำนายว่า eGFR ฟื้นได้น้อย","ส่วนที่ active ยังควรรักษา ชั่งกับพิษของยา","Proteinuria ที่เหลืออาจมาจาก sclerosis ไม่ใช่ disease activity"]},
+  vi:{name:"Class VI", p:{act:0, scl:92, cres:0, fcres:20, ifta:70, ii:10, mes:true, subepi:false, podo:false, nec:false, wire:false, neut:false, raasi:true, hcq:true, stop:false, up0:2, e0:14, tx:"sup"},
+    rows:[["Clinical","หญิง 45 ปี eGFR 14 ไตเล็ก"],["Biopsy","Global sclerosis ≥ 90% ไม่มี residual activity"],["Class","VI"],["Plan","เตรียม KRT และปลูกถ่ายไต รักษา extrarenal lupus"]],
+    take:["Class VI ไม่ต้องให้ immunosuppression เพื่อไต","รักษาตามอาการ extrarenal และเตรียม KRT","Recurrence หลังปลูกถ่ายไตพบไม่บ่อย"]},
+  flare:{name:"Flare หลังหยุดยา", p:{act:65, scl:5, cres:10, fcres:0, ifta:5, ii:10, mes:true, subepi:false, podo:false, nec:false, wire:true, neut:false, raasi:true, hcq:false, stop:true, up0:3, e0:75, tx:"mmf"},
+    rows:[["Clinical","หญิง 26 ปี response ดี แล้วหยุด MMF และ HCQ เองที่ 12 เดือน"],["Course","Proteinuria กลับขึ้นราวเดือน 15–18"],["Risk","ไม่ได้ HCQ, หยุด maintenance เร็ว, dsDNA ขึ้น"],["Plan","Re-induction, ตรวจ adherence, maintenance อย่างน้อย 3–5 ปี"]],
+    take:["Maintenance ควรต่ออย่างน้อย 3–5 ปีหลัง response","HCQ ลดโอกาส flare","ทุก flare เพิ่ม chronicity และเสี่ยง CKD"]}
+};
+
+/* ---------- controls ---------- */
+var box = document.getElementById("ctls"), C = {};
+function add(k, o){ o.onInput = update; C[k] = Sim.slider(o); box.appendChild(C[k].el); }
+add("act", {id:"sA", label:"Endocapillary (% glom)", min:0, max:100, step:5, value:60, unit:"%"});
+add("cres", {id:"sCr", label:"Cellular crescent", min:0, max:60, step:5, value:10, unit:"%"});
+add("scl", {id:"sS", label:"Global sclerosis", min:0, max:100, step:5, value:5, unit:"%"});
+add("ifta", {id:"sI", label:"IFTA", min:0, max:80, step:5, value:5, unit:"%"});
+add("up0", {id:"sU", label:"UPCR baseline", min:0.3, max:10, step:0.1, value:3, unit:"g/g"});
+add("e0", {id:"sE", label:"eGFR baseline", min:10, max:120, step:1, value:70, unit:""});
+var FL = {mes:false, subepi:false, podo:false, nec:false, wire:false, neut:false, raasi:true, hcq:true, stop:false}, TG = {};
+[["mes","Mesangial hypercellularity"],["subepi","Subepithelial deposits"],["podo","Diffuse effacement (podocytopathy)"],["nec","Fibrinoid necrosis"],["wire","Wire loop/hyaline"],["neut","Karyorrhexis"],["raasi","RAASi"],["hcq","Hydroxychloroquine"],["stop","หยุด maintenance เดือน 12"]].forEach(function(x){
+  TG[x[0]] = Sim.toggle(x[1], function(on){ FL[x[0]] = on; update(); }, FL[x[0]]); document.getElementById("tools").appendChild(TG[x[0]]); });
+var sTx = document.getElementById("sTx"); sTx.addEventListener("change", update);
+function P(){ var p = {}; Object.keys(C).forEach(function(k){ p[k] = C[k].get(); }); Object.keys(FL).forEach(function(k){ p[k] = FL[k]; }); p.fcres = FCRES; p.ii = II; return p; }
+var FCRES = 0, II = 10;
+
+/* ---------- views ---------- */
+var gl = document.getElementById("gl"), GL = [];
+for(var i = 0; i < 12; i++){ var d = Sim.h("div"); gl.appendChild(d); GL.push(Patho.glom(d, {seed:20 + i})); }
+var loop = Patho.loop("loop", {labels:false});
+var ch = Plot.chart(document.getElementById("chart"), {height:190, aria:"UPCR and eGFR after induction",
+  x:{min:0, max:24, step:6, label:"Month"}, y:{min:0, max:8, label:"UPCR g/g"}, y2:{min:0, max:120, label:"eGFR"},
+  series:[{id:"U", name:"UPCR", color:Plot.colors.red, data:[], width:2.4}, {id:"E", name:"eGFR", color:Plot.colors.teal, data:[], axis:"y2", width:2.2}],
+  hlines:[{y:0.5, label:"CR 0.5", color:"#1F7A72", dash:[3,4]}], legend:true});
+function drawGlom(p, k){
+  var nS = Math.round(p.scl / 100 * 12), nA = Math.round(p.act / 100 * 12), nC = Math.round(p.cres / 100 * 12), nF = Math.round(FCRES / 100 * 12);
+  for(var i = 0; i < 12; i++){
+    var o = {hyper:p.mes ? 0.6 : 0.1, endocap:0, neutrophils:0, mesExpand:p.mes ? 0.4 : 0, nodules:0, thick:p.subepi ? 0.5 : 0, wireloop:0, crescent:"none", crescentFrac:0, sclerosis:0, collapse:false, thrombi:0, thrombusType:"hyaline", necrosis:0, lobular:false, spikes:false, doubleContour:false, label:null};
+    if(i < nS){ o.sclerosis = 1; o.hyper = 0; o.label = "GS"; }
+    else if(i < nS + nA){ o.endocap = 0.85; o.neutrophils = p.neut ? 0.5 : 0; o.wireloop = p.wire ? 0.5 : 0; o.thrombi = p.wire ? 0.12 : 0; o.necrosis = p.nec && i % 3 === 0 ? 0.4 : 0;
+      var j = i - nS; if(j < nC) { o.crescent = "cellular"; o.crescentFrac = 0.4; } else if(j < nC + nF){ o.crescent = "fibrous"; o.crescentFrac = 0.4; } }
+    GL[i].update(o);
+  }
+}
+function update(){
+  var p = P(), k = klass(p), ix = indices(p), tx = sTx.value;
+  var cl = document.getElementById("cls"); cl.innerHTML = "";
+  ["I","II","III","IV","V","VI","POD"].forEach(function(c){ cl.appendChild(Sim.h("div", {class:k.c.split("+").concat(k.c.indexOf("+V") > 0 ? ["V"] : []).indexOf(c) >= 0 || k.c === c ? "on" : "", text:c === "POD" ? "Podo" : c})); });
+  drawGlom(p, k);
+  var dep = [];
+  if(k.c === "POD"){} else { dep.push({site:"mesangial", n:p.mes ? 7 : 3}); if(p.act > 0) dep.push({site:"subendo", n:4, size:p.wire ? 1.3 : 1}); if(p.subepi) dep.push({site:"subepi", n:9}); }
+  loop.update({deposits:dep, spikes:p.subepi, effacement:k.c === "POD" ? 1 : Math.min(0.9, p.up0 / 8), mesCells:p.mes ? 3 : 1, mesExpand:p.mes ? 0.5 : 0, title:k.t});
+  var R = simulate(p, k, tx, ix);
+  ch.setSeries("U", R.U); ch.setSeries("E", R.E);
+  ch.update({y:{min:0, max:Math.max(4, Math.ceil(p.up0 + 1)), label:"UPCR g/g"}, vlines:p.stop ? [{x:12, label:"Stop"}] : []});
+  Sim.ro("roAI", ix.ai, ix.ai >= 12 ? "flag" : ix.ai > 0 ? true : "ok");
+  Sim.ro("roCI", ix.ci, ix.ci >= 4 ? "flag" : "ok");
+  Sim.ro("roR6", R.u6.toFixed(1), R.u6 < 0.5 ? "ok" : R.u6 < p.up0 * 0.5 ? true : "flag");
+  var stableE = R.e12 >= p.e0 * 0.85;
+  var resp = R.u12 < 0.5 && stableE ? "CR" : (R.u12 <= p.up0 * 0.5 && R.u12 < 3) ? "PR" : "NR";
+  Sim.ro("roR12", resp, resp === "NR" ? "flag" : "ok");
+  Sim.ro("roE", Math.round(R.e24), R.e24 < p.e0 * 0.85 ? "flag" : "ok");
+  Sim.ro("roFl", R.flare ? "เดือน 15" : "ไม่มี", R.flare ? "flag" : "ok");
+  Sim.ro("roUp", p.up0.toFixed(1)); Sim.ro("roE0", p.e0);
+  var n;
+  if(k.c === "VI") n = "Class VI: ไม่ให้ immunosuppression เพื่อไต เตรียม KRT/ปลูกถ่ายไต รักษา extrarenal disease ด้วย HCQ และยาตามอวัยวะ";
+  else if(k.c === "POD") n = tx === "gc" || tx === "tac" ? "Podocytopathy: GC ตอบสนองดี ถ้า relapse หรือ steroid-dependent ใช้ MMF หรือ CNI ไม่ต้อง induction แบบ class IV" : "Podocytopathy ตอบสนองต่อ glucocorticoid ใช้ GC เป็นหลักก่อน";
+  else if(k.c === "I" || k.c === "II") n = p.up0 > 3 ? "Class I/II แต่ proteinuria nephrotic ให้คิด podocytopathy (ดู EM) ถ้า effacement กระจายให้ GC" : "Class I/II: RAASi + HCQ รักษา extrarenal lupus ไม่ต้อง induction เพื่อไต";
+  else if(k.c === "V") n = p.up0 >= 3 ? "Class V nephrotic: GC ร่วม MMF, CNI หรือ rituximab + RAASi + HCQ" + (tx === "sup" ? " ระดับนี้ supportive อย่างเดียวไม่พอ" : "") : "Class V sub-nephrotic: RAASi + HCQ ติดตาม proteinuria immunosuppression เมื่อไม่ลด";
+  else {
+    if(tx === "sup" || tx === "gc") n = "Class " + k.c + " ต้อง induction: GC ร่วม MMF หรือ low-dose IV CYC หรือ triple therapy (เพิ่ม belimumab, CNI หรือ anti-CD20) GC อย่างเดียวไม่พอ";
+    else if(resp === "NR") n = "ไม่ response ที่ 12 เดือน: ตรวจ adherence และระดับ MPA, ทบทวนว่า proteinuria มาจาก chronicity หรือไม่ (repeat biopsy) แล้วเปลี่ยนกลุ่มยา (MMF ↔ CYC, เพิ่ม anti-CD20 หรือ CNI)";
+    else if(R.flare) n = "Flare: re-induction ตาม regimen เดิมที่ได้ผล ต่อ maintenance 3–5 ปี และให้ HCQ";
+    else n = "Response ดี: ลด GC ให้ต่ำสุด (≤ 5 mg/วัน) ต่อ MMF เป็น maintenance อย่างน้อย 3–5 ปีหลัง complete response ร่วม HCQ และ RAASi";
+    if(ix.ci >= 4) n += " Chronicity สูง: eGFR ฟื้นได้จำกัด ชั่งพิษยากับประโยชน์";
+  }
+  document.getElementById("act").innerHTML = "<b>Next step:</b> " + n;
+}
+Sim.mount({code:"GN-09", title:"Lupus Nephritis: Class, Activity and Response",
+  lead:"ปรับสัดส่วน glomeruli ที่มี lesion, deposit, chronicity และ induction ดู ISN/RPS class, activity และ chronicity index แล้วดู UPCR และ eGFR ที่ตามมา 24 เดือน",
+  scenarios:S, order:["iv","iii","ivv","v","podo","chronic","vi","flare"], captureMs:1000,
+  onChange:function(k, s){ var q = s.p; ["act","cres","scl","ifta","up0","e0"].forEach(function(n){ C[n].set(q[n]); }); FCRES = q.fcres; II = q.ii;
+    Object.keys(FL).forEach(function(n){ FL[n] = !!q[n]; TG[n].setState(FL[n]); }); sTx.value = q.tx; update(); },
+  refs:["KDIGO 2024 Clinical Practice Guideline for the Management of Lupus Nephritis. Kidney Int 2024, 105(1S): S1-S69",
+        "Bajema IM, Wilhelmus S, Alpers CE, et al. Revision of the International Society of Nephrology/Renal Pathology Society classification for lupus nephritis. Kidney Int 2018, 93(4): 789-796",
+        "Furie R, Rovin BH, Houssiau F, et al. Two-year, randomized, controlled trial of belimumab in lupus nephritis (BLISS-LN). N Engl J Med 2020, 383(12): 1117-1128",
+        "Rovin BH, Teng YKO, Ginzler EM, et al. Efficacy and safety of voclosporin versus placebo for lupus nephritis (AURORA 1). Lancet 2021, 397(10289): 2070-2080",
+        "Furie RA, Rovin BH, Garg JP, et al. Efficacy and safety of obinutuzumab in active lupus nephritis (REGENCY). N Engl J Med 2025, 392(15): 1471-1483",
+        "Houssiau FA, Vasconcelos C, D'Cruz D, et al. Immunosuppressive therapy in lupus nephritis: the Euro-Lupus Nephritis Trial. Arthritis Rheum 2002, 46(8): 2121-2131",
+        "Appel GB, Contreras G, Dooley MA, et al. Mycophenolate mofetil versus cyclophosphamide for induction treatment of lupus nephritis (ALMS). J Am Soc Nephrol 2009, 20(5): 1103-1112",
+        "Hu W, Chen Y, Wang S, et al. Clinical-morphological features and outcomes of lupus podocytopathy. Clin J Am Soc Nephrol 2016, 11(4): 585-592"],
+  note:"Response curve เป็นโมเดลเชิงคุณภาพ ความเร็วของแต่ละ regimen จัดลำดับตามผลของ trial แต่ไม่ใช่ค่าที่วัดได้ activity และ chronicity index คำนวณแบบย่อจาก slider"
+});
+})();
+</script>
+</body>
+</html>

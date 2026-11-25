@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[HD-01] AV Access PE and Doppler</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+/* HD-01 page-specific styles only. Shared layout comes from core/core.css */
+svg#circ{min-width:560px}
+canvas#dop{width:100%;height:200px;display:block;background:#05060f;border-radius:8px}
+.dopctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.tog.sound[aria-pressed="true"]{background:var(--peach);border-color:#e7b56b}
+.key{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:6px}
+.sw{display:inline-block;width:14px;height:10px;border-radius:3px;vertical-align:middle;margin-right:4px}
+.readout{grid-template-columns:repeat(4,1fr)}
+@media (max-width:760px){.readout{grid-template-columns:repeat(2,1fr)}}
+/* presentation: circuit left, Doppler right */
+body.present .bench{grid-template-columns:1.35fr 1fr}
+body.present svg#circ{min-width:0}
+body.present canvas#dop{height:230px}
+body.present .find{grid-template-columns:1fr}
+body.present .find .card{display:none}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench one">
+    <div class="card">
+      <h2 id="circTitle">Access circuit</h2>
+      <div class="svgwrap">
+        <svg id="circ" viewBox="0 0 900 320" role="img" aria-label="Animated access circuit">
+          <defs>
+            <radialGradient id="cell" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#ff6b6b"/><stop offset="1" stop-color="#b4232a"/></radialGradient>
+          </defs>
+          <g id="armShape"></g>
+          <g id="vessels"></g>
+          <g id="cells"></g>
+          <g id="marks"></g>
+          <g id="labels" font-family="IBM Plex Sans Thai, sans-serif" font-size="13" fill="#5b5b6b">
+            <text x="40" y="150">Feeding artery</text>
+            <text x="198" y="146" text-anchor="middle">Anastomosis</text>
+            <text x="450" y="98" text-anchor="middle">Draining vein (cannulation zone)</text>
+            <text x="760" y="146" text-anchor="middle">Central vein</text>
+            <text x="862" y="214" text-anchor="middle">Heart</text>
+            <text x="92" y="306" text-anchor="middle">Hand</text>
+          </g>
+          <g id="hud" font-family="IBM Plex Sans Thai, sans-serif"></g>
+        </svg>
+      </div>
+      <div class="tools">
+        <button class="tog" type="button" id="tElev" aria-pressed="false">ยกแขน 90° (arm elevation)</button>
+        <button class="tog" type="button" id="tAug" aria-pressed="false">กด vein เหนือ anastomosis (augmentation)</button>
+        <button class="tog" type="button" id="tOcc" aria-pressed="false">กด access ทั้งเส้น (occlusion)</button>
+        <button class="tog sound no-present" type="button" id="tSnd" aria-pressed="false">ฟัง bruit</button>
+      </div>
+      <div class="key">
+        <span><i class="sw" style="background:#b4232a"></i>stenosis / clot</span>
+        <span><i class="sw" style="background:#FFDE59"></i>thrill (สั่นตลอด = continuous, สั่นเป็นจังหวะ = systolic only)</span>
+        <span><i class="sw" style="background:#7fb1d6"></i>segment ตึง pulsatile</span>
+      </div>
+      <p class="hint secondary" id="maneuverNote">กดปุ่มด้านบนเพื่อทำ maneuver ผลจะแสดงทั้งในภาพและตารางด้านล่าง</p>
+    </div>
+
+    <div class="card">
+      <h2>Spectral Doppler</h2>
+      <div class="dopctl">
+        <label for="site">Sample volume ที่</label>
+        <select id="site"></select>
+      </div>
+      <canvas id="dop" width="1100" height="240" aria-label="Spectral Doppler waveform"></canvas>
+      <div class="readout">
+        <div class="ro" id="roPSV"><b>-</b><span>PSV (cm/s)</span></div>
+        <div class="ro" id="roEDV"><b>-</b><span>EDV (cm/s)</span></div>
+        <div class="ro" id="roQa"><b>-</b><span>Qa brachial (mL/min)</span></div>
+        <div class="ro" id="roPSR"><b>-</b><span>PSV ratio</span></div>
+      </div>
+      <p class="hint secondary" id="dopNote"></p>
+    </div>
+  </section>
+</main>
+
+<script src="../core/shell.js"></script>
+<script>
+(function(){
+"use strict";
+var reduce = Sim.reduce;
+var Y = 200;
+var X = {a0:30, anast:200, juxEnd:290, branch:330, lesOut:600, v3:700, c1:820, heart:860};
+
+var S = {
+ normal:{name:"Normal AVF", qa:900,
+   seg:{art:12, jux:18, v1:20, v2:20, c:18}, amp:{art:.10, jux:.05, v1:.04, v2:.04, c:.03},
+   collapse:{jux:.45, v1:.45, v2:.45}, lesion:null, thrill:[{x:212, mode:"cont"}],
+   bruit:{f:140, sys:false},
+   speed:{art:1, jux:1, v1:.8, v2:.8, c:.8},
+   sites:{brach:{psv:120,edv:55,sh:"low"}, vein:{psv:70,edv:40,sh:"vein"}, radial:{psv:45,edv:12,sh:"low"}},
+   aug:"strong",
+   rows:[["Inspection","vein โตสม่ำเสมอ ผิวปกติ มือสีปกติ"],["Pulse","นุ่ม กดยุบง่าย"],["Thrill","continuous คลำชัดที่ anastomosis แล้วจางลงตามทาง"],["Bruit","continuous low-pitched ได้ยินทั้ง systole และ diastole"],["Arm elevation","vein ยุบลง (อย่างน้อยบางส่วน)"],["Augmentation","กด vein แล้ว pulse ใต้นิ้วแรงขึ้นชัด = inflow ดี"],["Doppler","brachial artery low-resistance monophasic diastolic flow สูง Qa 900"]],
+   take:["นี่คือ baseline ให้จำความรู้สึกนุ่ม continuous thrill และ machinery bruit","AVF ปกติ pulse ไม่ควรแรงแข็ง","waveform ของ feeding artery เปลี่ยนจาก triphasic เป็น low-resistance หลังทำ access"],
+   quiz:[{q:"RC-AVF อายุ 6 สัปดาห์ PE: thrill continuous, ยกแขนแล้ว vein ยุบ, augmentation ดี US: Qa 750 mL/min, diameter 6.5 mm, depth 4 mm ข้อใดเหมาะที่สุด",
+     opts:["เริ่ม cannulation ได้","ส่ง fistulogram ก่อนใช้","รออีก 3 เดือนแล้วตรวจซ้ำ","นัด US surveillance ทุกเดือนและทำ preemptive PTA ถ้า Qa ลด","ใส่ tunneled CVC ใช้ไปก่อน"],
+     ans:0, why:"PE ปกติทุกข้อและผ่าน Rule of 6s (Qa ≥ 600, diameter ≥ 6 mm, depth ≤ 6 mm) จึงเริ่มแทงเข็มได้ การทำ PTA จาก surveillance อย่างเดียวโดยไม่มี clinical indicator ไม่แนะนำตาม KDOQI 2019"}]},
+
+ inflow:{name:"Inflow stenosis (artery / anastomosis)", qa:330,
+   seg:{art:12, jux:9, v1:9, v2:9, c:10}, amp:{art:.14, jux:.01, v1:.01, v2:.01, c:.01},
+   collapse:{jux:.25, v1:.25, v2:.25}, lesion:{x:182, w:22, where:"art"}, thrill:[{x:206, mode:"sys", weak:true}],
+   bruit:{f:420, sys:true},
+   speed:{art:.6, jux:.45, v1:.4, v2:.4, c:.4},
+   sites:{brach:{psv:55,edv:22,sh:"tardus"}, lesion:{psv:380,edv:150,sh:"jet"}, pre:{psv:95,edv:30,sh:"low"}, vein:{psv:28,edv:16,sh:"vein"}, radial:{psv:30,edv:8,sh:"low"}},
+   aug:"weak",
+   rows:[["Inspection","vein เล็ก แฟบ"],["Pulse","weak, flat"],["Thrill","อ่อน เป็น systolic ที่ตำแหน่ง lesion"],["Bruit","high-pitched systolic ที่ lesion ส่วน vein เบา"],["Arm elevation","ยุบมากเกินไป (แฟบง่าย)"],["Augmentation","pulse แทบไม่เพิ่ม = inflow stenosis"],["HD clue","Qb ไม่ได้ arterial pressure ติดลบมาก cannulate ยาก vessel ยุบตอนดูด"],["Doppler","brachial tardus-parvus Qa 330 ที่ lesion PSV 380 เทียบ upstream 95 = PSR 4.0"]],
+   take:["Pulse อ่อน + augmentation น้อย = inflow","Qa < 500 mL/min ใน AVF ร่วมกับ PSR > 2 ถึง 3 = significant stenosis","ส่ง fistulogram / angiogram ดู feeding artery และ anastomosis"],
+   quiz:[{q:"ผู้ป่วย BC-AVF ฟอกได้ Qb แค่ 200 mL/min arterial pressure −260 mmHg PE: pulse อ่อน augmentation แทบไม่เพิ่ม vein แฟบ ข้อใดเหมาะที่สุด",
+     opts:["เพิ่มขนาดเข็ม arterial เป็น 14G","กลับสาย arterial และ venous","Fistulogram รวม feeding artery และ anastomosis แล้วทำ angioplasty","PTA ของ cephalic arch","ให้ฟอกต่อด้วย Qb เดิมแล้วเพิ่มเวลา"],
+     ans:2, why:"Pulse อ่อน + augmentation น้อย + arterial pressure ติดลบมาก เป็น inflow stenosis ต้องถ่ายภาพให้เห็น arterial inflow และ anastomosis การกลับสายทำให้ recirculation เพิ่ม cephalic arch เป็น outflow"}]},
+
+ juxta:{name:"Juxta-anastomotic stenosis (maturation failure)", qa:290,
+   seg:{art:13, jux:13, v1:8, v2:8, c:10}, amp:{art:.14, jux:.10, v1:.01, v2:.01, c:.01},
+   collapse:{jux:1, v1:.25, v2:.25}, lesion:{x:246, w:22, where:"jux"}, thrill:[{x:256, mode:"sys"}],
+   bruit:{f:460, sys:true},
+   speed:{art:.6, jux:.6, v1:.4, v2:.4, c:.4},
+   sites:{brach:{psv:60,edv:22,sh:"tardus"}, pre:{psv:110,edv:35,sh:"low"}, lesion:{psv:420,edv:160,sh:"jet"}, vein:{psv:25,edv:14,sh:"vein"}, radial:{psv:30,edv:8,sh:"low"}},
+   aug:"weak",
+   rows:[["Context","RC-AVF อายุ 6 ถึง 8 สัปดาห์ ยังใช้ไม่ได้"],["Pulse","แรงที่ anastomosis แต่หายไปภายใน 2 ถึง 5 cm"],["Thrill","systolic ที่ juxta-anastomotic segment แล้วหาย"],["Bruit","high-pitched systolic ตรง lesion"],["Arm elevation","vein ส่วนบนแฟบ"],["Augmentation","น้อย (lesion อยู่ระหว่าง anastomosis กับนิ้วที่กด)"],["Doppler","PSV 420 vs 110 upstream = PSR 3.8 Qa 290"]],
+   take:["สาเหตุ maturation failure ที่พบบ่อยที่สุด","Rule of 6s ไม่ผ่าน: Qa < 600, diameter < 6 mm","รักษา: balloon-assisted maturation หรือ surgical re-anastomosis"],
+   quiz:[{q:"RC-AVF อายุ 8 สัปดาห์ ยังแทงเข็มไม่ได้ pulse แรงที่ anastomosis แล้วหายใน 3 cm US: stenosis 2 cm จาก anastomosis PSR 3.8 Qa 290 mL/min ข้อใดเหมาะที่สุด",
+     opts:["รออีก 3 เดือนให้ mature เอง","Balloon angioplasty ของ juxta-anastomotic segment","Ligate AVF แล้วทำ AVG","ฝึกบริหารมือ (hand exercise) อย่างเดียว","Coil embolization ของ side branch"],
+     ans:1, why:"Juxta-anastomotic stenosis เป็นสาเหตุ maturation failure ที่พบบ่อยที่สุด แก้ด้วย balloon-assisted maturation (หรือ surgical re-anastomosis) ไม่ควรรอนานจนต้องใช้ CVC"}]},
+
+ outflow:{name:"Outflow stenosis (draining vein / cephalic arch)", qa:430,
+   seg:{art:12, jux:22, v1:26, v2:26, c:9}, amp:{art:.10, jux:.16, v1:.18, v2:.18, c:.02},
+   collapse:{jux:1, v1:1, v2:1}, lesion:{x:X.lesOut, w:24, where:"v2"}, thrill:[{x:212, mode:"sys"},{x:612, mode:"sys"}], post:true,
+   bruit:{f:480, sys:true},
+   speed:{art:.7, jux:.45, v1:.4, v2:.4, c:.9},
+   sites:{brach:{psv:115,edv:14,sh:"high"}, pre:{psv:115,edv:20,sh:"vein"}, lesion:{psv:460,edv:190,sh:"jet"}, vein:{psv:40,edv:12,sh:"vein"}, radial:{psv:45,edv:10,sh:"low"}},
+   aug:"na",
+   rows:[["Inspection","vein upstream โต ตึง อาจมี aneurysm โต"],["Pulse","hyperpulsatile (water-hammer) upstream ต่อ lesion"],["Thrill","systolic only ที่ lesion"],["Bruit","high-pitched systolic discontinuous"],["Arm elevation","ไม่ยุบ ส่วนที่ยังพองคือ upstream ของ lesion"],["Augmentation","ไม่ต้องทำ pulse แรงอยู่แล้ว"],["HD clue","venous pressure สูง เลือดหยุดยากหลังถอดเข็ม recirculation Kt/V ตก"],["Doppler","brachial diastolic flow ลดลง (resistance สูงขึ้น) Qa 430 ที่ lesion PSV 460 vs 115 = PSR 4.0"]],
+   take:["Hyperpulsatile + ยกแขนไม่ยุบ = outflow","ใน brachiocephalic AVF นึกถึง cephalic arch","มี clinical indicator จึง PTA (ไม่ทำ preemptive จาก surveillance อย่างเดียว)"],
+   quiz:[{q:"BC-AVF 2 ปี ช่วงหลังเลือดหยุดยากหลังถอดเข็ม venous pressure สูงขึ้น spKt/V ลดจาก 1.4 เป็น 1.1 PE: hyperpulsatile ยกแขนแล้วไม่ยุบ ข้อใดเหมาะที่สุด",
+     opts:["เพิ่ม heparin ระหว่างฟอก","Fistulogram แล้วทำ angioplasty ที่ outflow (นึกถึง cephalic arch)","Ligate AVF แล้วใส่ CVC","เพิ่มเวลาฟอกเป็น 5 ชั่วโมงอย่างเดียว","ทำ banding ลด flow"],
+     ans:1, why:"มีทั้ง clinical indicator (เลือดหยุดยาก, venous pressure สูง, Kt/V ตก) และ PE เข้ากับ outflow stenosis จึงมีข้อบ่งชี้ทำ PTA ตำแหน่งที่พบบ่อยใน BC-AVF คือ cephalic arch ถ้า restenosis เร็วพิจารณา stent graft"}]},
+
+ central:{name:"Central vein stenosis", qa:720,
+   seg:{art:12, jux:22, v1:26, v2:26, c:26}, amp:{art:.10, jux:.12, v1:.14, v2:.14, c:.12},
+   collapse:{jux:1, v1:1, v2:1}, lesion:{x:788, w:22, where:"c"}, thrill:[{x:212, mode:"cont"}], swell:true,
+   bruit:{f:200, sys:false},
+   speed:{art:.9, jux:.6, v1:.55, v2:.55, c:.55},
+   sites:{brach:{psv:110,edv:32,sh:"low"}, pre:{psv:60,edv:25,sh:"vein"}, lesion:{psv:300,edv:140,sh:"jet"}, vein:{psv:55,edv:25,sh:"vein"}, radial:{psv:45,edv:10,sh:"low"}},
+   aug:"na",
+   rows:[["Inspection","แขนทั้งแขนบวม หน้า/เต้านมข้างเดียวกันบวม collateral ที่อกและไหล่"],["History","เคยใส่ CVC subclavian, pacemaker/ICD ข้างเดียวกัน"],["Pulse","pulsatile ทั้งเส้น"],["Thrill","ที่ access อาจปกติ"],["Arm elevation","ไม่ยุบทั้งเส้น"],["HD clue","venous pressure สูง เลือดหยุดยาก"],["Doppler","Qa อาจยังพอ (720) เพราะ collateral ช่วยระบาย ต้องดู venogram"]],
+   take:["แขนบวม + collateral ที่อก = central","รักษาเฉพาะเมื่อมีอาการ PTA ± stent graft","ป้องกัน: หลีกเลี่ยง subclavian catheter และ PICC ใน CKD"],
+   quiz:[{q:"ผู้ป่วยเคยใส่ subclavian CVC ขวา 2 ครั้ง ตอนนี้ใช้ BC-AVF ขวา แขนขวาบวมทั้งแขน มี collateral ที่หน้าอก Qa 720 mL/min ข้อใดเหมาะที่สุด",
+     opts:["Ligate AVF ทันที","Venography แล้วทำ angioplasty (± stent graft) ที่ central vein","ให้ warfarin อย่างเดียว","ใส่ compression sleeve แล้วติดตาม","ทำ DRIL"],
+     ans:1, why:"Central vein stenosis ที่มีอาการ รักษาด้วย endovascular PTA ± stent graft เพื่อเก็บ access ไว้ ligation เป็นทางเลือกสุดท้ายเมื่อรักษาไม่ได้ ถ้าไม่มีอาการไม่ต้องทำ PTA"}]},
+
+ avg:{name:"AVG venous anastomosis stenosis", qa:450, graft:true,
+   seg:{art:12, jux:16, v1:16, v2:16, c:10}, amp:{art:.10, jux:.10, v1:.10, v2:.10, c:.02},
+   collapse:{jux:1, v1:1, v2:1}, lesion:{x:X.lesOut, w:24, where:"v2"}, thrill:[{x:212, mode:"cont"},{x:612, mode:"sys"}], post:true,
+   bruit:{f:470, sys:true},
+   speed:{art:.7, jux:.5, v1:.5, v2:.5, c:.9},
+   sites:{brach:{psv:120,edv:18,sh:"high"}, pre:{psv:150,edv:30,sh:"low"}, lesion:{psv:500,edv:200,sh:"jet"}, vein:{psv:40,edv:12,sh:"vein"}, radial:{psv:45,edv:10,sh:"low"}},
+   aug:"na",
+   rows:[["ลักษณะ graft","PTFE แข็ง ไม่ยุบเมื่อยกแขนอยู่แล้ว arm elevation จึงใช้ไม่ได้"],["Pulse","graft ตึง pulse แรงขึ้นกว่าเดิม"],["Thrill","ปกติมีที่ arterial anastomosis ถ้ามี systolic thrill ที่ venous end = stenosis"],["Bruit","high-pitched systolic ที่ venous anastomosis"],["HD clue","venous pressure สูง เลือดหยุดยาก thrombosis ซ้ำ"],["Doppler","PSV 500 vs 150 = PSR 3.3 (AVG PSR ≥ 3.0 ประมาณ ≥ 75% stenosis) Qa 450 < 600"]],
+   take:["ตำแหน่งที่พบบ่อยที่สุดของ AVG คือ venous anastomosis (neointimal hyperplasia)","ที่ venous anastomosis ของ AVG stent graft ให้ patency ดีกว่า PTA อย่างเดียว (FLAIR)","Dipyridamole + aspirin เพิ่ม primary unassisted patency ของ AVG ใหม่ได้เล็กน้อย (DAC: 28% vs 23% ที่ 1 ปี) แต่ไม่เพิ่ม cumulative graft survival"],
+   quiz:[{q:"Forearm loop AVG ระยะหลัง venous pressure สูง เลือดหยุดยาก มี systolic thrill ที่ venous end angiogram: stenosis 70% ที่ venous anastomosis ทางเลือก endovascular ใดให้ treatment-area patency ที่ 6 เดือนดีที่สุด",
+     opts:["Plain balloon angioplasty","Stent graft","Bare-metal stent","Thrombolysis","Cutting balloon อย่างเดียวโดยไม่ต้องติดตาม"],
+     ans:1, why:"FLAIR (NEJM 2010, n 190): stent graft ให้ 6-month treatment-area patency 51% เทียบ PTA 23% ที่ venous anastomosis ของ AVG"}]},
+
+ accessory:{name:"Accessory (side-branch) vein", qa:560, accessory:true,
+   seg:{art:12, jux:18, v1:16, v2:9, c:10}, amp:{art:.10, jux:.05, v1:.03, v2:.01, c:.01},
+   collapse:{jux:.45, v1:.4, v2:.25}, lesion:null, thrill:[{x:212, mode:"cont"}],
+   bruit:{f:150, sys:false},
+   speed:{art:.9, jux:.8, v1:.7, v2:.4, c:.4},
+   sites:{brach:{psv:105,edv:45,sh:"low"}, vein:{psv:30,edv:16,sh:"vein"}, branch:{psv:60,edv:30,sh:"vein"}, radial:{psv:45,edv:12,sh:"low"}},
+   aug:"strong",
+   rows:[["Inspection","เห็นเส้นแขนงหลายเส้น main vein เล็กเกินจะแทงเข็ม"],["Thrill","continuous ที่ anastomosis"],["Sequential occlusion","กด main vein เหนือแขนงแล้ว thrill ที่ anastomosis ไม่หาย = มี accessory vein ระบายออก"],["Augmentation","ดี (inflow ปกติ)"],["Doppler","flow ส่วนหนึ่งเลี้ยวเข้า branch main vein ปลายทาง flow ต่ำ"]],
+   take:["ลองกด access ทั้งเส้น ในภาพ thrill ยังอยู่เพราะ branch ระบายเลือด","รักษา: ligation หรือ coil embolization ของ branch","เป็นสาเหตุ maturation failure อันดับรองจาก juxta-anastomotic stenosis"],
+   quiz:[{q:"RC-AVF อายุ 10 สัปดาห์ main vein เล็ก 4 mm augmentation ดี กด main vein แล้ว thrill ที่ anastomosis ยังอยู่ US: ไม่มี stenosis มี side branch ขนาดใหญ่ ข้อใดเหมาะที่สุด",
+     opts:["Ligation หรือ coil embolization ของ accessory vein","Balloon angioplasty ของ anastomosis","ทำ AVG ใหม่","DRIL","รอต่ออีก 6 เดือน"],
+     ans:0, why:"Augmentation ดีบอกว่า inflow ปกติ และ thrill ไม่หายเมื่อกด main vein บอกว่ามีทางระบายอื่น การปิด accessory vein ทำให้ flow ไปที่ main vein และ mature ได้"}]},
+
+ steal:{name:"Steal syndrome (HAIDI)", qa:1300, steal:true,
+   seg:{art:15, jux:24, v1:24, v2:24, c:22}, amp:{art:.08, jux:.05, v1:.04, v2:.04, c:.03},
+   collapse:{jux:.45, v1:.45, v2:.45}, lesion:null, thrill:[{x:212, mode:"cont"}],
+   bruit:{f:130, sys:false},
+   speed:{art:1.4, jux:1.3, v1:1.1, v2:1.1, c:1.1},
+   sites:{brach:{psv:190,edv:90,sh:"low"}, vein:{psv:90,edv:55,sh:"vein"}, radial:{psv:-45,edv:-15,sh:"retro"}},
+   aug:"strong",
+   rows:[["Inspection","มือซีด เย็น อาจมี ulcer ปลายนิ้ว (stage IV)"],["Pulse distal","radial pulse อ่อน/หาย"],["Occlusion test","กด access แล้ว radial pulse กลับมา SpO2 นิ้วดีขึ้น = ยืนยัน steal"],["Doppler","distal radial artery flow ย้อนทิศ (retrograde) เข้าหา access กด access แล้วกลับเป็น antegrade"],["Risk","brachial-based access, DM, อายุมาก, PAD"]],
+   take:["Stage I ติดตามอาการ stage II เริ่มแบบ conservative ทำ intervention เมื่ออาการรบกวนมาก stage III ถึง IV ต้อง intervention","normal/low flow: DRIL หรือ PAI | high flow: banding, MILLER หรือ RUDI","มืออุ่น pulse คลำได้ + neuro deficit ทันทีหลังผ่าตัด = IMN ไม่ใช่ steal ต้อง ligate ทันที"],
+   quiz:[{q:"ชาย DM อายุ 68 ปี BC-AVF ขวา 3 เดือน ปวดมือขณะพัก มือซีดเย็น กด access แล้ว radial pulse กลับมา Qa 750 mL/min ไม่มี inflow stenosis ข้อใดเหมาะที่สุด",
+     opts:["ให้ยาแก้ปวดและติดตาม","Banding ลด flow","DRIL (distal revascularization interval ligation)","Ligate AVF เป็นทางเลือกแรก","เพิ่ม aspirin อย่างเดียว"],
+     ans:2, why:"Steal stage III (ปวดขณะพัก) ต้อง intervention Qa ไม่สูงจึงไม่เลือก banding (banding ใช้กับ high flow) DRIL เก็บ access ไว้และเพิ่ม perfusion มือ ligation สงวนไว้เมื่อทางอื่นใช้ไม่ได้"}]},
+
+ highflow:{name:"High-flow access", qa:2400, highflow:true,
+   seg:{art:18, jux:30, v1:32, v2:32, c:28}, amp:{art:.08, jux:.05, v1:.04, v2:.04, c:.03},
+   collapse:{jux:.6, v1:.6, v2:.6}, lesion:null, thrill:[{x:212, mode:"cont"},{x:420, mode:"cont"}],
+   bruit:{f:120, sys:false},
+   speed:{art:1.8, jux:1.6, v1:1.4, v2:1.4, c:1.4},
+   sites:{brach:{psv:260,edv:130,sh:"low"}, vein:{psv:120,edv:80,sh:"vein"}, radial:{psv:40,edv:8,sh:"low"}},
+   aug:"strong",
+   rows:[["Inspection","vein ใหญ่มาก aneurysmal"],["Symptom","เหนื่อย บวม orthopnea (high-output HF)"],["Nicoladoni-Branham","กด access แล้ว HR ลดลง"],["Doppler","Qa 2,400 mL/min (> 1,500 ถึง 2,000) หรือ Qa/CO > 0.3"]],
+   take:["ลองกด access ทั้งเส้น ดู HR บนภาพลดลง","รักษา: flow reduction (banding, MILLER) หรือ ligation หลัง transplant","ตรวจ echo ประเมิน cardiac output และ pulmonary pressure"],
+   quiz:[{q:"ผู้ป่วย BC-AVF 5 ปี เหนื่อยมากขึ้น orthopnea Qa 2,400 mL/min echo: high cardiac output ไม่มี valvular disease กด access แล้ว HR ลดจาก 96 เป็น 78 ข้อใดเหมาะที่สุด",
+     opts:["เพิ่ม UF เพื่อลด dry weight อย่างเดียว","Flow reduction ด้วย banding หรือ MILLER","DRIL","PTA ของ cephalic arch","ให้ beta-blocker แล้วติดตาม"],
+     ans:1, why:"High-flow access (Qa > 1,500 ถึง 2,000 หรือ Qa/CO > 0.3) ร่วมกับ high-output HF และ Nicoladoni-Branham sign บวก รักษาที่ต้นเหตุด้วย flow reduction ส่วน DRIL ใช้กับ steal ที่ flow ไม่สูง"}]},
+
+ thrombosis:{name:"Thrombosed access", qa:0, clot:true,
+   seg:{art:11, jux:14, v1:14, v2:14, c:10}, amp:{art:.12, jux:.0, v1:0, v2:0, c:0},
+   collapse:{jux:1, v1:1, v2:1}, lesion:{x:X.lesOut, w:24, where:"v2"}, thrill:[],
+   bruit:null,
+   speed:{art:0, jux:0, v1:0, v2:0, c:0},
+   sites:{brach:{psv:75,edv:-15,sh:"tri"}, vein:{psv:0,edv:0,sh:"none"}, radial:{psv:55,edv:-10,sh:"tri"}},
+   aug:"none",
+   rows:[["Pulse","ไม่มี หรือ pulse กระแทกเฉพาะตรงต้น (water-hammer) เหนือ clot"],["Thrill","ไม่มี"],["Bruit","ไม่มี"],["HD clue","ดูดได้ลิ่มเลือด"],["Doppler","brachial กลับเป็น high-resistance triphasic มี reversed flow ช่วง early diastole ไม่มี flow ใน access"]],
+   take:["แก้ภายใน 24 ถึง 48 ชม. เพื่อเลี่ยง CVC","pharmacomechanical หรือ surgical thrombectomy","ต้องหาและแก้ underlying stenosis เสมอ (ส่วนใหญ่ outflow / venous anastomosis)"],
+   quiz:[{q:"ผู้ป่วย AVG มาฟอกตามนัด คลำไม่มี thrill ฟังไม่มี bruit K 5.6 mmol/L ไม่มีภาวะฉุกเฉินอื่น ข้อใดเหมาะที่สุด",
+     opts:["ใส่ tunneled CVC ถาวรแล้วนัดทำ AVF ใหม่","Thrombectomy (endovascular หรือ surgical) ภายใน 24 ถึง 48 ชม. พร้อมรักษา underlying stenosis","ให้ systemic alteplase ทางหลอดเลือดดำ","ให้ heparin infusion แล้วรอดู","Ligate graft"],
+     ans:1, why:"Thrombosed access ควรเปิดให้เร็วภายใน 24 ถึง 48 ชม. เพื่อเลี่ยง CVC และต้องแก้ stenosis ที่เป็นสาเหตุ (ส่วนใหญ่ที่ venous anastomosis) ในครั้งเดียวกัน"}]}
+};
+var ORDER = ["normal","inflow","juxta","outflow","central","avg","accessory","steal","highflow","thrombosis"];
+var SITE_LABEL = {brach:"Brachial artery (วัด Qa)", pre:"Upstream ของ lesion", lesion:"ตรง lesion (jet)", vein:"Draining vein ปลายทาง", branch:"Accessory branch", radial:"Distal radial artery (ไปมือ)"};
+
+var cur = "normal", st = {elev:false, aug:false, occ:false, snd:false};
+var el = Sim.svg;
+var gV = document.getElementById("vessels"), gC = document.getElementById("cells"), gM = document.getElementById("marks"), gArm = document.getElementById("armShape"), gH = document.getElementById("hud");
+
+function tog(id,key){var b=document.getElementById(id);b.addEventListener("click",function(){st[key]=!st[key];b.setAttribute("aria-pressed",st[key]?"true":"false");if(key==="snd"){st.snd?startSound():stopSound();}if(key==="occ"&&st.snd)startSound();updateNote();updateReadout();});}
+tog("tElev","elev");tog("tAug","aug");tog("tOcc","occ");tog("tSnd","snd");
+
+var segs = {};
+function buildVessels(){
+  gV.innerHTML="";gArm.innerHTML="";gM.innerHTML="";
+  var s=S[cur];
+  var sw = s.swell?1:0;
+  el("path",{d:"M20 "+(Y-60-sw*18)+" C300 "+(Y-90-sw*24)+", 600 "+(Y-90-sw*24)+", 830 "+(Y-70-sw*10)+" L830 "+(Y+50+sw*10)+" C600 "+(Y+60+sw*24)+", 300 "+(Y+60+sw*24)+", 150 "+(Y+50+sw*18)+" L150 "+(Y+50+sw*18),fill:s.swell?"#FFD6D6":"#fbf3ee",stroke:"#e6d6cc","stroke-width":1.5,opacity:.9},gArm);
+  el("ellipse",{cx:92,cy:Y+78,rx:52,ry:24,fill:s.steal?"#e9ecf2":"#fbf3ee",stroke:"#e6d6cc","stroke-width":1.5},gArm);
+  if(s.swell){
+    for(var i=0;i<4;i++){el("path",{d:"M"+(800+i*8)+" "+(Y-110)+" q20 -20 40 0 q10 15 30 -5",fill:"none",stroke:"#5a6fb0","stroke-width":2,opacity:.7},gArm);}
+    el("text",{x:812,y:Y-122,"font-size":12,fill:"#B4232A","font-family":"IBM Plex Sans Thai, sans-serif",text:"collateral"},gArm);
+  }
+  var veinCol = s.graft?"#9aa0b5":"#5a6fb0";
+  segs.art = el("line",{x1:X.a0,y1:Y,x2:X.anast,y2:Y,stroke:"#c9343a","stroke-linecap":"round"},gV);
+  segs.dist = el("path",{d:"M"+X.anast+" "+Y+" C170 "+(Y+40)+", 140 "+(Y+60)+", 110 "+(Y+72),fill:"none",stroke:"#c9343a","stroke-width":6,"stroke-linecap":"round"},gV);
+  segs.jux = el("line",{x1:X.anast,y1:Y,x2:X.juxEnd,y2:Y,stroke:veinCol,"stroke-linecap":"round"},gV);
+  segs.v1 = el("line",{x1:X.juxEnd,y1:Y,x2:X.lesOut-12,y2:Y,stroke:veinCol,"stroke-linecap":"round"},gV);
+  segs.v2 = el("line",{x1:X.lesOut+12,y1:Y,x2:X.v3,y2:Y,stroke:veinCol,"stroke-linecap":"round"},gV);
+  segs.bridge = el("line",{x1:X.lesOut-14,y1:Y,x2:X.lesOut+14,y2:Y,stroke:veinCol,"stroke-linecap":"butt"},gV);
+  segs.c = el("line",{x1:X.v3,y1:Y,x2:X.c1,y2:Y,stroke:"#5a6fb0","stroke-linecap":"round"},gV);
+  if(s.graft){ segs.jux.setAttribute("stroke-dasharray","2 6"); }
+  segs.acc = null;
+  if(s.accessory){ segs.acc = el("path",{d:"M"+X.branch+" "+Y+" C350 "+(Y-40)+", 380 "+(Y-70)+", 430 "+(Y-80),fill:"none",stroke:veinCol,"stroke-width":12,"stroke-linecap":"round"},gV); }
+  el("circle",{cx:X.heart,cy:Y,r:20,fill:"#FFD6D6",stroke:"#B4232A","stroke-width":1.5},gV);
+  segs.les = null;
+  if(s.lesion){
+    var lx=s.lesion.x;
+    if(s.clot){ segs.les = el("rect",{x:X.anast+4,y:Y-9,width:X.v3-X.anast-8,height:18,rx:9,fill:"#7a1a1f",opacity:.85},gM); }
+    else { segs.les = el("rect",{x:lx-s.lesion.w/2,y:Y-4,width:s.lesion.w,height:8,rx:4,fill:"#B4232A"},gM);
+      el("text",{x:lx,y:Y+40,"text-anchor":"middle","font-size":12.5,fill:"#B4232A","font-family":"IBM Plex Sans Thai, sans-serif","font-weight":600,text:"stenosis"},gM); }
+  }
+  segs.thr = (s.thrill||[]).map(function(t){var g=el("g",{},gM);for(var i=0;i<3;i++){el("path",{d:"M"+(t.x-10+i*10)+" "+(Y-30)+" l4 -8 l4 8",fill:"none",stroke:t.weak?"#e7c64a":"#d9a400","stroke-width":2.2},g);}return {g:g,t:t};});
+  segs.finger = el("g",{opacity:0},gM);
+  el("ellipse",{cx:330,cy:Y-26,rx:12,ry:20,fill:"#f2c9a8",stroke:"#b98a66"},segs.finger);
+  el("text",{x:330,y:Y-54,"text-anchor":"middle","font-size":12,fill:"#0E0857","font-family":"IBM Plex Sans Thai, sans-serif","font-weight":600,text:"Finger"},segs.finger);
+  segs.occl = el("g",{opacity:0},gM);
+  el("rect",{x:226,y:Y-30,width:30,height:60,rx:8,fill:"#0E0857",opacity:.25},segs.occl);
+  el("text",{x:241,y:Y+46,"text-anchor":"middle","font-size":12,fill:"#0E0857","font-family":"IBM Plex Sans Thai, sans-serif","font-weight":600,text:"Occlude"},segs.occl);
+  buildCells();
+}
+
+var cells=[];
+function buildCells(){
+  gC.innerHTML="";cells=[];
+  var n= S[cur].clot? 0 : 46;
+  for(var i=0;i<n;i++){var c=el("circle",{r:2.6,fill:"url(#cell)"},gC);cells.push({e:c,p:Math.random(),lane:(Math.random()-.5),br:Math.random()<.4});}
+  for(var j=0;j<8;j++){var d=el("circle",{r:2.2,fill:"url(#cell)"},gC);cells.push({e:d,p:Math.random(),dist:true,lane:0});}
+  if(S[cur].clot){for(var k=0;k<10;k++){var a=el("circle",{r:2.6,fill:"url(#cell)"},gC);cells.push({e:a,p:Math.random()*0.23,lane:(Math.random()-.5),stuck:true});}}
+}
+function segOf(x){if(x<X.anast)return"art";if(x<X.juxEnd)return"jux";if(x<X.lesOut)return"v1";if(x<X.v3)return"v2";return"c";}
+
+var HR=72, t0=performance.now();
+function phase(t){var per=60/HR;return ((t/1000)%per)/per;}
+function pulse(ph){return ph<.32? Math.sin(Math.PI*ph/.32):0;}
+
+function width(key,ph){
+  var s=S[cur];var base=s.seg[key]||10;var a=(s.amp[key]||0);
+  var col=(s.collapse[key]!==undefined)?s.collapse[key]:1;
+  var w=base;
+  if(st.elev && !s.graft && key!=="art"){ w = base*col; }
+  if(st.occ && key!=="art" && !s.accessory){ w = base*1.05; a = (s.clot?0:0.2); }
+  if(st.aug && (key==="jux")){ var g={strong:.35,weak:.05,na:.18,none:0}[s.aug]; a = g; w = base*(s.aug==="weak"?1:1.15); }
+  if(st.aug && (key==="v1"||key==="v2"||key==="c")){ w=base*0.6; a=0.01; }
+  return w*(1+a*pulse(ph));
+}
+
+function frame(now){
+  var s=S[cur];var ph=phase(now-t0);var p=pulse(ph);
+  ["art","jux","v1","v2","c"].forEach(function(k){segs[k].setAttribute("stroke-width",Math.max(2,width(k,ph)).toFixed(1));});
+  segs.bridge.setAttribute("stroke-width",(s.lesion&&!s.clot&&s.lesion.where==="v2")?6:Math.max(2,width("v1",ph)).toFixed(1));
+  var tense = (s.post && !st.aug) || s.swell || (st.elev && !s.graft && (s.collapse.v1===1));
+  [segs.v1,segs.jux].forEach(function(e){e.setAttribute("stroke", s.graft? "#9aa0b5" : (tense?"#7fb1d6":"#5a6fb0"));});
+  if(s.swell) segs.v2.setAttribute("stroke","#7fb1d6");
+  segs.finger.setAttribute("opacity",st.aug?1:0);
+  segs.occl.setAttribute("opacity",st.occ?1:0);
+  if(segs.acc){segs.acc.setAttribute("stroke-width",st.elev?6:12);}
+  segs.thr.forEach(function(o){var on = st.occ? !!s.accessory : (o.t.mode==="cont"? true : ph<.35);
+    if(st.aug && o.t.x>330) on=false;
+    var j = on? (Math.random()-.5)*(o.t.weak?1.5:3.5):0; if(reduce) j*=0.3; o.g.setAttribute("transform","translate("+j.toFixed(1)+","+(j*0.6).toFixed(1)+")"); o.g.setAttribute("opacity",on?1:.15);});
+  var spdMul = reduce? .25 : 1;
+  var flowStop = st.occ && !s.accessory;
+  cells.forEach(function(c){
+    if(c.dist){
+      var dir = (s.steal && !st.occ)? -1 : 1; var v = (s.steal&&!st.occ)?0.006:0.004;
+      c.p = (c.p + dir*v*spdMul*(0.6+p) + 1)%1;
+      var bx=X.anast, by=Y, ex=110, ey=Y+72; var q=c.p;
+      var x = bx+(ex-bx)*q, y = by+(ey-by)*q*q*0.9+ (ey-by)*0.1*q;
+      c.e.setAttribute("cx",x.toFixed(1)); c.e.setAttribute("cy",y.toFixed(1)); return; }
+    if(c.stuck){ var xx = X.a0 + (X.anast-X.a0)*c.p; c.p += (p>0? 0.002:-0.0015)*spdMul; if(c.p<0)c.p=0.2; if(c.p>0.98)c.p=0.6; c.e.setAttribute("cx",xx.toFixed(1)); c.e.setAttribute("cy",(Y+c.lane*6).toFixed(1)); return; }
+    var x0 = X.a0 + (X.heart-18-X.a0)*c.p; var sk=segOf(x0);
+    var v = (s.speed[sk]||.5);
+    if(s.lesion && !s.clot && Math.abs(x0-s.lesion.x)<s.lesion.w) v*=3.2;
+    if(flowStop && x0>X.anast-20) v*=0.03;
+    if(st.aug && x0>330) v*=0.05;
+    if(st.aug && x0<=330 && x0>X.anast) v*=0.3;
+    var mv = 0.0016*v*(0.55+0.9*p)*spdMul; c.p += mv;
+    if(s.accessory && c.br && x0>X.branch && x0<X.branch+6 && !st.elev){ c.onBr = 0.001; }
+    if(c.onBr!==undefined){ c.onBr += 0.006*spdMul*(0.6+p); var t=c.onBr; var bx2=X.branch+(430-X.branch)*t, by2=Y-80*Math.sin(Math.min(1,t)*Math.PI/2); c.e.setAttribute("cx",bx2.toFixed(1)); c.e.setAttribute("cy",by2.toFixed(1)); if(t>=1){c.onBr=undefined;c.p=0;} return; }
+    if(c.p>1) c.p=0;
+    var half = Math.max(2,width(sk,ph))/2 - 2.5;
+    if(s.lesion && !s.clot && Math.abs(x0-s.lesion.x)<s.lesion.w/2+2) half=1;
+    c.e.setAttribute("cx",x0.toFixed(1)); c.e.setAttribute("cy",(Y+c.lane*2*Math.max(0,half)).toFixed(1));
+  });
+  drawHud();
+  drawDoppler(now);
+  requestAnimationFrame(frame);
+}
+
+var hudKey = "";
+function drawHud(){
+  var s=S[cur];
+  var key = cur+"|"+st.occ+"|"+st.elev+"|"+st.aug;
+  if(key===hudKey) return; hudKey = key;
+  gH.innerHTML="";
+  el("text",{x:24,y:28,"font-size":14,fill:"#0E0857","font-weight":700,text:"HR "+(s.highflow? (st.occ?"60 (Nicoladoni-Branham: HR falls)":"88") : "72")+"   |   Qa "+(st.occ&&!s.accessory?0:s.qa)+" mL/min"},gH);
+  if(s.steal){el("text",{x:24,y:48,"font-size":13,fill:st.occ?"#1F7A72":"#B4232A","font-weight":600,text:st.occ?"Radial pulse returns, hand pinker (steal confirmed)":"Weak radial pulse, pale cold hand"},gH);}
+  var msg = maneuverMsg();
+  if(msg){el("text",{x:24,y:s.steal?68:48,"font-size":13,fill:"#B4232A","font-weight":600,text:msg},gH);}
+}
+function maneuverMsg(){
+  var s=S[cur];
+  if(st.elev){ if(s.graft) return "Arm elevation: graft never collapses, not interpretable";
+    if(s.collapse.v1===1 || s.swell) return "Arm elevation: vein stays distended = outflow / central stenosis";
+    if(s.collapse.v1<=.3) return "Arm elevation: vein flat (inadequate inflow)";
+    return "Arm elevation: vein collapses = normal outflow"; }
+  if(st.aug){ return {strong:"Augmentation: pulse clearly stronger = good inflow",weak:"Augmentation: little pulse increase = inflow stenosis",na:"Augmentation: already hyperpulsatile, not interpretable (think outflow)",none:"Augmentation: no pulse (thrombosed)"}[s.aug]; }
+  if(st.occ){ if(s.accessory) return "Occlude main vein: thrill at anastomosis persists = accessory vein"; if(s.steal) return "Occlude access: distal flow becomes antegrade"; if(s.highflow) return "Occlude access: HR falls"; return "Occlude access: thrill and bruit disappear"; }
+  return "";
+}
+function updateNote(){var m=maneuverMsg();document.getElementById("maneuverNote").textContent=m||"กดปุ่มด้านบนเพื่อทำ maneuver ผลจะแสดงทั้งในภาพและตารางด้านล่าง";}
+
+// ---------- Doppler ----------
+var cv=document.getElementById("dop"), cx=cv.getContext("2d"), siteSel=document.getElementById("site");
+siteSel.addEventListener("change",function(){dopX=0;cx.fillStyle="#05060f";cx.fillRect(0,0,cv.width,cv.height);updateReadout();});
+function fillSites(){siteSel.innerHTML="";Object.keys(S[cur].sites).forEach(function(k){var o=document.createElement("option");o.value=k;o.textContent=SITE_LABEL[k];siteSel.appendChild(o);});siteSel.value="brach";}
+function wave(sh,psv,edv,ph){
+  switch(sh){
+    case "low": return ph<.12? edv+(psv-edv)*(ph/.12) : ph<.3? psv-(psv-edv)*0.45*((ph-.12)/.18) : edv+(psv-edv)*0.55*Math.exp(-(ph-.3)*4);
+    case "high": return ph<.1? edv+(psv-edv)*(ph/.1) : ph<.25? psv-(psv-edv)*((ph-.1)/.15)*0.9 : edv+ (psv-edv)*0.1*Math.exp(-(ph-.25)*6);
+    case "tardus": var r=ph<.28? Math.sin(Math.PI/2*ph/.28) : Math.exp(-(ph-.28)*2.2); return edv+(psv-edv)*r;
+    case "jet": return ph<.1? edv+(psv-edv)*(ph/.1) : edv+(psv-edv)*Math.exp(-(ph-.1)*3.2);
+    case "vein": return edv+(psv-edv)*0.5*(1+Math.sin(2*Math.PI*ph-1.2));
+    case "retro": return ph<.12? edv+(psv-edv)*(ph/.12) : edv+(psv-edv)*Math.exp(-(ph-.12)*4);
+    case "tri": if(ph<.1)return psv*(ph/.1); if(ph<.2)return psv*(1-(ph-.1)/.1); if(ph<.3)return edv*Math.sin(Math.PI*(ph-.2)/.1); if(ph<.42)return 12*Math.sin(Math.PI*(ph-.3)/.12); return 0;
+    case "none": return 0;
+  }
+  return 0;
+}
+function siteParams(){
+  var s=S[cur], k=siteSel.value||"brach", p=s.sites[k]||s.sites.brach;
+  var o={psv:p.psv,edv:p.edv,sh:p.sh};
+  if(st.occ && !s.accessory){
+    if(k==="brach") o={psv:85,edv:-12,sh:"tri"};
+    else if(k==="radial") o={psv:60,edv:-8,sh:"tri"};
+    else o={psv:0,edv:0,sh:"none"};
+  }
+  return o;
+}
+var dopX=0, lastT=0;
+function drawDoppler(now){
+  var W=cv.width,H=cv.height,base=H*0.62,scale=(H*0.55)/520;
+  var dt = lastT? (now-lastT):16; lastT=now;
+  var step = Math.min(200, Math.max(1, Math.round(dt/1000*160*(reduce?.4:1))));
+  var o=siteParams();
+  for(var i=0;i<step;i++){
+    var tt = now - (step-i)*(1000/160);
+    var ph=phase(tt-t0); var v=wave(o.sh,o.psv,o.edv,ph);
+    var x=dopX;
+    cx.fillStyle="#05060f"; cx.fillRect(x,0,3,H);
+    cx.fillStyle="rgba(255,255,255,0.10)"; for(var g=-100;g<=500;g+=100){cx.fillRect(x,base-g*scale,1,1);}
+    cx.fillStyle="rgba(255,255,255,0.55)"; cx.fillRect(x,base,1,1);
+    if(o.sh!=="none"){
+      var broad = (o.sh==="jet")? 0.95 : (o.sh==="vein"?0.5:0.35);
+      var top=base-v*scale, inner=base-v*(1-broad)*scale;
+      var y1=Math.min(top,inner), y2=Math.max(top,inner);
+      if(o.sh!=="jet" && v>0){ y2 = base - v*(1-broad)*scale; }
+      for(var y=y1;y<=y2;y+=1){ var a = 0.35+0.65*Math.random(); var hot=(o.sh==="jet")? "255,"+(180+Math.floor(Math.random()*60))+",80" : "200,230,255"; cx.fillStyle="rgba("+hot+","+a.toFixed(2)+")"; cx.fillRect(x,y,1,1); }
+      cx.fillStyle="#ffffff"; cx.fillRect(x,top,1,1.5);
+      if(o.sh==="jet"){ for(var n=0;n<3;n++){cx.fillStyle="rgba(255,120,120,"+(Math.random()*.6).toFixed(2)+")";cx.fillRect(x, base-Math.random()*v*scale,1,1);} }
+    }
+    dopX=(dopX+1)%W;
+  }
+  cx.fillStyle="#05060f";cx.fillRect(dopX+1,0,10,H);
+  cx.fillStyle="#FFDE59";cx.fillRect(dopX,0,1,H);
+  cx.fillStyle="#05060f";cx.fillRect(0,0,46,H);
+  cx.fillStyle="rgba(255,255,255,0.75)";cx.font="12px Geist Mono, monospace";
+  [-100,0,100,200,300,400,500].forEach(function(g){cx.fillText(String(g),4,base-g*scale+4);});
+}
+function updateReadout(){
+  var s=S[cur], o=siteParams(), k=siteSel.value;
+  Sim.ro("roPSV", o.sh==="none"?"0":String(o.psv), o.psv>=400);
+  Sim.ro("roEDV", o.sh==="none"?"0":String(o.edv), o.edv<0);
+  var qa = (st.occ&&!s.accessory)?0:s.qa;
+  Sim.ro("roQa", Sim.fmt(qa), qa<500 || qa>1500);
+  var psr="-";
+  if(s.sites.lesion && s.sites.pre && !(st.occ&&!s.accessory)){psr=(s.sites.lesion.psv/s.sites.pre.psv).toFixed(1);}
+  Sim.ro("roPSR", psr, psr!=="-" && parseFloat(psr)>2);
+  var notes = {
+    brach:"Brachial artery ใช้วัด Qa เพราะเกือบทั้งหมดของ flow ไหลเข้า access และเส้นตรง laminar",
+    pre:"ใช้เป็นตัวหารของ PSV ratio (PSV ตรง lesion / PSV upstream 2 cm)",
+    lesion:"Jet: PSV สูง spectral broadening และ aliasing PSR > 2 ถึง 3 ร่วมกับ diameter reduction > 50% = significant",
+    vein:"Venous flow ใน access เป็น pulsatile turbulent ไม่ใช้วัด Qa",
+    branch:"Flow ส่วนหนึ่งเลี้ยวเข้า accessory branch",
+    radial:"Distal radial: ปกติ antegrade ใน steal จะ retrograde (อยู่ใต้ baseline) และกลับ antegrade เมื่อกด access แต่ retrograde flow อย่างเดียวพบได้บ่อยใน access ที่ไม่มีอาการ (physiologic steal) การวินิจฉัย steal syndrome ต้องมีอาการ ischemia ร่วม"
+  };
+  var extra = "";
+  if(st.occ && !s.accessory) extra=" | ขณะกด access: brachial กลับเป็น high-resistance triphasic";
+  if(cur==="thrombosis") extra=" | thrombosed: brachial high-resistance triphasic ไม่มี flow ใน access";
+  document.getElementById("dopNote").textContent=(notes[k]||"")+extra;
+}
+
+// ---------- sound (synthesised bruit) ----------
+var ac=null, src=null, filt=null, gain=null, sndTimer=null;
+function startSound(){
+  try{
+    var s=S[cur];
+    if(!ac){ var AC=window.AudioContext||window.webkitAudioContext; ac=new AC(); }
+    if(ac.state==="suspended") ac.resume();
+    stopNodes();
+    if(!s.bruit || (st.occ && !s.accessory)) return;
+    var len=ac.sampleRate*2, buf=ac.createBuffer(1,len,ac.sampleRate), d=buf.getChannelData(0);
+    for(var i=0;i<len;i++) d[i]=Math.random()*2-1;
+    src=ac.createBufferSource(); src.buffer=buf; src.loop=true;
+    filt=ac.createBiquadFilter(); filt.type="bandpass"; filt.frequency.value=s.bruit.f; filt.Q.value=s.bruit.sys?6:2.5;
+    gain=ac.createGain(); gain.gain.value=0;
+    src.connect(filt); filt.connect(gain); gain.connect(ac.destination); src.start();
+    var per=60/HR;
+    var beat = function(){ if(!gain) return; var t=ac.currentTime; gain.gain.cancelScheduledValues(t);
+      var peak = s.bruit.sys?0.9:0.7, floor = s.bruit.sys?0.0:0.35;
+      gain.gain.setValueAtTime(floor,t); gain.gain.linearRampToValueAtTime(peak,t+0.08); gain.gain.linearRampToValueAtTime(floor,t+per*0.4); gain.gain.setValueAtTime(floor,t+per*0.99);
+    };
+    beat(); sndTimer=setInterval(beat, per*1000);
+  }catch(e){ document.getElementById("maneuverNote").textContent="เบราว์เซอร์นี้เล่นเสียงไม่ได้ ดู thrill marker แทน"; }
+}
+function stopNodes(){ if(sndTimer){clearInterval(sndTimer);sndTimer=null;} try{ if(src){src.stop();src.disconnect();} }catch(e){} src=null; filt=null; if(gain){try{gain.disconnect();}catch(e){}} gain=null; }
+function stopSound(){ stopNodes(); }
+
+Sim.mount({
+  code:"HD-01", title:"AV Access PE and Doppler",
+  lead:"เลือก lesion แล้วลองยกแขน กด augmentation กด access หรือฟัง bruit ดูว่า pulse, thrill และ Doppler waveform เปลี่ยนอย่างไร",
+  scenarios:S, order:ORDER, captureMs:7300,
+  onChange:function(k,s){
+    cur=k; hudKey="";
+    document.getElementById("circTitle").textContent="Access circuit: "+s.name;
+    buildVessels(); fillSites(); dopX=0; cx.fillStyle="#05060f"; cx.fillRect(0,0,cv.width,cv.height); updateReadout(); updateNote();
+    if(st.snd) startSound();
+  },
+  refs:[
+    "Lok CE, Huber TS, Lee T, et al. KDOQI Clinical Practice Guideline for Vascular Access: 2019 Update. Am J Kidney Dis 2020, 75(4 Suppl 2): S1-S164",
+    "Asif A, Leon C, Orozco-Vargas LC, et al. Accuracy of physical examination in the detection of arteriovenous fistula stenosis. Clin J Am Soc Nephrol 2007, 2(6): 1191-4",
+    "Malik J, Lomonte C, Meola M, et al. The role of Doppler ultrasonography in vascular access surveillance: controversies continue. J Vasc Access 2021, 22(1 Suppl): 63-70",
+    "Haskal ZJ, Trerotola S, Dolmatch B, et al. Stent graft versus balloon angioplasty for failing dialysis-access grafts (FLAIR). N Engl J Med 2010, 362(6): 494-503",
+    "Dixon BS, Beck GJ, Vazquez MA, et al. Effect of dipyridamole plus aspirin on hemodialysis graft patency (DAC). N Engl J Med 2009, 360(21): 2191-201"
+  ],
+  note:"ค่า PSV, EDV และ Qa ในหน้านี้เป็นค่าตัวอย่างเพื่อการสอน cut-off ที่ใช้จริง: Qa < 500 mL/min (AVF) หรือ < 600 (AVG), Qa ลด > 25%, diameter reduction > 50% ร่วมกับ PSV ratio > 2 ถึง 3, high flow > 1,500 ถึง 2,000 mL/min หรือ Qa/CO > 0.3"
+});
+setInterval(updateReadout, 400);
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[HT-05] Renovascular Hypertension</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.3fr 1fr}}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:12px}
+.sub{font-size:12.5px;color:var(--muted);margin:14px 0 4px}
+.row2{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px;font-size:13.5px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:14px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .ro{padding:6px 12px}
+body.present .ro b{font-size:18px}
+body.present .ctls{gap:2px}
+body.present .ctl{font-size:13px}
+body.present .tog{padding:3px 8px;font-size:11.5px}
+body.present .tools{margin-top:4px;gap:5px}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+body.present .sub{margin:6px 0 2px}
+body.present .row2{margin-top:4px}
+body.present .svgwrap svg{max-height:275px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Aorta, renal arteries และไต</h2>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 640 330" role="img" aria-label="Aorta with renal artery stenosis and both kidneys"></svg></div>
+      <div id="chart"></div>
+      <p class="hint no-present">ความหนาของหลอดเลือดแคบลงตาม % stenosis สีไตแสดง perfusion pressure จุดม่วงที่ออกจากไตคือ renin ตัวเลขใต้ไตคือ single-kidney GFR กราฟล่างคือ GFR ของไตขวาตาม % stenosis เส้นทึบไม่มียา เส้นประเมื่อใช้ ACEi/ARB</p>
+    </div>
+    <div class="card">
+      <h2>Stenosis, ไต และการรักษา</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="row2"><label for="cause">สาเหตุ</label><select id="cause"><option value="aras">Atherosclerotic</option><option value="fmd">Fibromuscular dysplasia</option></select></div>
+      <div class="sub">ภาวะและการรักษา (กดเปิด/ปิด)</div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roMAP"><b>-</b><span>MAP (mmHg)</span></div>
+        <div class="ro" id="roGFR"><b>-</b><span>Total GFR (mL/min)</span></div>
+        <div class="ro" id="roRen"><b>-</b><span>Renin (เทียบปกติ)</span></div>
+        <div class="ro" id="roPSV"><b>-</b><span>PSV ขวา (cm/s)</span></div>
+        <div class="ro" id="roVol"><b>-</b><span>ECF เกิน (L)</span></div>
+        <div class="ro" id="roType"><b>-</b><span>Physiology</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script>
+(function(){
+"use strict";
+function SV(t,a,p){ var b={}; for(var k in a) if(a[k]!==null&&a[k]!==undefined) b[k]=a[k]; return Sim.svg(t,b,p); }
+var RX={acei:{name:"ACEi/ARB"},solo:{name:"Solitary kidney (ไม่มีไตซ้าย)"},revasc:{name:"Revascularize ไตขวา"}};
+function P(o){ var d={sr:75,sl:0,len:10.5,ri:0.68,cause:"aras",rx:[]}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  uni:{name:"Unilateral ARAS 75%", p:P({}),
+    rows:[["ภาวะ","2-kidney 1-clip: ไตขวาแคบ ไตซ้ายปกติ"],["กลไก","ไตขวาหลั่ง renin ไตซ้ายขับ Na ทิ้งด้วย pressure natriuresis"],["ผล","renin-dependent HT volume ไม่เกิน"]],
+    take:["Stenosis มีผลต่อ hemodynamic เมื่อแคบราว 70% ขึ้นไป ต่ำกว่านั้นแรงดันหลังจุดแคบแทบไม่ลด","2-kidney 1-clip: HT ขึ้นกับ renin ไตข้างดีขับ Na ทิ้ง volume จึงไม่เกินมาก","ACEi หรือ ARB ใช้ได้และมักได้ผลดีในภาวะนี้"]},
+  uniAce:{name:"Unilateral + ACEi", p:P({sr:85,rx:["acei"]}),
+    rows:[["ยา","ACEi/ARB"],["ไตขวา","efferent dilate GFR ข้างแคบลดลง"],["รวม","total GFR ลดเล็กน้อยเพราะไตซ้ายชดเชย"]],
+    take:["ACEi ลด GFR ของไตข้างที่แคบเพราะไตข้างนั้นพึ่ง Ang II ที่ efferent","ถ้าอีกข้างปกติ Cr ขึ้นไม่มาก ให้ยาต่อได้และติดตาม Cr","Cr ขึ้นเกินราว 30% หลังเริ่ม ACEi เป็น clue ให้หา bilateral RAS"]},
+  bil:{name:"Bilateral RAS + ACEi", p:P({sr:82,sl:78,rx:["acei"]}),
+    rows:[["ภาวะ","แคบทั้งสองข้าง"],["ยา","ACEi ตัด Ang II ที่ efferent ทั้งสองไต"],["ผล","GFR ตกมาก AKI"]],
+    take:["Bilateral RAS หรือ solitary kidney + ACEi/ARB ทำให้เกิด AKI ที่กลับได้เมื่อหยุดยา","ภาวะนี้เป็น volume-dependent เพราะไม่มีไตข้างดีขับ Na ทิ้ง","ใช้ CCB หรือ diuretic คุม BP แทนจนกว่าจะประเมิน revascularization"]},
+  flash:{name:"Solitary kidney + flash edema", p:P({sr:88,rx:["solo"]}),
+    rows:[["ภาวะ","ไตเดียวแคบ 88%"],["กลไก","1-kidney 1-clip Na ค้าง volume เกิน"],["ผล","HT รุนแรง flash pulmonary edema ซ้ำๆ"]],
+    take:["Flash pulmonary edema ที่ไม่มีสาเหตุทางหัวใจชัด เป็นข้อบ่งชี้ revascularization ที่หนักแน่นที่สุด","1-kidney 1-clip และ bilateral RAS เป็น volume-dependent renin ไม่สูงมาก","Revascularization ช่วยเมื่อไตยัง viable"]},
+  fmd:{name:"FMD หญิงอายุน้อย", p:P({sr:78,cause:"fmd",len:11,ri:0.6}),
+    rows:[["ภาวะ","หญิง 28 ปี HT ดื้อยา string of beads ที่ mid renal artery"],["กลไก","2-kidney 1-clip"],["รักษา","balloon angioplasty โดยไม่ใส่ stent"]],
+    take:["FMD พบในหญิงอายุน้อย รอยโรคอยู่กลางถึงปลาย renal artery ภาพ string of beads","Angioplasty ใน FMD มักลด BP ได้ดี บางรายหายจาก HT","คัดกรองหลอดเลือดอื่น (carotid, vertebral, intracranial aneurysm) เพราะเป็นโรคทั้งระบบ"]},
+  nonv:{name:"ไตไม่ viable", p:P({sr:95,len:7.2,ri:0.86}),
+    rows:[["ภาวะ","ไตขวา 7.2 cm RI 0.86"],["กลไก","parenchymal damage เกินกว่าจะฟื้น"],["ผล","revascularize แล้ว GFR และ BP ไม่ดีขึ้น"]],
+    take:["ก่อน revascularize ต้องดู viability: ขนาดไตน้อยกว่าราว 7–8 cm หรือ resistive index > 0.8 ฟื้นยาก","RI สูงสะท้อนความเสียหายของหลอดเลือดเล็กในเนื้อไต ไม่ใช่ของจุดแคบ","ARAS ส่วนใหญ่ใช้ยา (RAAS blocker, statin, antiplatelet, หยุดบุหรี่) ได้ผลเท่า stent"]},
+  mild:{name:"Stenosis 55%", p:P({sr:55}),
+    rows:[["ภาวะ","แคบปานกลาง"],["ผล","แรงดันหลังจุดแคบแทบไม่เปลี่ยน renin ปกติ"],["ความหมาย","ไม่ใช่สาเหตุของ HT"]],
+    take:["Stenosis ที่ไม่ถึงราว 60–70% ไม่มีผลต่อ hemodynamic","Duplex: PSV > 200 cm/s หรือ renal-aortic ratio > 3.5 บ่งชี้แคบมากกว่าราว 60%","รักษา cardiovascular risk และ HT ด้วยยาตามปกติ"]}
+};
+var ORDER=["uni","uniAce","bil","flash","fmd","nonv","mild"];
+var box=document.getElementById("ctls"), C={};
+function sl(k,o){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("sr",{label:"Stenosis ขวา",min:0,max:99,step:1,value:75,unit:" %"});
+sl("sl",{label:"Stenosis ซ้าย",min:0,max:99,step:1,value:0,unit:" %"});
+sl("len",{label:"ความยาวไตขวา",min:6,max:13,step:0.1,value:10.5,unit:"",fmt:function(v){ return v.toFixed(1)+" cm"; }});
+sl("ri",{label:"Resistive index ขวา",min:0.5,max:0.95,step:0.01,value:0.68,unit:"",fmt:function(v){ return v.toFixed(2); }});
+var causeSel=document.getElementById("cause"); causeSel.addEventListener("change",update);
+var T={}, tb=document.getElementById("tools");
+Object.keys(RX).forEach(function(k){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:RX[k].name}); b.addEventListener("click",function(){ b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); tb.appendChild(b); T[k]=b; });
+function on(k){ return T[k].getAttribute("aria-pressed")==="true"; }
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?150:200,aria:"Right single-kidney GFR versus right renal artery stenosis with and without ACE inhibitor",
+  x:{min:0,max:99,step:10,label:"Right renal artery stenosis (%)"},y:{min:0,max:70,step:Sim.present?20:10,label:"Right SK-GFR (mL/min)"},y2:{min:80,max:160,step:20,label:"MAP (mmHg)"},
+  series:[{id:"g",name:"GFR no ACEi",color:A.accent,data:[],width:2.4},{id:"ga",name:"GFR on ACEi/ARB",color:A.accent,data:[],width:1.6,dash:[6,4]},{id:"m",name:"MAP",color:A.red,data:[],width:1.6,axis:"y2"}],legend:true});
+/* ---------- model ---------- */
+function grad(s){ s=s/100; return s<0.5?0:Math.min(0.72,0.72*Math.pow((s-0.5)/0.5,2.2)); }
+function viab(len,ri){ return Math.max(0.08,Math.min(1,(len-6)/4.5))*(ri>0.8?Math.max(0.35,1-(ri-0.8)*4):1); }
+function solve(o){
+  var kid=[{s:o.revasc?Math.min(o.sr,15):o.sr,q:viab(o.len,o.ri),present:true},{s:o.sl,q:1,present:!o.solo}];
+  if(o.revasc&&o.cause==="aras") kid[0].s=Math.min(o.sr,20);
+  function renin(m){ var rsum=0; kid.forEach(function(k){ if(!k.present) return; k.P=m*(1-grad(k.s)); k.r=k.q*Math.min(8,Math.exp(10*grad(k.s))*Math.exp((92-k.P)/12)); rsum+=k.r; }); return rsum/2; }
+  var E=function(m,ang){ var e=0; kid.forEach(function(k){ if(!k.present) return; var P=m*(1-grad(k.s)); e+=0.5*(0.4+0.6*k.q)*Math.exp(0.085*(P-93)); }); return e*Math.pow(Math.max(0.5,ang),-0.35); };
+  /* chronic state without ACEi: renin-driven pressure, then volume until natriuresis matches intake */
+  var map=93, ren=1, vol=0, ang=1;
+  for(var it=0;it<80;it++){
+    ren=renin(map)*Math.exp(-0.9*vol); ang=Math.max(0.25,ren);
+    var mapAng=93+20*Math.log(Math.max(0.5,ang)), mNew=mapAng, vNew=0;
+    if(E(mapAng,ang)<1){ var lo=mapAng, hi=mapAng+60; for(var j=0;j<40;j++){ var mid=(lo+hi)/2; if(E(mid,ang)<1) lo=mid; else hi=mid; } mNew=hi; vNew=(hi-mapAng)/18; }
+    map=map*0.6+mNew*0.4; vol=vol*0.6+vNew*0.4;
+  }
+  /* ACEi/ARB acting on that state: Ang II component removed, volume unchanged (first weeks) */
+  if(o.acei){ for(var i2=0;i2<60;i2++){ ren=renin(map)*Math.exp(-0.9*vol)*2; ang=Math.min(0.9,Math.max(0.25,ren*0.15)); var mN=93+20*Math.log(Math.max(0.75,ang))+vol*18; map=map*0.6+mN*0.4; } ren=renin(map)*Math.exp(-0.9*vol)*2; }
+  var gfr=0;
+  kid.forEach(function(k){ if(!k.present){ k.g=0; return; } var P=k.P, g;
+    if(o.acei) g=P>=85?1:Math.max(0,Math.min(1,(P-62)/23));
+    else g=P>=78?1:Math.max(0,Math.min(1,(P-40)/38));
+    /* compensatory hypertrophy of the contralateral kidney when the other is weak or absent */
+    k.g=60*k.q*g; });
+  var other=kid[1].present?kid[1]:null;
+  if(other&&kid[0].g<45) other.g*=1+0.25*(45-kid[0].g)/45;
+  if(!other) kid[0].g*=1.45;
+  if(other&&other.s<50&&kid[0].s<50) {}
+  gfr=kid[0].g+(other?other.g:0);
+  var psv=function(s){ s=s/100; return s<0.3?95:Math.min(480,100/Math.pow(1-Math.min(0.93,s),0.75)); };
+  return {kid:kid,map:map,ren:ren,vol:vol,gfr:gfr,psvR:psv(kid[0].s),psvL:psv(kid[1].s)};
+}
+function opts(){ var o={sr:C.sr.get(),sl:C.sl.get(),len:C.len.get(),ri:C.ri.get(),cause:causeSel.value}; Object.keys(RX).forEach(function(k){ o[k]=on(k); }); return o; }
+/* ---------- drawing ---------- */
+var svg=document.getElementById("vis"), INK="#0B0B1F", MUT="#5E6075", RED="#B4232A", ACC="#5B4BFF", TEAL="#1F7A72";
+function tx(x,y,s,o){ o=o||{}; return SV("text",{x:x,y:y,"text-anchor":o.a||"middle","font-family":o.mono?"Geist Mono, monospace":"IBM Plex Sans Thai, sans-serif","font-size":o.fs||12,"font-weight":o.fw||400,fill:o.fill||INK,text:s},svg); }
+function pcol(P){ var t=Math.max(0,Math.min(1,(P-55)/45)); return "rgb("+Math.round(240-60*t)+","+Math.round(200-150*t)+","+Math.round(200-150*t)+")"; }
+function rng(seed){ var s=seed; return function(){ s=(s*16807)%2147483647; return (s-1)/2147483646; }; }
+function kidney(cx,cy,len,P,present,flip,label,k,o,isR){
+  if(!present){ tx(cx,cy,"Absent",{fs:13,fill:"#B5B7C8"}); tx(cx,cy+18,"(nephrectomy or agenesis)",{fs:10.5,fill:"#B5B7C8"}); return; }
+  var h=len*12.5, w=h*0.55;
+  var d="M"+cx+" "+(cy-h/2)+" C "+(cx+w*0.95)+" "+(cy-h/2)+" "+(cx+w*0.95)+" "+(cy+h/2)+" "+cx+" "+(cy+h/2)+" C "+(cx-w*0.55)+" "+(cy+h/2)+" "+(cx-w*0.62)+" "+(cy+h*0.12)+" "+(cx-w*0.25)+" "+cy+" C "+(cx-w*0.62)+" "+(cy-h*0.12)+" "+(cx-w*0.55)+" "+(cy-h/2)+" "+cx+" "+(cy-h/2)+" Z";
+  var g=SV("g",{transform:flip?"translate("+(2*cx)+",0) scale(-1,1)":null},svg);
+  SV("path",{d:d,fill:pcol(P),stroke:"#fff","stroke-width":3},g);
+  SV("path",{d:d,fill:"none",stroke:"rgba(11,11,31,.25)","stroke-width":1},g);
+  /* renin particles */
+  var n=Math.min(18,Math.round(k.r*5)), r=rng(isR?11:29);
+  for(var i=0;i<n;i++){ var ang=r()*Math.PI*2, rad=w*0.8+r()*34; SV("circle",{cx:cx+(flip?-1:1)*Math.abs(Math.cos(ang))*rad*0.9,cy:cy+Math.sin(ang)*h*0.55,r:3,fill:ACC,opacity:0.75},svg); }
+  tx(cx,cy+h/2+20,label,{fs:12.5,fw:600});
+  tx(cx,cy+h/2+38,"P "+P.toFixed(0)+" mmHg  GFR "+k.g.toFixed(0),{fs:11.5,mono:true,fill:k.g<25?RED:MUT});
+  tx(cx,cy+h/2+54,len.toFixed(1)+" cm",{fs:11,mono:true,fill:len<8?RED:MUT});
+}
+function draw(R,o){
+  svg.innerHTML="";
+  var ax=320, ay0=20, ay1=310, rY=150;
+  /* aorta */
+  SV("rect",{x:ax-22,y:ay0,width:44,height:ay1-ay0,rx:20,fill:"#E9A3A6"},svg);
+  SV("rect",{x:ax-14,y:ay0,width:28,height:ay1-ay0,rx:14,fill:"#D9787D"},svg);
+  tx(ax,ay0+14,"Aorta",{fs:11,fill:"#fff",fw:600});
+  tx(ax+30,ay1-8,"MAP "+R.map.toFixed(0),{fs:12,fill:INK,fw:600,mono:true,a:"start"});
+  /* renal arteries with stenosis */
+  function artery(dir,s,present){ if(!present) return; var x0=ax+dir*20, x1=ax+dir*150, w0=16, sx=o.cause==="fmd"&&dir>0?ax+dir*95:ax+dir*42;
+    var wS=Math.max(2,w0*(1-s/100));
+    var pts=dir>0?[x0,x1]:[x1,x0];
+    SV("path",{d:"M"+x0+" "+rY+" L"+x1+" "+rY,stroke:"#D9787D","stroke-width":w0,"stroke-linecap":"round",fill:"none"},svg);
+    if(s>5){ if(o.cause==="fmd"&&dir>0){ for(var b=0;b<4;b++){ var bx=sx+dir*b*14; SV("ellipse",{cx:bx,cy:rY,rx:6,ry:w0/2+2,fill:"#D9787D"},svg); SV("rect",{x:bx+dir*6-2,y:rY-wS/2,width:4,height:wS,fill:"#D9787D"},svg); SV("rect",{x:bx+dir*6-2,y:rY-w0/2-3,width:4,height:(w0-wS)/2+3,fill:"#FFFFFF"},svg); SV("rect",{x:bx+dir*6-2,y:rY+wS/2,width:4,height:(w0-wS)/2+3,fill:"#FFFFFF"},svg); } }
+      else { SV("path",{d:"M"+(sx-10)+" "+(rY-w0/2)+" Q"+sx+" "+(rY-wS/2)+" "+(sx+10)+" "+(rY-w0/2)+" L"+(sx+10)+" "+(rY-w0/2-4)+" L"+(sx-10)+" "+(rY-w0/2-4)+"Z",fill:"#E8C27A"},svg);
+        SV("path",{d:"M"+(sx-10)+" "+(rY+w0/2)+" Q"+sx+" "+(rY+wS/2)+" "+(sx+10)+" "+(rY+w0/2)+" L"+(sx+10)+" "+(rY+w0/2+4)+" L"+(sx-10)+" "+(rY+w0/2+4)+"Z",fill:"#E8C27A"},svg);
+        SV("rect",{x:sx-10,y:rY-w0/2-5,width:20,height:(w0-wS)/2+5,fill:"#E8C27A",rx:3},svg); SV("rect",{x:sx-10,y:rY+wS/2,width:20,height:(w0-wS)/2+5,fill:"#E8C27A",rx:3},svg); }
+      tx(sx,rY-w0/2-12,s.toFixed(0)+"%",{fs:12,fw:600,fill:s>=70?RED:MUT,mono:true}); }
+  }
+  artery(1,R.kid[0].s,true); artery(-1,R.kid[1].s,R.kid[1].present);
+  if(o.revasc){ var sx=o.cause==="fmd"?ax+95:ax+42; SV("rect",{x:sx-14,y:rY-10,width:28,height:20,rx:4,fill:"none",stroke:TEAL,"stroke-width":2,"stroke-dasharray":o.cause==="fmd"?"3 2":null},svg); tx(sx,rY+28,o.cause==="fmd"?"Angioplasty":"Stent",{fs:10.5,fill:TEAL,fw:600}); }
+  kidney(530,rY,o.len,R.kid[0].P||0,true,false,"Right kidney",R.kid[0],o,true);
+  kidney(110,rY,10.8,R.kid[1].P||0,R.kid[1].present,true,"Left kidney",R.kid[1],o,false);
+  tx(530,24,"RI "+o.ri.toFixed(2)+"  PSV "+R.psvR.toFixed(0),{fs:11.5,mono:true,fill:o.ri>0.8?RED:MUT});
+  if(R.kid[1].present) tx(110,24,"PSV "+R.psvL.toFixed(0),{fs:11.5,mono:true,fill:MUT});
+  /* volume / lungs */
+  if(R.vol>1.2){ SV("rect",{x:ax-80,y:250,width:160,height:28,rx:14,fill:RED},svg); tx(ax,269,"Flash pulmonary edema risk",{fs:11.5,fill:"#fff",fw:600}); }
+  tx(ax+60,48,"Renin",{fs:11,fill:ACC,a:"start",fw:600}); SV("circle",{cx:ax+52,cy:44,r:3.5,fill:ACC},svg);
+}
+function update(){
+  var o=opts(), R=solve(o);
+  draw(R,o);
+  var G=[],GA=[],M=[];
+  for(var s=0;s<=99;s+=1){ var a=solve(Object.assign({},o,{sr:s,acei:false,revasc:false})), b=solve(Object.assign({},o,{sr:s,acei:true,revasc:false})); G.push([s,a.kid[0].g]); GA.push([s,b.kid[0].g]); M.push([s,(o.acei?b:a).map]); }
+  chart.setSeries("g",G); chart.setSeries("ga",GA); chart.setSeries("m",M);
+  chart.update({vlines:[{x:o.revasc?R.kid[0].s:o.sr,label:"Now",color:A.ink}],xbands:[{x0:0,x1:60,label:"Not significant",color:"rgba(31,122,114,0.06)"}],
+    y:{min:0,max:o.solo?90:70,step:Sim.present?20:10,label:"Right SK-GFR (mL/min)"}});
+  var base=solve({sr:0,sl:0,len:10.5,ri:0.68,cause:"aras"});
+  var bil=R.kid[1].present?(R.kid[0].s>=60&&R.kid[1].s>=60):(R.kid[0].s>=60);
+  var sig=R.kid[0].s>=65||R.kid[1].s>=65;
+  var type=!sig?"Not significant":(R.vol>=0.8&&R.ren<1.5)?"Volume-dependent":(R.vol>=0.4)?"Mixed renin + volume":"Renin-dependent";
+  Sim.ro("roMAP",R.map.toFixed(0),R.map>=107?"flag":"ok");
+  Sim.ro("roGFR",R.gfr.toFixed(0),R.gfr<60?"flag":"ok");
+  Sim.ro("roRen",R.ren.toFixed(1),R.ren>1.6?"flag":null);
+  Sim.ro("roPSV",R.psvR.toFixed(0),R.psvR>200?"flag":"ok");
+  Sim.ro("roVol",R.vol.toFixed(1),R.vol>1.2?"flag":"ok");
+  Sim.ro("roType",type,sig?"flag":"ok");
+  var viable=o.len>=8&&o.ri<=0.8, m, bad=true, a=document.getElementById("act");
+  var noAce=solve(Object.assign({},o,{acei:false})), drop=(1-R.gfr/noAce.gfr)*100;
+  if(o.acei&&drop>30&&bil) m="<b>AKI จาก ACEi/ARB</b> GFR ลด "+drop.toFixed(0)+"% บ่งชี้ bilateral RAS หรือ RAS ในไตเดียว หยุด ACEi/ARB ใช้ CCB หรือ diuretic แทน ประเมิน revascularization";
+  else if(o.acei&&drop>15) { m="<b>Cr ขึ้นหลัง ACEi/ARB</b> GFR รวมลด "+drop.toFixed(0)+"% ส่วนใหญ่จากไตข้างที่แคบ ("+R.kid[0].g.toFixed(0)+" mL/min) ไตอีกข้างยังดี ให้ยาต่อได้ถ้า Cr ขึ้นไม่เกินราว 30% และคงที่ ถ้าขึ้นมากกว่านั้นหยุดยาและตรวจไตอีกข้าง"; }
+  else if(o.revasc&&!viable) m="<b>Revascularize ไตที่ไม่ viable</b> ไต "+o.len.toFixed(1)+" cm RI "+o.ri.toFixed(2)+" GFR ฟื้นน้อยและเสี่ยง atheroembolism ไม่คุ้ม ใช้ยาแทน";
+  else if(R.vol>1.2) m="<b>Volume-dependent HT + flash edema</b> ข้อบ่งชี้ revascularization"+(viable?" ไตยัง viable ควรทำ":" แต่ไตไม่ viable ต้องประเมินอีกข้าง")+" ระหว่างนี้ใช้ loop diuretic และ CCB";
+  else if(o.cause==="fmd"&&sig&&!o.revasc) m="<b>FMD</b> balloon angioplasty โดยไม่ใส่ stent คัดกรอง FMD ที่ carotid, vertebral และ intracranial aneurysm";
+  else if(sig&&o.cause==="aras"&&!o.revasc){ bad=R.map>=107; m="<b>ARAS</b> optimal medical therapy ก่อน: ACEi/ARB (ติดตาม Cr), statin, antiplatelet, หยุดบุหรี่ revascularize เฉพาะ flash pulmonary edema, GFR ลดเร็วโดยไม่มีสาเหตุอื่น หรือ HT ดื้อยาจริงในไตที่ viable"; }
+  else if(o.revasc&&viable){ bad=false; m="<b>Revascularize แล้ว</b> MAP "+R.map.toFixed(0)+" GFR "+R.gfr.toFixed(0)+(o.cause==="fmd"?" FMD ตอบสนองดี ติดตาม restenosis ด้วย duplex":" ติดตาม duplex เพราะเกิด in-stent restenosis ได้ ยังต้องใช้ยาต่อ")+""; }
+  else { bad=false; m="<b>ไม่มีผลทาง hemodynamic</b> stenosis ต่ำกว่าราว 65% ไม่ใช่สาเหตุของ HT รักษา risk factor ตามปกติ"; }
+  a.innerHTML="<b>Next step:</b> "+m; a.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"HT-05", title:"Renovascular Hypertension", lead:"ปรับ % stenosis ทั้งสองข้าง ขนาดไตและ resistive index เปิด ACEi/ARB ทำให้ไตข้างเดียวหรือแคบทั้งสองข้าง แล้วดูว่า HT เป็นแบบ renin-dependent หรือ volume-dependent และเมื่อไหร่ revascularization ช่วยได้",
+  scenarios:S, order:ORDER, captureMs:900,
+  onChange:function(k,s){ ["sr","sl","len","ri"].forEach(function(x){ C[x].set(s.p[x]); }); causeSel.value=s.p.cause; Object.keys(T).forEach(function(x){ T[x].setAttribute("aria-pressed",s.p.rx.indexOf(x)>=0?"true":"false"); }); update(); },
+  refs:["Textor SC, Lerman L. Renovascular hypertension and ischemic nephropathy. Am J Hypertens 2010, 23(11): 1159-1169",
+        "Cooper CJ, Murphy TP, Cutlip DE, et al (CORAL). Stenting and medical therapy for atherosclerotic renal-artery stenosis. N Engl J Med 2014, 370(1): 13-22",
+        "ASTRAL Investigators. Revascularization versus medical therapy for renal-artery stenosis. N Engl J Med 2009, 361(20): 1953-1962",
+        "Radermacher J, Chavan A, Bleck J, et al. Use of Doppler ultrasonography to predict the outcome of therapy for renal-artery stenosis. N Engl J Med 2001, 344(6): 410-417",
+        "Gornik HL, Persu A, Adlam D, et al. First international consensus on the diagnosis and management of fibromuscular dysplasia. Vasc Med 2019, 24(2): 164-189",
+        "Aboyans V, Ricco JB, Bartelink MEL, et al. 2017 ESC guidelines on the diagnosis and treatment of peripheral arterial diseases. Eur Heart J 2018, 39(9): 763-816",
+        "Herrmann SM, Textor SC. Renovascular hypertension. Endocrinol Metab Clin North Am 2019, 48(4): 765-778"],
+  note:"Model เพื่อการสอน: translesional gradient = 0 เมื่อ stenosis < 50% แล้วเพิ่มเป็น 0.88 x ((s − 0.5)/0.5)^2.4 renin ต่อไต = viability x e^(10 x gradient) x e^((92 − P)/12) (สูงสุด 8) MAP = 93 + 20 ln(Ang II) แล้วถ้าไตขับ Na ไม่พอ (pressure natriuresis ตามแรงดันหลังจุดแคบ) MAP สูงขึ้นอีกจาก volume (18 mmHg ต่อลิตร) ACEi/ARB คิดเป็นผลช่วงสัปดาห์แรก: renin x2, Ang II เหลือ 15%, volume เท่าเดิม single-kidney GFR 60 mL/min x viability คงที่เมื่อ P ≥ 78 (ใช้ ACEi ต้อง ≥ 85 ต่ำกว่านั้นลดเชิงเส้นถึง 0 ที่ 62) viability ลดเมื่อไตยาวน้อยกว่า 10.5 cm และ RI > 0.8 PSV = 100/(1 − s)^0.75"
+});
+})();
+</script>
+</body>
+</html>

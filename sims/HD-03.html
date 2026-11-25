@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[HD-03] Solute Transport: Diffusion, Convection and Membranes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(120px,160px) 1fr 104px}
+.sel{display:grid;grid-template-columns:minmax(120px,160px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;width:100%}
+.readout{grid-template-columns:repeat(3,1fr)}
+body.present .bench{grid-template-columns:1.5fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Clearance ตามขนาดโมเลกุล</h2>
+      <div id="chart"></div>
+      <p class="hint no-present">แกน x เป็น log ของ molecular weight (Da) เส้นจางคือ low-flux HD ไว้เทียบ diffusion เด่นที่โมเลกุลเล็ก convection และรูของ membrane ตัดสิน middle molecule</p>
+    </div>
+    <div class="card">
+      <h2>Membrane และ modality</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roU"><b>-</b><span>K urea (ml/min)</span></div>
+        <div class="ro" id="roP"><b>-</b><span>K phosphate (ml/min)</span></div>
+        <div class="ro" id="roB"><b>-</b><span>K β2-microglobulin</span></div>
+        <div class="ro" id="roM"><b>-</b><span>K myoglobin / λ FLC</span></div>
+        <div class="ro" id="roCV"><b>-</b><span>Convection volume (L)</span></div>
+        <div class="ro" id="roAlb"><b>-</b><span>Albumin loss (g/session)</span></div>
+      </div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script>
+(function(){
+"use strict";
+var MEM={low:{name:"Low-flux",cut:3500,pow:4,ifl:0},high:{name:"High-flux",cut:15000,pow:5,ifl:15},mco:{name:"Medium cut-off (MCO)",cut:32000,pow:6,ifl:25}};
+function P(o){ var d={mem:"high",mode:"HD",Qb:350,KoA:1200,t:240,cv:0}; for(var k in o) d[k]=o[k]; return d; }
+var S = {
+  low:{name:"Low-flux HD", p:P({mem:"low"}),
+    rows:[["Membrane","รูเล็ก ultrafiltration coefficient ต่ำ"],["Clearance","urea ดี แต่ β2M แทบเป็นศูนย์"],["ผล","middle molecule สะสม เช่น β2M amyloidosis ระยะยาว"]],
+    take:["Diffusion ลดลงเร็วเมื่อโมเลกุลใหญ่ขึ้น","Low-flux แทบไม่เอา β2M (11.8 kDa) ออก","การเอา middle molecule ออกต้องอาศัย high-flux หรือ convection"],
+    quiz:[{q:"ผู้ป่วย HD 15 ปีด้วย low-flux membrane มี carpal tunnel syndrome ทั้งสองข้างและ bone cyst ข้อใดเหมาะที่สุดในการปรับการฟอก",opts:["เพิ่ม Qb เพื่อเพิ่ม urea clearance","เปลี่ยนเป็น high-flux หรือ online HDF เพื่อเพิ่ม β2M removal","เปลี่ยน dialysate Ca","ลดเวลาฟอก"],ans:1,why:"Dialysis-related amyloidosis เกิดจาก β2M สะสม ต้องเพิ่ม middle molecule clearance ด้วย high-flux หรือ HDF (และ KT ถ้าทำได้)"}]},
+  high:{name:"High-flux HD", p:P({mem:"high"}),
+    rows:[["Membrane","รูใหญ่ขึ้น มี internal filtration และ backfiltration"],["Clearance","urea ใกล้เคียง low-flux แต่ β2M ราว 30–50 ml/min"],["ข้อควรระวัง","ต้องใช้ dialysate คุณภาพสูง เพราะ backfiltration นำ endotoxin เข้าเลือดได้"]],
+    take:["High-flux เพิ่ม middle molecule โดย urea แทบไม่เปลี่ยน","HEMO และ MPO ไม่ต่างใน primary analysis ประโยชน์ด้าน survival พบเฉพาะ subgroup (HEMO: ฟอกมานานกว่า 3.7 ปี, MPO: albumin ≤ 4 g/dL และ post hoc ในเบาหวาน)","เป็น standard membrane ในปัจจุบัน"],
+    quiz:[{q:"เปลี่ยนจาก low-flux เป็น high-flux โดยคง Qb, Qd, t ค่าใดเปลี่ยนมากที่สุด",opts:["Urea clearance","β2M clearance","Phosphate clearance เพิ่มเป็นสองเท่า","Albumin loss มากกว่า 5 g/session"],ans:1,why:"Urea ขึ้นกับ diffusion และ KoA ใกล้เคียงกัน ส่วน β2M ผ่านได้เพราะรูใหญ่ขึ้น"}]},
+  hdf23:{name:"Online HDF 23 L", p:P({mem:"high",mode:"HDF",Qb:400,cv:24}),
+    rows:[["Prescription","post-dilution HDF convection 24 L ต่อ session Qb 400"],["Clearance","β2M เพิ่มชัด urea เพิ่มเล็กน้อย"],["Evidence","CONVINCE (n 1,360): high-volume HDF ≥ 23 L เทียบ high-flux HD ลด all-cause mortality (HR 0.77, 95% CI 0.65–0.93) ในผู้ป่วยที่คัดเลือกว่าน่าจะทำ high-volume ได้"]],
+    take:["Convection volume คือ dose ของ HDF เป้า ≥ 23 L ต่อ session (body-size adjusted)","ต้องการ Qb สูง (ราว 350–400 ขึ้นไป) และ ultrapure dialysate","Ultrafiltration ของ post-dilution HDF ไม่ควรเกินราว 25–30% ของ Qb"],
+    quiz:[{q:"ผู้ป่วย online HDF ได้ convection volume 17 L ต่อ session ที่ Qb 300 ข้อใดช่วยให้ถึงเป้า CONVINCE มากที่สุด",opts:["เพิ่ม Qd","เพิ่ม Qb เป็น 400 และเพิ่มเวลา ถ้า access รองรับ","เปลี่ยนเป็น low-flux","ลด UF"],ans:1,why:"convection volume ถูกจำกัดด้วย Qb (FF) และเวลา เพิ่ม Qb และ t ให้ convection volume ≥ 23 L"}]},
+  hdfLow:{name:"HDF แต่ volume ต่ำ", p:P({mem:"high",mode:"HDF",Qb:300,cv:15}),
+    rows:[["Prescription","HDF 15 L ต่อ session เพราะ Qb ได้แค่ 300"],["ผล","β2M clearance เพิ่มจาก high-flux HD ไม่มาก"],["Evidence","ประโยชน์ใน CONVINCE มาจาก convection volume สูง"]],
+    take:["HDF ที่ volume ต่ำไม่ได้ให้ผลเท่า high-volume HDF","จำกัดด้วย FF: Quf สูงสุดราว 25–30% ของ blood flow","ประโยชน์ต่อ survival สัมพันธ์กับ convection volume ที่ได้จริง"],
+    quiz:[{q:"ข้อใดคือปัจจัยหลักที่จำกัด convection volume ใน post-dilution HDF",opts:["Dialysate Na","Blood flow และ filtration fraction","ชนิด heparin","Dialysate temperature"],ans:1,why:"post-dilution ultrafiltration ทำได้ไม่เกินราว 25–30% ของ blood flow ก่อนเกิด hemoconcentration และ TMP สูง"}]},
+  mco:{name:"MCO (expanded HD)", p:P({mem:"mco"}),
+    rows:[["Membrane","medium cut-off รูใหญ่และสม่ำเสมอ internal filtration สูง"],["Clearance","molecule 15–45 kDa ดีขึ้นคล้าย HDF โดยไม่ต้องใช้ replacement fluid"],["Trade-off","albumin loss ราว 2–4 g ต่อ session"]],
+    take:["MCO = expanded HD (HDx) ใช้เครื่อง HD ปกติ","เพิ่ม removal ของ myoglobin, FLC, cytokine ขนาดกลาง","ยังไม่มีหลักฐานด้าน hard outcome ต้องติดตาม albumin"],
+    quiz:[{q:"เปลี่ยนเป็น MCO membrane แล้ว serum albumin ลดจาก 3.8 เป็น 3.4 ใน 3 เดือน ไม่มีสาเหตุอื่น ข้อใดเหมาะที่สุด",opts:["ไม่ต้องทำอะไร","ประเมินภาวะโภชนาการและพิจารณากลับเป็น high-flux หรือ HDF","เพิ่มเวลาฟอก MCO","ให้ albumin IV ทุก session"],ans:1,why:"albumin loss เป็นข้อเสียหลักของ MCO ถ้า albumin ลดชัดควรประเมินและพิจารณาเปลี่ยน membrane"}]},
+  flc:{name:"Cast nephropathy (FLC)", p:P({mem:"mco",t:360,Qb:300}),
+    rows:[["ข้อบ่งชี้","myeloma cast nephropathy ที่ต้องฟอก ต้องการลด free light chain"],["Membrane","high cut-off หรือ MCO เอา κ (22.5 kDa) และ λ dimer (45 kDa) ได้มากกว่า high-flux"],["Evidence","EuLITE (n 90): dialysis independence 90 วันไม่ต่าง (56% vs 51%) MYRE (n 98): 3 เดือน 41% vs 33% ไม่ต่าง 6 เดือน 57% vs 35%"]],
+    take:["หัวใจของการรักษาคือ chemotherapy ที่ลด FLC เร็ว (bortezomib-based)","Extended HD ด้วย HCO/MCO เป็นทางเสริม หลักฐานยังไม่ชัด","λ FLC เป็น dimer 45 kDa เอาออกยากกว่า κ"],
+    quiz:[{q:"ผู้ป่วย myeloma cast nephropathy ต้อง HD λ FLC 4,500 mg/L เริ่ม bortezomib-dexamethasone แล้ว ข้อใดถูกต้องที่สุด",opts:["High-flux HD ลด λ FLC ได้เท่า HCO","การลด FLC ด้วย chemotherapy อย่างรวดเร็วสำคัญที่สุด HCO/MCO เป็นทางเสริม","Plasma exchange เป็นมาตรฐานทุกราย","ไม่ต้องติดตาม FLC"],ans:1,why:"EuLITE และ MYRE ไม่แสดงประโยชน์ชัดของ HCO ต่อ dialysis independence ในช่วงแรก การควบคุม clone ด้วย chemotherapy เป็นหลัก"}]}
+};
+var ORDER=["low","high","hdf23","hdfLow","mco","flc"];
+
+var box=document.getElementById("ctls"), C={};
+var memSel=Sim.h("select",{id:"sMem"},Object.keys(MEM).map(function(k){ return Sim.h("option",{value:k,text:MEM[k].name}); }));
+var modeSel=Sim.h("select",{id:"sMode"},[["HD","HD"],["HDF","Online HDF post-dilution"]].map(function(x){ return Sim.h("option",{value:x[0],text:x[1]}); }));
+memSel.addEventListener("change",update); modeSel.addEventListener("change",update);
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"sMem",text:"Membrane"}),memSel]));
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"sMode",text:"Modality"}),modeSel]));
+function sl(k,o){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); box.appendChild(C[k].el); return C[k]; }
+sl("Qb",{label:"Qb",min:200,max:500,step:10,value:350,unit:"ml/min"});
+sl("cv",{label:"Convection volume",min:0,max:35,step:1,value:0,unit:"L/session"});
+sl("t",{label:"เวลา",min:180,max:420,step:15,value:240,unit:"min"});
+sl("KoA",{label:"KoA urea",min:600,max:1800,step:50,value:1200}).el.classList.add("secondary");
+
+var SOL=[["Urea",60],["Phosphate*",300],["B12",1355],["β2M",11800],["Myoglobin",17000],["λ FLC",45000],["Albumin",66500]];
+function sieve(mem,mw){ var m=MEM[mem]; return 1/(1+Math.pow(mw/m.cut,m.pow)); }
+function K(p,mw){
+  var qbw=p.Qb*0.86, s=sieve(p.mem,mw), koa=p.KoA*0.7*Math.pow(mw/60,-0.55)*s;
+  var kd=qbw*(1-Math.exp(-koa/qbw));
+  var quf=(p.mode==="HDF"?p.cv*1000/p.t:0)+MEM[p.mem].ifl;
+  var kc=quf*s*(1-kd/qbw*0.5);
+  return Math.min(qbw, kd+kc);
+}
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:300,aria:"Clearance versus molecular weight",
+  x:{min:50,max:100000,log:true,label:"Molecular weight (Da)",fmt:function(v){ return v>=1000?(v/1000)+"k":String(v); }},
+  y:{min:0,max:420,step:100,label:"Clearance (ml/min)"},
+  series:[{id:"ref",name:"Low-flux HD",color:A.muted,data:[],width:1.4,dash:[4,4]},{id:"cur",name:"Prescription",color:A.accent,data:[],width:2.6,fill:true}],
+  legend:true});
+function params(){ return {mem:memSel.value,mode:modeSel.value,Qb:C.Qb.get(),cv:C.cv.get(),t:C.t.get(),KoA:C.KoA.get()}; }
+function update(){
+  var p=params();
+  C.cv.el.style.opacity = p.mode==="HDF" ? 1 : 0.4;
+  var ref={mem:"low",mode:"HD",Qb:p.Qb,cv:0,t:p.t,KoA:p.KoA};
+  chart.setSeries("ref",Plot.logSample(function(mw){ return K(ref,mw); },50,100000,140));
+  chart.setSeries("cur",Plot.logSample(function(mw){ return K(p,mw); },50,100000,140));
+  chart.update({marks:SOL.map(function(s,i){ return {x:s[1],y:K(p,s[1]),label:s[0],color:i>=5?A.red:A.ink,below:i===4||i===6}; })});
+  var quf=p.mode==="HDF"?p.cv*1000/p.t:0, ff=quf/p.Qb;
+  var alb=(MEM[p.mem].ifl+quf)*sieve(p.mem,66500)*0.04*p.t;
+  Sim.ro("roU",Sim.fmt(K(p,60),0));
+  Sim.ro("roP",Sim.fmt(K(p,300),0));
+  Sim.ro("roB",Sim.fmt(K(p,11800),0),K(p,11800)<10?"flag":(K(p,11800)>80?"ok":false));
+  Sim.ro("roM",Sim.fmt(K(p,17000),0)+" / "+Sim.fmt(K(p,45000),0));
+  Sim.ro("roCV",p.mode==="HDF"?Sim.fmt(p.cv,0)+(ff>0.3?" FF สูง":""):"-",p.mode==="HDF"?((p.cv>=23&&ff<=0.3)?"ok":"flag"):false);
+  Sim.ro("roAlb",Sim.fmt(alb,1),alb>2?"flag":"ok");
+}
+Sim.mount({code:"HD-03", title:"Solute Transport: Diffusion, Convection and Membranes", lead:"เลือก membrane และ modality ปรับ Qb, convection volume และเวลา แล้วดู clearance ตั้งแต่ urea จนถึง albumin",
+  scenarios:S, order:ORDER, captureMs:2000,
+  onChange:function(k,s){ var p=s.p; memSel.value=p.mem; modeSel.value=p.mode; C.Qb.set(p.Qb); C.cv.set(p.cv); C.t.set(p.t); C.KoA.set(p.KoA); update(); },
+  refs:["Blankestijn PJ, Vernooij RWM, Hockham C, et al (CONVINCE). Effect of hemodiafiltration or hemodialysis on mortality in kidney failure. N Engl J Med 2023, 389(8): 700-709",
+        "Locatelli F, Martin-Malo A, Hannedouche T, et al (MPO). Effect of membrane permeability on survival of hemodialysis patients. J Am Soc Nephrol 2009, 20(3): 645-654",
+        "Cheung AK, Levin NW, Greene T, et al. Effects of high-flux hemodialysis on clinical outcomes: results of the HEMO study. J Am Soc Nephrol 2003, 14(12): 3251-3263",
+        "Ronco C, Clark WR. Haemodialysis membranes. Nat Rev Nephrol 2018, 14(6): 394-410",
+        "Hutchison CA, Cockwell P, Moroz V, et al (EuLITE). High cutoff versus high-flux haemodialysis for myeloma cast nephropathy in patients receiving bortezomib-based chemotherapy. Lancet Haematol 2019, 6(4): e217-e228",
+        "Bridoux F, Carron PL, Pegourie B, et al (MYRE). Effect of high-cutoff hemodialysis vs conventional hemodialysis on hemodialysis independence among patients with myeloma cast nephropathy. JAMA 2017, 318(21): 2099-2110"],
+  note:"Model เพื่อการสอน: sieving coefficient แบบ logistic ตาม cut-off ของ membrane, diffusion ลดตาม MW ยกกำลัง −0.55, internal filtration high-flux 15 และ MCO 25 ml/min *Phosphate ใช้ effective size ราว 300 Da เพราะ hydration shell และ distribution ช้า"
+});
+})();
+</script>
+</body>
+</html>

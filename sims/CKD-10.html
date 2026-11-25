@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[CKD-10] Cardiovascular Risk in CKD: Lipids and Anticoagulation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(90px,120px) 1fr 96px}
+.sel{display:grid;grid-template-columns:minmax(90px,120px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:8px}
+.grp{font:500 11.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin:12px 0 2px}
+.dt{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}
+.dt td{padding:5px 8px;border-top:1px solid var(--line)}
+.dt td:first-child{font-weight:600}
+.dt tr.pick td{background:var(--accent-soft)}
+.dt .no{color:var(--red)}
+.dt .lim{color:var(--gold)}
+body.present .bench{grid-template-columns:1.15fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:12px 16px}
+body.present .ctls{gap:0}
+body.present .ctl,body.present .sel{font-size:12.5px}
+body.present .grp{margin:4px 0 0}
+body.present .tools{margin-top:4px}
+body.present .tog{padding:3px 8px;font-size:11.5px}
+body.present .ro{padding:5px 10px}
+body.present .ro b{font-size:17px}
+body.present .readout{margin-top:6px}
+body.present .dt{font-size:11.5px;margin-top:4px}
+body.present .dt td{padding:2px 6px}
+body.present .act,body.present .readout{display:none}
+body.present .dt td:last-child{display:none}
+body.present .take li{font-size:14px}
+body.present .svgwrap svg{max-height:470px;width:auto;margin:0 auto}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>ประโยชน์และความเสี่ยงที่เปลี่ยนตาม GFR</h2>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 640 470" role="img" aria-label="Atherosclerotic risk reduction with lipid lowering and stroke versus bleeding with anticoagulation"></svg></div>
+      <p class="hint no-present">บน: ความเสี่ยง atherosclerotic event 5 ปีก่อนและหลังลด LDL ผลต่อ 1 mmol/L ลดลงเมื่อ GFR ต่ำ และแทบไม่มีใน dialysis ล่าง: stroke เทียบ major bleeding ต่อปีของแต่ละทางเลือก ในผู้ป่วย AF ที่ GFR ต่ำ stroke และ bleeding เพิ่มพร้อมกัน</p>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วย</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools"></div>
+      <div class="grp">Lipid</div>
+      <div class="ctls" id="ctls2"></div>
+      <div class="grp">Atrial fibrillation</div>
+      <div class="ctls" id="ctls3"></div>
+      <div class="tools" id="tools3"></div>
+      <table class="dt" id="dt"></table>
+      <div class="readout">
+        <div class="ro" id="roE"><b>-</b><span>eGFR / CrCl (CG)</span></div>
+        <div class="ro" id="roN"><b>-</b><span>NNT 5 ปี ลด LDL</span></div>
+        <div class="ro" id="roC"><b>-</b><span>CHA2DS2-VASc</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/calc.js"></script>
+<script>
+(function(){
+"use strict";
+var LIP={none:["ไม่มี",0],mod:["Moderate statin",0.30],high:["High-intensity statin",0.50],modez:["Moderate statin + ezetimibe",0.45],highez:["High statin + ezetimibe",0.60]};
+var AC={none:"ไม่ anticoagulate",warf:"Warfarin INR 2–3",apix:"Apixaban",riva:"Rivaroxaban",edox:"Edoxaban",dabi:"Dabigatran"};
+function P(o){ var d={age:62,sex:"M",w:72,cr:1.6,dial:false,alb:"A2",dm:true,ascvd:false,ldl:130,lip:"none",af:false,hf:false,stroke:false,ac:"none"}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  g3:{name:"G3a DM ยังไม่ได้ statin", p:P({lip:"mod"}),
+    rows:[["ผู้ป่วย","ชาย 62 ปี DM eGFR ราว 48 UACR 120 LDL 130"],["การรักษา","statin หรือ statin + ezetimibe"],["ผล","ลดความเสี่ยงสัมบูรณ์ได้มากเพราะ baseline risk สูง"]],
+    take:["CKD ที่ยังไม่ dialysis อายุ ≥ 50 ปีควรได้ statin หรือ statin + ezetimibe โดยไม่ต้องดู LDL","ผลต่อ 1 mmol/L ลดลงเมื่อ GFR ต่ำ แต่ความเสี่ยงพื้นฐานสูงขึ้น NNT จึงยังดี","ใน CKD ระยะท้ายการลด LDL ให้ได้มากต้องใช้ยาร่วมกัน"]},
+  hd:{name:"HD เริ่ม statin ใหม่?", p:P({age:64,cr:7.5,dial:true,ldl:120,lip:"mod"}),
+    rows:[["ผู้ป่วย","HD 2 ปี ไม่เคยได้ statin LDL 120"],["หลักฐาน","การเริ่ม statin ใน dialysis ไม่ลด CV event ชัด"],["ทำ","ไม่เริ่มเป็นประจำ แต่ใช้ต่อถ้าได้ก่อนเริ่ม dialysis"]],
+    take:["ใน dialysis CV death ส่วนใหญ่ไม่ใช่ atherosclerotic (sudden death, HF) statin จึงช่วยน้อย","ไม่แนะนำเริ่ม statin ใหม่ใน dialysis แต่ไม่ต้องหยุดถ้าได้อยู่แล้ว","ยกเว้นมี ASCVD ชัดเจนหรือเพิ่งเกิด ACS พิจารณาเป็นรายๆ"]},
+  af4:{name:"AF + CKD G4", p:P({age:74,sex:"F",w:62,cr:2.0,alb:"A2",af:true,hf:true,ac:"apix",lip:"mod"}),
+    rows:[["ผู้ป่วย","หญิง 74 ปี HF AF eGFR ราว 25 CrCl ราว 26"],["เลือก","apixaban 5 mg bid (ยังไม่ครบ 2 ใน 3 เกณฑ์ลดขนาด)"],["ทางอื่น","rivaroxaban 15 mg, edoxaban 30 mg, dabigatran ไม่แนะนำ"]],
+    take:["DOAC ดีกว่า warfarin ใน CKD G3–G4 ทั้ง stroke และ bleeding","ขนาด DOAC ใช้ CrCl Cockcroft-Gault ตาม label ไม่ใช้ eGFR","Dabigatran ขับทางไต 80% หลีกเลี่ยงเมื่อ CrCl < 30"]},
+  apix25:{name:"Apixaban ลดขนาด", p:P({age:82,sex:"F",w:55,cr:1.6,alb:"A1",af:true,ac:"apix",dm:false,lip:"mod"}),
+    rows:[["ผู้ป่วย","หญิง 82 ปี 55 kg Cr 1.6"],["เกณฑ์","อายุ ≥ 80, น้ำหนัก ≤ 60, Cr ≥ 1.5 ครบ 3 ข้อ"],["ขนาด","apixaban 2.5 mg bid"]],
+    take:["Apixaban ลดเป็น 2.5 mg bid เมื่อมี ≥ 2 ใน 3: อายุ ≥ 80, น้ำหนัก ≤ 60 kg, Cr ≥ 1.5 mg/dL","การลดขนาดโดยไม่ครบเกณฑ์ (underdosing) เพิ่ม stroke โดยไม่ลด bleeding","ทบทวน CrCl อย่างน้อยปีละครั้ง และบ่อยขึ้นเมื่อ CrCl < 60"]},
+  afhd:{name:"AF ใน HD", p:P({age:70,w:68,cr:8,dial:true,af:true,ac:"apix",lip:"none"}),
+    rows:[["ผู้ป่วย","HD AF CHA2DS2-VASc 4"],["ปัญหา","stroke และ bleeding สูงทั้งคู่ หลักฐาน anticoagulation จำกัด"],["ทางเลือก","apixaban (ข้อมูลจำกัด), warfarin, ไม่ anticoagulate, left atrial appendage occlusion"]],
+    take:["ใน dialysis ประโยชน์ของ anticoagulation ในการป้องกัน stroke ยังไม่ชัด bleeding สูง ตัดสินใจร่วมกับผู้ป่วย","Warfarin ใน dialysis สัมพันธ์กับ vascular calcification และ calciphylaxis","Apixaban เป็นทางเลือกที่ใช้บ่อย แต่ข้อมูล RCT ยังจำกัด"]},
+  dabi:{name:"Dabigatran CrCl 25", p:P({age:76,w:60,cr:2.2,af:true,ac:"dabi",lip:"mod"}),
+    rows:[["ผู้ป่วย","ชาย 76 ปี 60 kg Cr 2.2 CrCl ราว 24"],["ปัญหา","dabigatran สะสมเมื่อ CrCl ต่ำ bleeding สูง"],["แก้","เปลี่ยนเป็น apixaban หรือ rivaroxaban 15 mg หรือ edoxaban 30 mg"]],
+    take:["Dabigatran พึ่งไตมากที่สุด เปลี่ยนยาเมื่อ CrCl < 30","ยาที่ dialyze ได้ในกรณีเลือดออก: dabigatran (idarucizumab เป็น antidote)","เลือก DOAC ตามสัดส่วนการขับทางไต: apixaban 27%, rivaroxaban 35%, edoxaban 50%, dabigatran 80%"]}
+};
+var ORDER=["g3","hd","af4","apix25","afhd","dabi"];
+var b1=document.getElementById("ctls"), b2=document.getElementById("ctls2"), b3=document.getElementById("ctls3"), C={}, ST={};
+function sl(k,o,b){ o.id="s"+k; o.onInput=function(){ update(); }; C[k]=Sim.slider(o); b.appendChild(C[k].el); }
+function sel(id,label,opts,b){ var s=Sim.h("select",{id:id},opts.map(function(o){ return Sim.h("option",{value:o[0],text:o[1]}); })); s.addEventListener("change",function(){ update(); }); b.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":id,text:label}),s])); return s; }
+var sSex=sel("sex","เพศ",[["M","ชาย"],["F","หญิง"]],b1);
+sl("age",{label:"อายุ",min:40,max:92,step:1,value:62,unit:"ปี"},b1);
+sl("w",{label:"น้ำหนัก",min:40,max:110,step:1,value:72,unit:"kg"},b1);
+sl("cr",{label:"Cr",min:0.6,max:10,step:0.1,value:1.6,unit:"mg/dL",fmt:function(v){ return v.toFixed(1); }},b1);
+var sAlb=sel("alb","Albuminuria",[["A1","A1 < 30"],["A2","A2 30–300"],["A3","A3 > 300"]],b1);
+var t1=document.getElementById("tools"), t3=document.getElementById("tools3"), BT={};
+[["dial","Dialysis",t1],["dm","Diabetes",t1],["ascvd","ASCVD",t1],["af","AF",t3],["hf","HF",t3],["stroke","Prior stroke/TIA",t3]].forEach(function(t){ BT[t[0]]=Sim.toggle(t[1],function(on){ ST[t[0]]=on; update(); },false); t[2].appendChild(BT[t[0]]); });
+sl("ldl",{label:"LDL",min:50,max:220,step:5,value:130,unit:"mg/dL"},b2);
+var sLip=sel("lip","Lipid therapy",Object.keys(LIP).map(function(k){ return [k,LIP[k][0]]; }),b2);
+var sAc=sel("ac","Anticoagulant",Object.keys(AC).map(function(k){ return [k,AC[k]]; }),b3);
+function v(k){ return C[k].get(); }
+function doses(age,w,cr,crcl,dial){
+  var ap=[age>=80,w<=60,cr>=1.5].filter(Boolean).length;
+  var D={};
+  D.apix=dial||crcl<15?["lim",(age>=80||w<=60)?"2.5 mg bid":"5 mg bid","limited data"]:["ok",ap>=2?"2.5 mg bid":"5 mg bid",ap+"/3 dose-reduction criteria"];
+  D.riva=crcl<15?["no","avoid","CrCl < 15"]:crcl<=50?["ok","15 mg daily","CrCl 15–50"]:["ok","20 mg daily","CrCl > 50"];
+  D.edox=crcl<15?["no","avoid","CrCl < 15"]:crcl<=50?["ok","30 mg daily","CrCl 15–50"]:crcl>95?["lim","avoid (US label)","CrCl > 95 less effective"]:["ok","60 mg daily","CrCl 51–95"];
+  D.dabi=crcl<30?["no","avoid","CrCl < 30"]:crcl<=50||age>=80?["ok","110 mg bid","CrCl 30–50 or age ≥ 80"]:["ok","150 mg bid","CrCl > 50"];
+  D.warf=["ok","INR 2–3",dial?"calcification risk":"time in range matters"];
+  return D;
+}
+var svg=document.getElementById("vis");
+function T(x,y,s,o){ o=o||{}; var a={x:x,y:y,"font-size":o.fs||12,fill:o.c||"#0B0B1F","text-anchor":o.a||"start",text:s}; if(o.w) a["font-weight"]=o.w; if(o.mono) a["font-family"]="Geist Mono, monospace"; return Sim.svg("text",a,svg); }
+function update(){
+  var sex=sSex.value, age=v("age"), w=v("w"), cr=v("cr"), dial=!!ST.dial;
+  var eg=dial?5:Calc.ckdEpiCr({sex:sex,age:age,cr:cr}).value, cg=dial?5:Calc.cockcroftGault({age:age,w:w,cr:cr,sex:sex}).value;
+  var albF={A1:1,A2:1.4,A3:2}[sAlb.value];
+  var base=5*Math.exp(0.06*(age-60))*(eg<60?Math.pow(60/Math.max(eg,10),0.6):1)*albF*(ST.dm?1.5:1)*(ST.ascvd?2.2:1)*(sex==="M"?1.3:1)*(dial?1.6:1);
+  base=Math.min(base,60);
+  var red=LIP[sLip.value][1], dL=v("ldl")/38.67*red;
+  var rr1=dial?0.94:eg>=60?0.78:eg>=45?0.80:eg>=30?0.85:0.89;
+  var tr=base*Math.pow(rr1,dL), arr=base-tr, nnt=arr>0.05?Math.round(100/arr):null;
+  // AF
+  var chads=(ST.hf?1:0)+1+(age>=75?2:age>=65?1:0)+(ST.dm?1:0)+(ST.stroke?2:0)+(ST.ascvd?1:0)+(sex==="F"?1:0);
+  var sr=[0.2,0.6,2.2,3.2,4.8,7.2,9.7,11.2,10.8,12.2][Math.min(9,chads)]*(dial?1.5:eg<45?1.3:1);
+  var hb=1+(age>65?1:0)+(eg<60||dial?1:0)+(ST.stroke?1:0)+1;
+  var bl=(1.0+0.8*hb)*(dial?2.5:eg<30?1.6:eg<60?1.3:1);
+  var D=doses(age,w,cr,cg,dial);
+  var opts=["none","warf","apix","riva","edox","dabi"].map(function(k){
+    var s=sr,b=bl*0.6;
+    if(k==="warf"){ s=sr*(dial?0.85:0.36); b=bl*(dial?1.3:1.0); }
+    if(k==="apix"||k==="riva"||k==="edox"||k==="dabi"){ var rs=dial?0.8:0.30; var rb={apix:0.7,riva:1.0,edox:0.8,dabi:cg<50?1.4:0.95}[k]; s=sr*rs; b=bl*rb*(dial?1.1:1); if(D[k][0]==="no"){ b*=1.6; } }
+    if(k==="none") b=bl*0.45;
+    return {k:k,s:s,b:b}; });
+  // draw
+  svg.innerHTML="";
+  T(16,22,"Atherosclerotic events in 5 years (per 100)",{fs:13,w:600});
+  T(624,22,dial?"Dialysis":"eGFR "+Math.round(eg)+"  CrCl "+Math.round(cg)+" mL/min",{fs:11.5,a:"end",mono:true,c:"#5E6075"});
+  var mx=Math.max(20,base*1.15), x0=150, wd=420;
+  function bar(y,label,val,col){ T(16,y+15,label,{fs:12}); Sim.svg("rect",{x:x0,y:y,width:Math.max(2,wd*val/mx),height:22,rx:6,fill:col},svg); T(x0+wd*val/mx+8,y+16,val.toFixed(1),{fs:12.5,mono:true}); }
+  bar(40,"No lipid therapy",base,"#9A9CB2");
+  bar(72,{none:"No therapy",mod:"Moderate statin",high:"High statin",modez:"Statin + ezetimibe",highez:"High statin + eze"}[sLip.value],tr,"#5B4BFF");
+  T(16,122,"LDL −"+Math.round(red*100)+"% ("+dL.toFixed(2)+" mmol/L), RR per 1 mmol/L "+rr1.toFixed(2)+(dial?" (dialysis: near null)":""),{fs:11.5,c:"#5E6075",mono:true});
+  T(16,140,"Absolute risk reduction "+arr.toFixed(1)+" per 100, NNT "+(nnt?nnt:"-"),{fs:11.5,c:nnt&&nnt<40?"#1F7A72":"#5E6075",mono:true});
+  // RR vs eGFR mini scale
+  var gx=16, gy=160; T(gx,gy+14,"Benefit per mmol/L by kidney function",{fs:11.5,w:600});
+  [["≥60",0.78],["45–59",0.80],["30–44",0.85],["<30",0.89],["Dialysis",0.94]].forEach(function(r,i){ var x=gx+i*120, h=(1-r[1])*230; var on=(dial&&i===4)||(!dial&&((i===0&&eg>=60)||(i===1&&eg>=45&&eg<60)||(i===2&&eg>=30&&eg<45)||(i===3&&eg<30)));
+    Sim.svg("rect",{x:x+20,y:gy+90-h,width:44,height:h,rx:5,fill:on?"#5B4BFF":"#D3D5E2"},svg); T(x+42,gy+104,r[0],{fs:11,a:"middle",c:"#5E6075"}); T(x+42,gy+84-h,(Math.round((1-r[1])*100))+"%",{fs:10.5,a:"middle",mono:true,c:on?"#5B4BFF":"#9A9CB2"}); });
+  Sim.svg("line",{x1:10,x2:630,y1:282,y2:282,stroke:"#E6E7F0"},svg);
+  if(!ST.af){ T(16,310,"Atrial fibrillation: off",{fs:13,w:600,c:"#9A9CB2"}); T(16,330,"Turn on AF to compare stroke and bleeding",{fs:11.5,c:"#9A9CB2"}); }
+  else {
+    T(16,304,"AF: events per 100 patient-years",{fs:13,w:600}); T(16,322,"CHA2DS2-VASc "+chads,{fs:11.5,mono:true,c:"#5E6075"});
+    var mx2=Math.max(6,sr*1.1,Math.max.apply(null,opts.map(function(o){ return o.b; }))*1.1), cw=96;
+    opts.forEach(function(o,i){ var x=24+i*cw, base2=448, hs=110*o.s/mx2, hbb=110*o.b/mx2, selc=o.k===sAc.value;
+      if(selc) Sim.svg("rect",{x:x-6,y:316,width:cw-8,height:150,rx:10,fill:"#EFEDFF"},svg);
+      Sim.svg("rect",{x:x,y:base2-hs,width:34,height:hs,rx:4,fill:"#B4232A"},svg);
+      Sim.svg("rect",{x:x+38,y:base2-hbb,width:34,height:hbb,rx:4,fill:"#A8842C"},svg);
+      T(x+17,base2-hs-4,o.s.toFixed(1),{fs:10,a:"middle",mono:true}); T(x+55,base2-hbb-4,o.b.toFixed(1),{fs:10,a:"middle",mono:true});
+      T(x+36,462,{none:"None",warf:"Warfarin",apix:"Apixaban",riva:"Rivaroxaban",edox:"Edoxaban",dabi:"Dabigatran"}[o.k],{fs:10.5,a:"middle",w:selc?600:400}); });
+    Sim.svg("rect",{x:420,y:296,width:10,height:10,fill:"#B4232A"},svg); T(434,305,"Stroke/SE",{fs:11}); Sim.svg("rect",{x:510,y:296,width:10,height:10,fill:"#A8842C"},svg); T(524,305,"Major bleed",{fs:11});
+  }
+  // dose table
+  var dt=document.getElementById("dt"); dt.innerHTML="";
+  if(ST.af){ ["apix","riva","edox","dabi","warf"].forEach(function(k){ var d=D[k]; dt.appendChild(Sim.h("tr",{class:k===sAc.value?"pick":""},[Sim.h("td",{text:AC[k].split(" ")[0]}),Sim.h("td",{class:d[0]==="no"?"no":d[0]==="lim"?"lim":"",text:d[1]}),Sim.h("td",{text:d[2]})])); }); }
+  Sim.ro("roE",dial?"dialysis":Math.round(eg)+" / "+Math.round(cg),eg<30||dial?"flag":null);
+  Sim.ro("roN",dial&&sLip.value!=="none"?"ไม่ชัด":nnt?String(nnt):"-",nnt&&nnt<40&&!dial?"ok":null);
+  Sim.ro("roC",ST.af?chads+" (stroke "+sr.toFixed(1)+"%/y)":"-",ST.af&&chads>=2?"flag":null);
+  var m,bad=true, ac=sAc.value;
+  if(ST.af&&ac!=="none"&&ac!=="warf"&&D[ac][0]==="no") m="<b>"+AC[ac]+" ไม่เหมาะที่ CrCl "+Math.round(cg)+"</b> เปลี่ยนเป็น "+(dial?"apixaban หรือ warfarin":"apixaban, rivaroxaban 15 mg หรือ edoxaban 30 mg")+" ตามเกณฑ์ขนาดยา";
+  else if(ST.af&&dial) m="<b>AF ใน dialysis</b> ประเมิน stroke และ bleeding ร่วมกับผู้ป่วย ทางเลือก: apixaban (ข้อมูลจำกัด), warfarin (ระวัง calcification), หรือไม่ anticoagulate พิจารณา LAAO ถ้า bleeding สูง ไม่ใช้ dabigatran, rivaroxaban 20 mg, edoxaban";
+  else if(ST.af&&chads>=2&&ac==="none") m="<b>CHA2DS2-VASc "+chads+"</b> แนะนำ anticoagulation เลือก DOAC มากกว่า warfarin ใน CKD G1–G4 ขนาดตาม CrCl: "+D.apix[1]+" apixaban หรือ rivaroxaban "+D.riva[1];
+  else if(ST.af&&ac==="warf"&&!dial) m="<b>Warfarin ใน CKD G1–G4</b> DOAC ลด intracranial hemorrhage ได้มากกว่า พิจารณาเปลี่ยนเป็น DOAC ตามขนาดที่เหมาะ";
+  else if(!dial&&age>=50&&sLip.value==="none") m="<b>CKD ไม่ dialysis อายุ ≥ 50</b> เริ่ม statin หรือ statin + ezetimibe ไม่ต้องรอ LDL สูง NNT 5 ปีถ้าเริ่ม moderate statin ราว "+Math.round(100/(base-base*Math.pow(rr1,v("ldl")/38.67*0.3)));
+  else if(dial&&sLip.value!=="none") { bad=false; m="<b>Dialysis</b> ถ้าได้ statin อยู่ก่อน dialysis ให้ใช้ต่อ ไม่แนะนำเริ่มใหม่เป็นประจำเพราะไม่ลด CV event ชัด ยกเว้นมี ASCVD ล่าสุด"; }
+  else { bad=false; m="<b>ครอบคลุมแล้ว</b> ทบทวน CrCl และขนาดยาอย่างน้อยปีละครั้ง (ทุก 3–6 เดือนเมื่อ CrCl < 30) และคุม BP, DM, smoking ร่วมด้วย"; }
+  var a=document.getElementById("act"); a.innerHTML="<b>Next step:</b> "+m; a.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"CKD-10", title:"Cardiovascular Risk in CKD: Lipids and Anticoagulation", lead:"ปรับอายุ, น้ำหนัก, Cr และ dialysis ดูประโยชน์ของการลด LDL ที่ลดลงตาม GFR และเลือก anticoagulant ใน AF ตาม CrCl พร้อมเทียบ stroke กับ bleeding",
+  scenarios:S, order:ORDER, captureMs:800,
+  onChange:function(kk,s){ var p=s.p; sSex.value=p.sex; C.age.set(p.age); C.w.set(p.w); C.cr.set(p.cr); sAlb.value=p.alb; C.ldl.set(p.ldl); sLip.value=p.lip; sAc.value=p.ac;
+    ["dial","dm","ascvd","af","hf","stroke"].forEach(function(x){ ST[x]=!!p[x]; BT[x].setState(ST[x]); }); update(); },
+  refs:["KDIGO 2024 Clinical Practice Guideline for the Evaluation and Management of CKD. Kidney Int 2024, 105(4S): S117-S314",
+        "KDIGO Clinical Practice Guideline for Lipid Management in CKD. Kidney Int Suppl 2013, 3(3): 259-305",
+        "Cholesterol Treatment Trialists' Collaboration. Impact of renal function on the effects of LDL cholesterol lowering with statin-based regimens. Lancet Diabetes Endocrinol 2016, 4(10): 829-839",
+        "Baigent C, Landray MJ, Reith C, et al (SHARP). The effects of lowering LDL cholesterol with simvastatin plus ezetimibe in patients with CKD. Lancet 2011, 377(9784): 2181-2192",
+        "Wanner C, Krane V, März W, et al (4D). Atorvastatin in patients with type 2 diabetes mellitus undergoing hemodialysis. N Engl J Med 2005, 353(3): 238-248",
+        "Fellström BC, Jardine AG, Schmieder RE, et al (AURORA). Rosuvastatin and cardiovascular events in patients undergoing hemodialysis. N Engl J Med 2009, 360(14): 1395-1407",
+        "Turakhia MP, Blankestijn PJ, Carrero JJ, et al. Chronic kidney disease and arrhythmias: conclusions from a KDIGO Controversies Conference. Eur Heart J 2018, 39(24): 2314-2325",
+        "Siontis KC, Zhang X, Eckard A, et al. Outcomes associated with apixaban use in patients with end-stage kidney disease and atrial fibrillation. Circulation 2018, 138(15): 1519-1529"],
+  note:"Model เพื่อการสอน (heuristic ไม่ใช่ risk calculator): baseline 5-year risk = 5% x e^(0.06 x (อายุ − 60)) x (60/eGFR)^0.6 เมื่อ eGFR < 60 x albuminuria (1, 1.4, 2) x DM 1.5 x ASCVD 2.2 x ชาย 1.3 x dialysis 1.6 RR ต่อ LDL 1 mmol/L 0.78 ถึง 0.94 ตาม GFR stroke risk ตาม CHA2DS2-VASc (HT นับเป็น 1 เสมอ) x 1.3 เมื่อ eGFR < 45 x 1.5 ใน dialysis DOAC RR 0.30, warfarin 0.36 (ใน dialysis 0.8 และ 0.85) bleeding ตามคะแนนแบบ HAS-BLED ย่อ x CKD factor ขนาดยาตาม label (CrCl Cockcroft-Gault)"
+});
+})();
+</script>
+</body>
+</html>

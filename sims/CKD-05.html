@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[CKD-05] Renal Osteodystrophy (TMV) and Calciphylaxis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(100px,130px) 1fr 100px}
+.sel{display:grid;grid-template-columns:minmax(100px,130px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.act ol{margin:6px 0 0;padding-left:20px}
+.tools{margin-top:10px}
+body.present .bench{grid-template-columns:1.2fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:14px 18px}
+body.present .ctls{gap:1px}
+body.present .ctl,body.present .sel{font-size:13px}
+body.present .tools{margin-top:6px}
+body.present .tog{padding:3px 8px;font-size:11.5px}
+body.present .ro{padding:6px 10px}
+body.present .ro b{font-size:17px}
+body.present .readout{margin-top:8px}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12px;line-height:1.45}
+body.present .act ol{margin:2px 0 0}
+body.present .take li{font-size:14px}
+body.present .svgwrap svg{max-height:440px;width:auto;margin:0 auto}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Bone biopsy schematic และ TMV</h2>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 640 440" role="img" aria-label="Bone histology schematic with turnover, mineralization and volume"></svg></div>
+      <p class="hint no-present">ภาพตัด trabecular bone หลังติดฉลาก tetracycline 2 ครั้ง ระยะห่างของแถบเหลืองคือ mineral apposition rate (turnover) แถบสีชมพูคือ osteoid ที่ยังไม่ mineralize จำนวน osteoclast และ fibrosis ตามระดับ PTH ส่วนแถบ Al คือ aluminum ที่ mineralization front</p>
+    </div>
+    <div class="card">
+      <h2>Biomarker และปัจจัยเสี่ยง</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roH"><b>-</b><span>PTH x ULN</span></div>
+        <div class="ro" id="roL"><b>-</b><span>โอกาส low turnover</span></div>
+        <div class="ro" id="roHi"><b>-</b><span>โอกาส high turnover</span></div>
+        <div class="ro" id="roT"><b>-</b><span>TMV pattern</span></div>
+        <div class="ro" id="roCP"><b>-</b><span>Ca x P (mg²/dL²)</span></div>
+        <div class="ro" id="roR"><b>-</b><span>Calciphylaxis risk</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script>
+(function(){
+"use strict";
+var ULN=65;
+var TG=[["fx","Fragility fracture / low BMD"],["cab","Ca binder + calcitriol"],["al","Aluminum exposure"],["dm","Diabetes"],["warf","Warfarin"],["fem","Female, BMI > 30"],["les","Painful skin lesion"]];
+function P(o){ var d={stage:"5d",pth:300,alp:20,p:5,ca:9.2,d25:30,on:[]}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  ady:{name:"Adynamic bone", p:P({pth:90,alp:9,p:4.8,ca:10.1,on:["cab","dm"]}),
+    rows:[["ผู้ป่วย","HD 6 ปี DM ได้ Ca carbonate + calcitriol"],["Lab","PTH 90 (1.4 เท่า ULN) bALP 9 µg/L Ca 10.1"],["Biopsy","osteoid บาง ไม่มี double label osteoclast น้อย"]],
+    take:["PTH ต่ำกว่า 2 เท่า ULN ร่วมกับ bone ALP ต่ำ ชี้ low turnover ได้ค่อนข้างดี","Adynamic bone เก็บ Ca ไม่ได้ Ca load จึงไปเกาะหลอดเลือด เพิ่ม calcification และ fracture","ลด Ca load และหยุดยากด PTH ให้ PTH ขึ้นเอง ไม่ให้ antiresorptive"]},
+  ofi:{name:"Osteitis fibrosa", p:P({pth:1600,alp:85,p:6.4,ca:9.0}),
+    rows:[["ผู้ป่วย","HD 9 ปี ปวดกระดูก ALP สูง"],["Lab","PTH 1,600 (25 เท่า ULN) bALP 85"],["Biopsy","osteoclast มาก peritrabecular fibrosis woven bone double label ห่าง"]],
+    take:["PTH เกิน 9 เท่า ULN ร่วมกับ ALP สูง ชี้ high turnover ไม่จำเป็นต้อง biopsy เพื่อเริ่มรักษา","คุม P แล้วใช้ calcimimetic หรือ active vitamin D ตาม Ca และ P","Parathyroidectomy เมื่อดื้อยา ระวัง hungry bone"]},
+  mal:{name:"Osteomalacia / aluminum", p:P({pth:160,alp:35,p:4.5,ca:9.0,on:["al"]}),
+    rows:[["ผู้ป่วย","HD ใช้ aluminum hydroxide เป็น binder นาน ปวดกระดูก กล้ามเนื้ออ่อนแรง"],["Lab","PTH 160 bALP 35 serum Al สูง"],["Biopsy","osteoid หนา mineralization lag ยาว Al stain บวกที่ mineralization front"]],
+    take:["Mineralization defect แยกจาก adynamic ได้ด้วย biopsy เท่านั้น (osteoid หนา, lag time ยาว)","สาเหตุ: aluminum, vitamin D deficiency รุนแรง, hypophosphatemia","Aluminum bone disease: หยุดแหล่ง Al, desferrioxamine test และรักษา"]},
+  op3:{name:"Osteoporosis CKD G3", p:P({stage:"3",pth:75,alp:15,p:3.6,ca:9.4,d25:32,on:["fx"]}),
+    rows:[["ผู้ป่วย","หญิง 70 ปี eGFR 40 กระดูกสะโพกหักจากล้ม"],["Lab","PTH 75 bALP 15 Ca P ปกติ"],["ความหมาย","ไม่มี CKD-MBD ชัด รักษาแบบ osteoporosis ทั่วไป"]],
+    take:["CKD G1–G3 ที่ PTH ปกติและไม่มีความผิดปกติของ mineral ใช้แนวทาง osteoporosis ทั่วไป","DXA ทำนาย fracture ใน CKD ได้ ควรตรวจเมื่อมีความเสี่ยง","Bisphosphonate ใช้ได้ถึง eGFR ราว 30–35 ต่ำกว่านั้นต้องระวัง"]},
+  op5:{name:"Fracture ใน dialysis", p:P({pth:260,alp:22,p:5.0,ca:9.2,on:["fx"]}),
+    rows:[["ผู้ป่วย","HD vertebral fracture"],["Lab","PTH 260 (4 เท่า ULN) bALP 22"],["ปัญหา","อยู่ช่วงกลาง biomarker แยก low กับ high turnover ไม่ได้"]],
+    take:["PTH 2–9 เท่า ULN เป็นช่วงที่ biomarker แยก turnover ไม่ได้","ถ้าจะให้ antiresorptive ใน G4–G5D ควรทราบ turnover ก่อน (biopsy ถ้ามีผลต่อการตัดสินใจ)","Denosumab ใน dialysis เสี่ยง hypocalcemia รุนแรง ต้องเตรียม Ca และ vitamin D"]},
+  calc:{name:"Calciphylaxis", p:P({pth:110,alp:11,p:6.6,ca:9.8,on:["cab","dm","warf","fem","les"]}),
+    rows:[["ผู้ป่วย","หญิง HD BMI 34 DM ได้ warfarin, Ca carbonate, calcitriol"],["อาการ","แผล livedo ปวดมากที่ต้นขา กลายเป็น eschar"],["ปัจจัยเสี่ยง","warfarin, Ca load, vitamin D, adynamic bone, obesity, female"]],
+    take:["Calciphylaxis วินิจฉัยทางคลินิกเป็นหลัก แผลปวดมากที่บริเวณไขมันหนา biopsy อาจทำให้แผลลุกลาม","แก้ทุกปัจจัยเสี่ยงพร้อมกัน: หยุด warfarin, Ca, vitamin D และคุม P, PTH","Sodium thiosulfate, เพิ่ม dialysis, ดูแลแผลและความปวดแบบสหสาขา"]}
+};
+var ORDER=["ady","ofi","mal","op3","op5","calc"];
+var box=document.getElementById("ctls"), C={}, ON={};
+var ss=Sim.h("select",{id:"ckdst"},[["3","CKD G3a–G3b"],["4","CKD G4–G5 ไม่ dialysis"],["5d","G5D (dialysis)"]].map(function(o){ return Sim.h("option",{value:o[0],text:o[1]}); }));
+ss.addEventListener("change",function(){ update(); });
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"ckdst",text:"Stage"}),ss]));
+function sl(k,o){ o.id="s"+k; o.onInput=function(){ update(); }; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("lpth",{label:"PTH",min:1.2,max:3.5,step:0.01,value:Math.log10(300),unit:"pg/mL",fmt:function(v){ return Math.round(Math.pow(10,v)); }});
+sl("alp",{label:"Bone ALP",min:4,max:120,step:1,value:20,unit:"µg/L"});
+sl("p",{label:"Phosphate",min:2,max:9,step:0.1,value:5,unit:"mg/dL",fmt:function(v){ return v.toFixed(1); }});
+sl("ca",{label:"Ca",min:7,max:11.5,step:0.1,value:9.2,unit:"mg/dL",fmt:function(v){ return v.toFixed(1); }});
+sl("d25",{label:"25(OH)D",min:5,max:50,step:1,value:30,unit:"ng/mL"});
+var tb=document.getElementById("tools"), BT={};
+TG.forEach(function(t){ BT[t[0]]=Sim.toggle(t[1],function(on){ ON[t[0]]=on; update(); },false); tb.appendChild(BT[t[0]]); });
+function v(k){ return C[k].get(); }
+function sig(x){ return 1/(1+Math.exp(-x)); }
+function model(){
+  var pth=Math.pow(10,v("lpth")), alp=v("alp"), xU=pth/ULN, d5=ss.value==="5d";
+  var ref=d5?4:1.3;
+  var z=1.5*Math.log(xU/ref)+1.2*Math.log(alp/20)-(ON.cab?0.3:0)-(ON.dm?0.25:0);
+  var pHi=sig(2.2*(z-0.9)), pLo=sig(2.2*(-z-0.9));
+  var tScore=Sim.clamp(z/2.2,-1,1);
+  var minAb=(ON.al?0.8:0)+(v("d25")<10?0.45:0)+(v("p")<2.5?0.4:0);
+  var vol=(ON.fx?-0.5:0)+(tScore>0.6?0.2:0);
+  var T=pLo>0.6?"low":pHi>0.6?"high":"indeterminate";
+  var M=minAb>=0.4?"abnormal":"normal";
+  var dx=T==="low"?(M==="abnormal"?"Osteomalacia":"Adynamic bone"):T==="high"?(M==="abnormal"?"Mixed uremic osteodystrophy":"Osteitis fibrosa"):(M==="abnormal"?"Mineralization defect":"Indeterminate");
+  if(ss.value==="3"&&xU<1.5&&T!=="high") dx=ON.fx?"Osteoporosis pattern":"No overt CKD-MBD";
+  var cp=v("ca")*v("p");
+  var risk=(ON.warf?2:0)+(ON.cab?1.5:0)+(ON.dm?1:0)+(ON.fem?1.2:0)+(d5?1.2:0)+(cp>55?1:0)+(pLo>0.6?0.8:0)+(xU>9?0.6:0);
+  var rl=risk>=5.5?"High":risk>=3?"Moderate":"Low";
+  return {pth:pth,alp:alp,xU:xU,z:z,tScore:tScore,pHi:pHi,pLo:pLo,minAb:minAb,vol:vol,T:T,M:M,dx:dx,cp:cp,risk:risk,rl:rl,d5:d5};
+}
+var svg=document.getElementById("vis");
+function T_(x,y,s,o){ o=o||{}; var a={x:x,y:y,"font-size":o.fs||12,fill:o.c||"#0B0B1F","text-anchor":o.a||"start",text:s}; if(o.w) a["font-weight"]=o.w; if(o.mono) a["font-family"]="Geist Mono, monospace"; return Sim.svg("text",a,svg); }
+function rng(seed){ var s=seed; return function(){ s=(s*16807)%2147483647; return (s-1)/2147483646; }; }
+function draw(M){
+  svg.innerHTML="";
+  var R=rng(7);
+  Sim.svg("rect",{x:20,y:16,width:600,height:270,rx:16,fill:"#FBF3F3",stroke:"#E6E7F0"},svg);
+  // marrow fat dots
+  for(var i=0;i<26;i++){ Sim.svg("circle",{cx:40+R()*560,cy:30+R()*240,r:5+R()*9,fill:"#fff",stroke:"#F0DADA"},svg); }
+  // trabecula shape
+  var thick=Sim.clamp(70+M.vol*40,32,100), y0=150-thick/2, y1=150+thick/2;
+  var top="M60 "+(y0+10)+" C160 "+(y0-10)+" 260 "+(y0+14)+" 360 "+(y0-6)+" S520 "+(y0+12)+" 580 "+(y0-2);
+  var path=top+" L580 "+(y1+4)+" C500 "+(y1+16)+" 400 "+(y1-8)+" 300 "+(y1+10)+" S120 "+(y1-6)+" 60 "+(y1+6)+" Z";
+  // fibrosis
+  if(M.tScore>0.35){ var fw=8+20*(M.tScore-0.35); Sim.svg("path",{d:path,fill:"none",stroke:"#E8D9B5","stroke-width":fw*2,"stroke-linejoin":"round",opacity:0.8},svg); }
+  Sim.svg("path",{d:path,fill:"#E9E2CF",stroke:"#C9BFA3","stroke-width":1.5},svg);
+  // lamellae
+  for(var l=0;l<4;l++){ Sim.svg("path",{d:"M80 "+(150-thick*0.3+l*thick*0.2)+" C220 "+(140-thick*0.3+l*thick*0.2)+" 380 "+(160-thick*0.3+l*thick*0.2)+" 560 "+(146-thick*0.3+l*thick*0.2),fill:"none",stroke:"#D8CFB6","stroke-width":1},svg); }
+  // osteoid seam on top surface
+  var tN=(M.tScore+1)/2, ost=Sim.clamp(2+6*tN*0.6+M.minAb*14,1.5,18);
+  if(M.T==="low"&&M.minAb<0.4) ost=1.5;
+  Sim.svg("path",{d:top,fill:"none",stroke:"#E58FA8","stroke-width":ost,transform:"translate(0,"+(-ost/2)+")"},svg);
+  // tetracycline labels: two lines below surface, spacing ~ turnover
+  var sp=Sim.clamp(3+16*tN,2,20);
+  if(M.minAb<0.6&&tN>0.2){ [0,1].forEach(function(j){ Sim.svg("path",{d:top,fill:"none",stroke:"#E3B505","stroke-width":2.2,transform:"translate(0,"+(ost*0.3+4+j*sp)+")",opacity:0.95},svg); }); }
+  else Sim.svg("path",{d:top,fill:"none",stroke:"#E3B505","stroke-width":3,transform:"translate(0,"+(ost*0.3+4)+")",opacity:0.55,"stroke-dasharray":"3 5"},svg);
+  if(M.al) Sim.svg("path",{d:top,fill:"none",stroke:"#3A2E1F","stroke-width":2.6,transform:"translate(0,"+(ost*0.5+1)+")"},svg);
+  // osteoclasts on bottom surface (resorption lacunae)
+  var nOc=Math.round(Sim.clamp(1+9*tN*tN,0,10));
+  for(var k=0;k<nOc;k++){ var x=90+k*(470/Math.max(1,nOc-1||1)); if(nOc===1) x=320; var y=y1+8+(k%2)*4;
+    Sim.svg("ellipse",{cx:x,cy:y+8,rx:16,ry:9,fill:"#8B7BD8",opacity:0.85},svg);
+    for(var n=0;n<3;n++) Sim.svg("circle",{cx:x-7+n*7,cy:y+8,r:2.2,fill:"#2A1F8F"},svg); }
+  // osteoblasts on top surface
+  var nOb=Math.round(Sim.clamp(2+14*tN,1,16));
+  for(var b=0;b<nOb;b++){ var bx=80+b*(480/Math.max(1,nOb-1)); Sim.svg("ellipse",{cx:bx,cy:y0-14-ost/2,rx:8,ry:5,fill:"#5B9BD5",opacity:0.8},svg); }
+  // legend
+  var lg=[["#E58FA8","Osteoid (unmineralized)"],["#E3B505","Tetracycline labels"],["#8B7BD8","Osteoclasts"],["#5B9BD5","Osteoblasts"],["#E8D9B5","Marrow fibrosis"]];
+  if(M.al) lg.push(["#3A2E1F","Aluminum at front"]);
+  lg.forEach(function(g,i){ var x=30+(i%3)*200, y=300+Math.floor(i/3)*20; Sim.svg("rect",{x:x,y:y-9,width:14,height:10,rx:2,fill:g[0]},svg); T_(x+20,y,g[1],{fs:11.5,c:"#5E6075"}); });
+  // TMV bars
+  var bars=[["Turnover",M.tScore,["Low","Normal","High"]],["Mineralization",M.minAb>=0.4?1:-1,["Normal","","Abnormal"]],["Volume",Sim.clamp(M.vol*2,-1,1),["Low","Normal","High"]]];
+  bars.forEach(function(bb,i){ var y=354+i*28; T_(30,y+5,bb[0],{fs:12.5,w:600});
+    Sim.svg("rect",{x:150,y:y-6,width:440,height:12,rx:6,fill:"#F4F5F9",stroke:"#E6E7F0"},svg);
+    T_(150,y-9,bb[2][0],{fs:10,c:"#9A9CB2"}); if(bb[2][1]) T_(370,y-9,bb[2][1],{fs:10,c:"#9A9CB2",a:"middle"}); T_(590,y-9,bb[2][2],{fs:10,c:"#9A9CB2",a:"end"});
+    var x=370+220*bb[1]; Sim.svg("circle",{cx:x,cy:y,r:8,fill:(i===1?bb[1]>0:Math.abs(bb[1])>0.5)?"#B4232A":"#1F7A72",stroke:"#fff","stroke-width":2},svg); });
+  if(M.les){ Sim.svg("rect",{x:452,y:24,width:160,height:112,rx:12,fill:"#fff",stroke:"#B4232A"},svg);
+    Sim.svg("circle",{cx:532,cy:72,r:30,fill:"#F9EAEA",stroke:"#E7B9BC","stroke-width":8},svg);
+    for(var q=0;q<18;q++){ var an=q/18*Math.PI*2; Sim.svg("circle",{cx:532+30*Math.cos(an),cy:72+30*Math.sin(an),r:2.6,fill:"#3A3A4A"},svg); }
+    Sim.svg("circle",{cx:532,cy:72,r:9,fill:"#B4232A",opacity:0.7},svg);
+    T_(532,124,"Calcified arteriole + thrombus",{fs:10.5,a:"middle",c:"#B4232A"}); }
+  T_(620,438,M.dx,{fs:12,w:600,a:"end",c:"#5B4BFF"});
+}
+function update(){
+  var M=model(); M.al=!!ON.al; M.les=!!ON.les;
+  draw(M);
+  Sim.ro("roH",M.xU.toFixed(1)+"x",M.d5?(M.xU<2||M.xU>9?"flag":"ok"):(M.xU>1.5?"flag":null));
+  Sim.ro("roL",Math.round(M.pLo*100)+"%",M.pLo>0.6?"flag":null);
+  Sim.ro("roHi",Math.round(M.pHi*100)+"%",M.pHi>0.6?"flag":null);
+  Sim.ro("roT",M.dx.replace(" uremic osteodystrophy"," ROD"),M.T!=="indeterminate"||M.M==="abnormal"?"flag":null);
+  Sim.ro("roCP",Math.round(M.cp),M.cp>55?"flag":"ok");
+  Sim.ro("roR",M.rl,M.rl==="High"?"flag":M.rl==="Low"?"ok":null);
+  var m,bad=true;
+  if(ON.les) m="<b>Calciphylaxis</b><ol><li>หยุด warfarin (เปลี่ยนเป็น heparin หรือ apixaban ถ้ายังต้อง anticoagulate), หยุด Ca binder และ calcitriol</li><li>คุม P ด้วย non-Ca binder, คุม PTH ด้วย cinacalcet (PTX ถ้า PTH สูงมากดื้อยา) หลีกเลี่ยง PTH ต่ำเกิน</li><li>Sodium thiosulfate 25 g IV ช่วงท้าย HD 3 ครั้ง/สัปดาห์ เพิ่มความถี่หรือเวลา dialysis</li><li>ดูแลแผล debridement เฉพาะ eschar ที่ติดเชื้อ, คุมปวด, ระวัง sepsis, พิจารณา hyperbaric O2 และ palliative care ร่วม</li></ol>";
+  else if(M.dx==="Adynamic bone") m="<b>Low turnover</b> ลด Ca load (เปลี่ยนเป็น non-Ca binder, dialysate Ca 2.5 mEq/L), ลดหรือหยุด calcitriol และ calcimimetic ให้ PTH กลับขึ้น ห้ามใช้ bisphosphonate";
+  else if(M.T==="high") m="<b>High turnover</b> คุม P, ใช้ calcimimetic หรือ active vitamin D ตาม Ca และ P ถ้าดื้อยาพิจารณา parathyroidectomy (ให้ Ca และ calcitriol รองรับ hungry bone)";
+  else if(M.M==="abnormal") m="<b>Mineralization defect</b> ยืนยันด้วย bone biopsy + tetracycline double label ถ้า Al สูง หยุดแหล่ง Al, desferrioxamine test แก้ vitamin D และ phosphate";
+  else if(ON.fx&&ss.value==="3") m="<b>Osteoporosis ใน CKD G3</b> PTH และ mineral ปกติ ตรวจ DXA และให้การรักษา osteoporosis ตามปกติ bisphosphonate ใช้ได้ถ้า eGFR ≥ 30–35";
+  else if(ON.fx) m="<b>Turnover ไม่ชัด</b> biomarker อยู่ช่วงกลาง ถ้าจะให้ antiresorptive หรือ anabolic ใน G4–G5D พิจารณา bone biopsy ก่อน แก้ P, Ca, PTH และ vitamin D ให้เหมาะก่อน";
+  else { bad=false; m="<b>ไม่มีข้อบ่งชี้เร่งด่วน</b> ติดตาม PTH และ ALP เป็นแนวโน้ม bone biopsy เมื่อผลจะเปลี่ยนการรักษา (fracture ไม่ทราบสาเหตุ, ก่อนให้ยากระดูก, สงสัย Al, hypercalcemia ไม่ทราบสาเหตุ)"; }
+  if(!ON.les&&M.rl==="High") m+=" และความเสี่ยง calciphylaxis สูง ลด warfarin และ Ca load ล่วงหน้า";
+  var a=document.getElementById("act"); a.innerHTML="<b>Next step:</b> "+m; a.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"CKD-05", title:"Renal Osteodystrophy (TMV) and Calciphylaxis", lead:"ปรับ PTH, bone ALP, mineral และปัจจัยเสี่ยง ดูภาพ bone biopsy ที่ควรเห็น การจัด TMV และเมื่อไรต้อง biopsy ก่อนให้ยากระดูก พร้อมแผนจัดการ calciphylaxis",
+  scenarios:S, order:ORDER, captureMs:800,
+  onChange:function(kk,s){ var p=s.p; ss.value=p.stage; C.lpth.set(Math.log10(p.pth)); C.alp.set(p.alp); C.p.set(p.p); C.ca.set(p.ca); C.d25.set(p.d25);
+    TG.forEach(function(t){ ON[t[0]]=p.on.indexOf(t[0])>=0; BT[t[0]].setState(ON[t[0]]); }); update(); },
+  refs:["KDIGO 2017 Clinical Practice Guideline Update for CKD-MBD. Kidney Int Suppl 2017, 7(1): 1-59",
+        "Moe S, Drüeke T, Cunningham J, et al. Definition, evaluation, and classification of renal osteodystrophy: a position statement from KDIGO. Kidney Int 2006, 69(11): 1945-1953",
+        "Sprague SM, Bellorin-Font E, Jorgetti V, et al. Diagnostic accuracy of bone turnover markers and bone histology in patients with CKD treated by dialysis. Am J Kidney Dis 2016, 67(4): 559-566",
+        "Nigwekar SU, Thadhani R, Brandenburg VM. Calciphylaxis. N Engl J Med 2018, 378(18): 1704-1714",
+        "Nigwekar SU, Zhao S, Wenger J, et al. A nationally representative study of calcific uremic arteriolopathy risk factors. J Am Soc Nephrol 2016, 27(11): 3421-3429",
+        "Evenepoel P, Cunningham J, Ferrari S, et al. European consensus statement on the diagnosis and management of osteoporosis in CKD stages G4-G5D. Nephrol Dial Transplant 2021, 36(1): 42-59",
+        "Haarhaus M, Evenepoel P. Differentiating the causes of adynamic bone in advanced CKD informs osteoporosis treatment. Kidney Int 2021, 100(3): 546-558"],
+  note:"Model เพื่อการสอน (heuristic ไม่ใช่ prediction model): turnover score = 1.5 ln(PTH/ULN ÷ 4 ใน dialysis หรือ ÷ 1.3 ก่อน dialysis) + 1.2 ln(bALP/20) − ปัจจัยกด (Ca/calcitriol, DM) แปลงเป็นโอกาส low/high ด้วย logistic mineralization ผิดปกติเมื่อมี Al, 25(OH)D < 10 หรือ P < 2.5 คะแนน calciphylaxis รวมน้ำหนัก warfarin, Ca/vitamin D, DM, female + obesity, dialysis, Ca x P > 55, low turnover ULN PTH 65 pg/mL"
+});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[MX-09] Urine Sediment Atlas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.2fr 1fr}}
+.tools{margin-top:6px}
+.sub{font-size:12.5px;color:var(--muted);margin:12px 0 4px}
+table.card2{width:100%;border-collapse:collapse;margin-top:10px;font-size:13.5px}
+table.card2 th{text-align:left;font-weight:500;color:var(--muted);width:24%;padding:6px 8px 6px 0;vertical-align:top;border-top:1px solid var(--line)}
+table.card2 td{padding:6px 0;border-top:1px solid var(--line)}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tog.cur{outline:2px solid var(--accent);outline-offset:1px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:12px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .svgwrap svg{max-height:470px}
+body.present .tog{padding:3px 8px;font-size:11.5px}
+body.present .tools{margin-top:2px;gap:4px}
+body.present .sub{margin:4px 0 1px}
+body.present table.card2{font-size:12px}
+body.present table.card2 th,body.present table.card2 td{padding:3px 0}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>กล้องจุลทรรศน์ high power field</h2>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 640 440" role="img" aria-label="Schematic urine sediment microscopy field"></svg></div>
+      <p class="hint no-present">ภาพวาดเชิงสัญลักษณ์ (ไม่ใช่ภาพถ่ายจริง) ขนาดเทียบกับ scale bar 20 µm กดชื่อ element ด้านขวาเพื่อเพิ่มหรือเอาออกจาก field ปุ่ม polarized light แสดงผลึกและไขมันที่ birefringent (fat droplet เห็นเป็น Maltese cross)</p>
+    </div>
+    <div class="card">
+      <h2>Elements</h2>
+      <div class="sub">Cells</div><div class="tools" id="tCell"></div>
+      <div class="sub">Casts</div><div class="tools" id="tCast"></div>
+      <div class="sub">Crystals และอื่น ๆ</div><div class="tools" id="tCry"></div>
+      <div class="sub">การดู</div><div class="tools" id="tView"></div>
+      <table class="card2" id="info"></table>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script>
+(function(){
+"use strict";
+function SV(t,a,p){ var b={}; for(var k in a) if(a[k]!==null&&a[k]!==undefined) b[k]=a[k]; return Sim.svg(t,b,p); }
+var E={
+  rbc:{g:"cell",n:"Isomorphic RBC",en:"Isomorphic RBC",cnt:24,bi:0,mean:"เม็ดเลือดแดงรูปร่างปกติ biconcave",ddx:"เลือดออกจากทางเดินปัสสาวะส่วนล่าง นิ่ว เนื้องอก ติดเชื้อ",ph:""},
+  dys:{g:"cell",n:"Dysmorphic RBC, acanthocyte",en:"Acanthocytes",cnt:16,bi:0,mean:"RBC ผิดรูป acanthocyte มีปุ่มยื่น (Mickey mouse ears) จากการผ่าน GBM และ osmotic stress ในท่อไต",ddx:"Glomerular hematuria: acanthocyte ≥ 5% หรือ dysmorphic > 40% ชี้ GN",ph:""},
+  wbc:{g:"cell",n:"WBC",en:"WBC",cnt:12,bi:0,mean:"Neutrophil มี granule และ nucleus หลาย lobe",ddx:"UTI, pyelonephritis, AIN (sterile pyuria), TB, นิ่ว",ph:""},
+  rte:{g:"cell",n:"Renal tubular epithelial cell",en:"RTE cells",cnt:7,bi:0,mean:"เซลล์ท่อไตหลุดลอก ขนาดใหญ่กว่า WBC nucleus กลมกลางเซลล์",ddx:"ATN, AIN, ไตบาดเจ็บจากยา",ph:""},
+  squam:{g:"cell",n:"Squamous epithelial cell",en:"Squamous cells",cnt:2,bi:0,mean:"เซลล์แบนใหญ่ nucleus เล็ก",ddx:"ปนเปื้อนจากอวัยวะเพศภายนอก บอกว่าเก็บตัวอย่างไม่ดี",ph:""},
+  hya:{g:"cast",n:"Hyaline cast",en:"Hyaline cast",cnt:2,bi:0,mean:"Tamm-Horsfall (uromodulin) protein ล้วน ใส",ddx:"พบในคนปกติ หลังออกกำลังกาย ขาดน้ำ ไม่จำเพาะ",ph:""},
+  gran:{g:"cast",n:"Muddy brown granular cast",en:"Muddy brown granular cast",cnt:3,bi:0,mean:"Cast ที่มีเศษเซลล์ท่อไตสีน้ำตาลหยาบ",ddx:"ATN จำเพาะสูง จำนวนมากสัมพันธ์กับความรุนแรง",ph:""},
+  rbcc:{g:"cast",n:"RBC cast",en:"RBC cast",cnt:2,bi:0,mean:"RBC ฝังใน matrix ของ cast",ddx:"Glomerulonephritis (proliferative, crescentic) แทบ pathognomonic",ph:""},
+  wbcc:{g:"cast",n:"WBC cast",en:"WBC cast",cnt:2,bi:0,mean:"WBC ฝังใน cast แสดงว่าการอักเสบอยู่ในเนื้อไต",ddx:"Acute pyelonephritis, AIN, proliferative GN บางชนิด",ph:""},
+  rtec:{g:"cast",n:"RTE cell cast",en:"RTE cell cast",cnt:2,bi:0,mean:"เซลล์ท่อไตฝังใน cast",ddx:"ATN, AIN",ph:""},
+  fat:{g:"cast",n:"Fatty cast และ oval fat body",en:"Fatty cast and oval fat bodies",cnt:2,bi:1,mean:"หยดไขมัน (cholesterol ester) ใน cast หรือในเซลล์ท่อไต เห็น Maltese cross ใน polarized light",ddx:"Nephrotic syndrome, Fabry (mulberry cell)",ph:""},
+  waxy:{g:"cast",n:"Waxy and broad cast",en:"Waxy, broad cast",cnt:2,bi:0,mean:"Cast ใส เนื้อแข็งเหมือนขี้ผึ้ง ขอบคมมีรอยแตก กว้างเพราะเกิดในท่อที่ขยาย",ddx:"CKD ระยะท้าย, rapidly progressive disease, urine stasis",ph:""},
+  caoxd:{g:"cry",n:"Calcium oxalate dihydrate",en:"CaOx dihydrate",cnt:7,bi:1,mean:"ผลึกรูปซองจดหมาย (bipyramid) มีกากบาท",ddx:"พบในคนปกติ hypercalciuria hyperoxaluria",ph:"pH ใดก็ได้"},
+  caoxm:{g:"cry",n:"Calcium oxalate monohydrate",en:"CaOx monohydrate",cnt:9,bi:1,mean:"ผลึกรูปดัมเบลหรือรี (picket fence) birefringent ชัด",ddx:"Ethylene glycol poisoning, enteric hyperoxaluria, primary hyperoxaluria, star fruit",ph:"pH ใดก็ได้"},
+  uric:{g:"cry",n:"Uric acid crystal",en:"Uric acid",cnt:8,bi:1,mean:"ผลึก rhomboid หรือ rosette สีเหลืองอำพัน birefringent สีรุ้ง",ddx:"Urine กรด, TLS, gout, uric acid stone",ph:"pH < 5.5"},
+  struv:{g:"cry",n:"Struvite (triple phosphate)",en:"Struvite",cnt:5,bi:1,mean:"ผลึกรูปฝาโลง (coffin lid) ไม่มีสี",ddx:"UTI จากเชื้อสร้าง urease (Proteus) staghorn stone",ph:"pH > 7"},
+  cys:{g:"cry",n:"Cystine crystal",en:"Cystine",cnt:6,bi:1,mean:"แผ่นหกเหลี่ยมใส",ddx:"Cystinuria (pathognomonic)",ph:"pH กรด"},
+  drug:{g:"cry",n:"Drug crystal (acyclovir, sulfonamide)",en:"Drug crystals",cnt:6,bi:1,mean:"ผลึกเข็มเรียวยาว acyclovir หรือรวงข้าว (shock of wheat) ของ sulfadiazine",ddx:"Crystal nephropathy จากยา IV ขนาดสูง volume ต่ำ",ph:"Acyclovir ไม่ขึ้นกับ pH มาก sulfonamide ตกผลึกใน urine กรด"},
+  bact:{g:"cry",n:"Bacteria",en:"Bacteria",cnt:40,bi:0,mean:"จุดหรือแท่งเล็กจำนวนมาก",ddx:"UTI หรือปนเปื้อน ต้องดูร่วมกับ WBC",ph:""},
+  yeast:{g:"cry",n:"Yeast",en:"Yeast",cnt:8,bi:0,mean:"รูปไข่แตกหน่อ ขนาดเล็กกว่า RBC บางส่วน",ddx:"Candiduria สายสวน DM antibiotic",ph:""}
+};
+var S={
+  nephritic:{name:"Nephritic", e:["dys","rbc","rbcc"],
+    rows:[["Field","dysmorphic RBC, acanthocyte, RBC cast"],["แปลผล","glomerular hematuria"],["ต่อ","C3/C4, ANCA, anti-GBM, ANA, UPCR, biopsy"]],
+    take:["RBC cast และ acanthocyte ชี้ว่าเลือดมาจาก glomerulus","Urine sediment ที่ดูเองจากตัวอย่างสดแม่นกว่าการรายงานอัตโนมัติ","ร่วมกับ Cr ขึ้นเร็ว ให้คิดถึง RPGN และส่ง serology ด่วน (ดู GN-03)"]},
+  atn:{name:"ATN", e:["gran","rte","rtec"],
+    rows:[["Field","muddy brown granular casts, RTE cells, RTE cell cast"],["แปลผล","acute tubular necrosis"],["ต่อ","หาและแก้สาเหตุ ประเมินความรุนแรง"]],
+    take:["Muddy brown cast จำเพาะต่อ ATN มากกว่า FENa","จำนวน cast และ RTE cell สัมพันธ์กับความรุนแรงและโอกาสต้อง KRT","Prerenal มักมีแค่ hyaline cast (ดู AKI-03)"]},
+  nephrotic:{name:"Nephrotic", e:["fat","hya"],
+    rows:[["Field","fatty cast, oval fat body, Maltese cross"],["แปลผล","nephrotic-range proteinuria"],["ต่อ","UPCR, albumin, lipid, biopsy"]],
+    take:["Oval fat body คือเซลล์ท่อไตที่กลืนไขมันจาก lipiduria","Maltese cross ใน polarized light คือ cholesterol ester","Mulberry cell ใน urine ช่วยนึกถึง Fabry disease"]},
+  pyelo:{name:"Pyelonephritis", e:["wbc","wbcc","bact"],
+    rows:[["Field","WBC จำนวนมาก, WBC cast, bacteria"],["แปลผล","การอักเสบในเนื้อไต"],["ต่อ","urine culture, antibiotic"]],
+    take:["WBC cast ยืนยันว่าการอักเสบอยู่ในไต ไม่ใช่แค่กระเพาะปัสสาวะ","Sterile pyuria + WBC cast ให้นึกถึง AIN (ดู AKI-08)","Squamous cell มากแปลว่าปนเปื้อน ควรเก็บใหม่"]},
+  eg:{name:"Ethylene glycol", e:["caoxm","caoxd"],
+    rows:[["Field","CaOx monohydrate จำนวนมาก + dihydrate"],["แปลผล","oxalate load สูง"],["ต่อ","osmolal gap, anion gap, fomepizole, HD"]],
+    take:["CaOx monohydrate จำนวนมากใน AKI ร่วม high AG acidosis ให้นึกถึง ethylene glycol","ไม่พบผลึกก็ไม่ตัดโรค","อาหาร oxalate สูง (มะเฟือง) และ enteric hyperoxaluria ทำให้เห็นได้เช่นกัน (ดู EL-10)"]},
+  tls:{name:"Tumor lysis", e:["uric"],
+    rows:[["Field","uric acid crystals จำนวนมาก"],["แปลผล","urate สูงใน urine กรด"],["ต่อ","rasburicase, hydration"]],
+    take:["Uric acid ตกผลึกใน urine pH ต่ำ","ใน TLS ให้ rasburicase ลด urate เร็ว (ระวัง G6PD deficiency)","ไม่แนะนำ alkalinize ใน TLS เพราะเพิ่ม calcium phosphate (ดู AKI-06)"]},
+  struv:{name:"Struvite UTI", e:["struv","bact","wbc"],
+    rows:[["Field","struvite crystals, bacteria, WBC"],["แปลผล","UTI จากเชื้อสร้าง urease urine pH สูง"],["ต่อ","culture, imaging หา staghorn"]],
+    take:["Struvite ต้องการ urine ด่างจาก urease","ถ้าพบร่วมนิ่วขนาดใหญ่ต้องเอานิ่วออกทั้งหมด (ดู MX-03)","เชื้อที่พบบ่อยคือ Proteus และ Klebsiella"]},
+  cyst:{name:"Cystinuria", e:["cys"],
+    rows:[["Field","แผ่นผลึกหกเหลี่ยม"],["แปลผล","cystinuria"],["ต่อ","24-h cystine, น้ำมาก, alkalinize"]],
+    take:["Cystine crystal พบได้เฉพาะ cystinuria","ตรวจ urine แรกตอนเช้าที่เข้มข้นเพิ่มโอกาสพบ","รักษาด้วยน้ำมาก alkali และ thiol drug"]},
+  acyc:{name:"Acyclovir crystal", e:["drug","rte"],
+    rows:[["Field","ผลึกเข็ม birefringent + RTE cells"],["แปลผล","crystal nephropathy จาก acyclovir IV"],["ต่อ","hydration ลดขนาดยา"]],
+    take:["Acyclovir IV ขนาดสูงที่ให้เร็วตกผลึกใน collecting duct","Sulfadiazine ให้ผลึกรูปรวงข้าว อาจเกิดนิ่ว","ป้องกันด้วย hydration และปรับขนาดตาม GFR (ดู AKI-07)"]},
+  ckd:{name:"CKD ระยะท้าย", e:["waxy","hya"],
+    rows:[["Field","waxy และ broad cast"],["แปลผล","ท่อไตขยาย การไหลช้า ไตเรื้อรัง"],["ต่อ","ประเมินความเรื้อรัง ultrasound ขนาดไต"]],
+    take:["Broad cast เกิดในท่อไตที่ขยายจาก nephron ที่เหลือน้อย","Waxy cast คือ cast ที่ค้างนานจนเนื้อเปลี่ยน","พบร่วม rapidly progressive disease ได้ด้วย"]}
+};
+var ORDER=["nephritic","atn","nephrotic","pyelo","eg","tls","struv","cyst","acyc","ckd"];
+var ON={}, CUR="rbc", POL=false, B={};
+var groups={cell:"tCell",cast:"tCast",cry:"tCry"};
+Object.keys(E).forEach(function(k){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:E[k].n.split(",")[0].replace(" crystal","")}); b.addEventListener("click",function(){ ON[k]=!ON[k]; CUR=k; update(); }); document.getElementById(groups[E[k].g]).appendChild(b); B[k]=b; });
+var polB=Sim.toggle("Polarized light",function(){ POL=!POL; update(); },false); document.getElementById("tView").appendChild(polB);
+var clr=Sim.h("button",{class:"tog",type:"button",text:"ล้าง field"}); clr.addEventListener("click",function(){ ON={}; update(); }); document.getElementById("tView").appendChild(clr);
+var svg=document.getElementById("vis"), CX=220, CY=220, R=200;
+function rng(seed){ var s=seed; return function(){ s=(s*16807)%2147483647; return (s-1)/2147483646; }; }
+function pos(r,pad){ for(var i=0;i<40;i++){ var a=r()*Math.PI*2, d=Math.sqrt(r())*(R-pad); var x=CX+Math.cos(a)*d, y=CY+Math.sin(a)*d; return [x,y]; } }
+function g(x,y,rot,p){ return SV("g",{transform:"translate("+x.toFixed(1)+","+y.toFixed(1)+") rotate("+(rot||0).toFixed(0)+")"},p||svg); }
+function dim(bi){ return POL&&!bi; }
+function C(col,bright){ if(!POL) return col; return bright?"#FFF4C2":"#3A3A48"; }
+/* drawing primitives */
+var D={
+  rbc:function(p,r){ SV("circle",{r:6.5,fill:C("#E7A3A3"),stroke:C("#C77D7D"),"stroke-width":0.8},p); SV("circle",{r:3,fill:C("#F5D2D2")},p); },
+  dys:function(p,r){ var n=3+Math.floor(r()*3); SV("circle",{r:5.8,fill:C("#E7A3A3"),stroke:C("#C77D7D"),"stroke-width":0.8},p); for(var i=0;i<n;i++){ var a=i/n*Math.PI*2+r(); SV("circle",{cx:Math.cos(a)*6.2,cy:Math.sin(a)*6.2,r:2.2,fill:C("#E7A3A3"),stroke:C("#C77D7D"),"stroke-width":0.6},p); } SV("circle",{r:2.3,fill:C("#F5D2D2")},p); },
+  wbc:function(p,r){ SV("circle",{r:10,fill:C("#ECE8F4"),stroke:C("#A9A3C2"),"stroke-width":1},p); for(var i=0;i<10;i++) SV("circle",{cx:(r()-0.5)*14,cy:(r()-0.5)*14,r:0.9,fill:C("#A9A3C2")},p); [[-3.5,-1],[0.5,2.5],[3.5,-2]].forEach(function(q){ SV("ellipse",{cx:q[0],cy:q[1],rx:2.8,ry:2.1,fill:C("#7C6FA8")},p); }); },
+  rte:function(p,r){ SV("path",{d:"M-13 -9 L2 -14 L14 -6 L12 9 L-2 14 L-14 6 Z",fill:C("#EADFCB"),stroke:C("#B9A57F"),"stroke-width":1},p); SV("circle",{r:4.6,fill:C("#8A7550")},p); },
+  squam:function(p,r){ SV("path",{d:"M-40 -18 L-6 -30 L36 -22 L44 8 L14 30 L-30 24 L-46 2 Z",fill:C("#F2EEE6"),stroke:C("#C9C1B0"),"stroke-width":1},p); SV("circle",{cx:2,cy:0,r:3.5,fill:C("#9E9078")},p); },
+  cast:function(p,r,len,w,fill,stroke){ SV("rect",{x:-len/2,y:-w/2,width:len,height:w,rx:w/2,fill:fill,stroke:stroke,"stroke-width":1.2},p); },
+  hya:function(p,r){ D.cast(p,r,96,20,POL?"#2A2A36":"rgba(220,226,236,0.55)",C("#AEB6C8")); },
+  gran:function(p,r){ D.cast(p,r,92,22,C("#B48A5A"),C("#7E5A33")); for(var i=0;i<26;i++) SV("circle",{cx:(r()-0.5)*80,cy:(r()-0.5)*14,r:1+r()*1.6,fill:C("#5E3F1E")},p); },
+  rbcc:function(p,r){ D.cast(p,r,96,24,POL?"#2A2A36":"rgba(226,214,214,0.7)",C("#C49A9A")); for(var i=0;i<9;i++){ var q=g(-38+i*9.5,(r()-0.5)*8,0,p); SV("circle",{r:4.6,fill:C("#D97C7C"),stroke:C("#B05E5E"),"stroke-width":0.6},q); } },
+  wbcc:function(p,r){ D.cast(p,r,100,26,POL?"#2A2A36":"rgba(222,220,236,0.7)",C("#A9A3C2")); for(var i=0;i<7;i++){ var q=g(-38+i*12.5,(r()-0.5)*6,0,p); SV("circle",{r:6,fill:C("#ECE8F4"),stroke:C("#A9A3C2"),"stroke-width":0.8},q); SV("ellipse",{cx:-1.5,rx:2,ry:1.6,fill:C("#7C6FA8")},q); SV("ellipse",{cx:2,cy:1.5,rx:1.8,ry:1.4,fill:C("#7C6FA8")},q); } },
+  rtec:function(p,r){ D.cast(p,r,104,28,POL?"#2A2A36":"rgba(234,223,203,0.7)",C("#B9A57F")); for(var i=0;i<5;i++){ var q=g(-36+i*18,(r()-0.5)*6,r()*60,p); SV("path",{d:"M-8 -6 L2 -9 L9 -4 L8 6 L-2 9 L-9 4 Z",fill:C("#EADFCB"),stroke:C("#B9A57F"),"stroke-width":0.8},q); SV("circle",{r:2.8,fill:C("#8A7550")},q); } },
+  fat:function(p,r){ D.cast(p,r,96,24,POL?"#1E1E28":"rgba(230,232,220,0.7)",C("#B8B89A")); for(var i=0;i<10;i++){ var x=-38+i*8.5, y=(r()-0.5)*8; fatDrop(p,x,y,3+r()*1.6); } var ob=g(70+(r()-0.5)*10,30,0,p); SV("path",{d:"M-13 -9 L2 -14 L14 -6 L12 9 L-2 14 L-14 6 Z",fill:POL?"#1E1E28":"#EFEADB",stroke:C("#B9A57F"),"stroke-width":1},ob); for(var j=0;j<7;j++) fatDrop(ob,(r()-0.5)*16,(r()-0.5)*16,2.4+r()); },
+  waxy:function(p,r){ var len=110, w=34; SV("path",{d:"M"+(-len/2)+" "+(-w/2)+" L"+(len/2-6)+" "+(-w/2)+" L"+(len/2)+" -4 L"+(len/2-4)+" "+(w/2)+" L"+(-len/2+4)+" "+(w/2)+" L"+(-len/2)+" 6 Z",fill:POL?"#2A2A36":"rgba(214,206,170,0.75)",stroke:C("#9C915F"),"stroke-width":1.6},p); [[-20,-17,-14,-6],[18,17,22,8],[38,-17,34,-8]].forEach(function(c){ SV("path",{d:"M"+c[0]+" "+c[1]+" L"+c[2]+" "+c[3],stroke:C("#9C915F"),"stroke-width":1.2},p); }); },
+  caoxd:function(p,r){ var s=7+r()*4; SV("rect",{x:-s,y:-s,width:2*s,height:2*s,transform:"rotate(45)",fill:POL?"#2E2E3C":"rgba(240,244,250,0.9)",stroke:C("#8E98AE",true),"stroke-width":1.3},p); SV("path",{d:"M"+(-s*1.25)+" 0 L"+(s*1.25)+" 0 M0 "+(-s*1.25)+" L0 "+(s*1.25),stroke:C("#8E98AE",true),"stroke-width":1},p); },
+  caoxm:function(p,r){ var s=6+r()*3; if(r()<0.5){ SV("path",{d:"M"+(-s*1.6)+" 0 C"+(-s*1.6)+" "+(-s*1.1)+" "+(-s*0.4)+" "+(-s*0.9)+" 0 "+(-s*0.4)+" C"+(s*0.4)+" "+(-s*0.9)+" "+(s*1.6)+" "+(-s*1.1)+" "+(s*1.6)+" 0 C"+(s*1.6)+" "+(s*1.1)+" "+(s*0.4)+" "+(s*0.9)+" 0 "+(s*0.4)+" C"+(-s*0.4)+" "+(s*0.9)+" "+(-s*1.6)+" "+(s*1.1)+" "+(-s*1.6)+" 0 Z",fill:POL?"#FFF4C2":"rgba(238,242,248,0.95)",stroke:POL?"#FFE27A":"#8E98AE","stroke-width":1.2},p); }
+    else SV("path",{d:"M"+(-s*1.7)+" "+(-s*0.45)+" L"+(s*1.7)+" "+(-s*0.45)+" L"+(s*1.7)+" "+(s*0.45)+" L"+(-s*1.7)+" "+(s*0.45)+" Z",fill:POL?"#FFF4C2":"rgba(238,242,248,0.95)",stroke:POL?"#FFE27A":"#8E98AE","stroke-width":1.2},p); },
+  uric:function(p,r){ var s=7+r()*5; var col=POL?["#FFD27A","#9BE7FF","#FF9BD2"][Math.floor(r()*3)]:"#E3B45A";
+    if(r()<0.3){ for(var i=0;i<5;i++) SV("path",{d:"M0 0 L"+(s*1.6)+" -2.5 L"+(s*1.9)+" 0 L"+(s*1.6)+" 2.5 Z",transform:"rotate("+(i*36)+")",fill:col,stroke:POL?col:"#B07E25","stroke-width":0.6,opacity:0.9},p); }
+    else SV("path",{d:"M"+(-s*1.5)+" 0 L0 "+(-s*0.75)+" L"+(s*1.5)+" 0 L0 "+(s*0.75)+" Z",fill:col,stroke:POL?col:"#B07E25","stroke-width":1},p); },
+  struv:function(p,r){ var s=9+r()*5; SV("path",{d:"M"+(-s*1.7)+" "+(s*0.6)+" L"+(-s*1.1)+" "+(-s*0.6)+" L"+(s*1.1)+" "+(-s*0.6)+" L"+(s*1.7)+" "+(s*0.6)+" Z",fill:POL?"#4A4A5E":"rgba(244,246,250,0.95)",stroke:POL?"#9A9AB8":"#7E879C","stroke-width":1.3},p); SV("path",{d:"M"+(-s*1.1)+" "+(-s*0.6)+" L"+(-s*0.6)+" "+(s*0.6)+" M"+(s*1.1)+" "+(-s*0.6)+" L"+(s*0.6)+" "+(s*0.6)+" M"+(-s*0.6)+" "+(s*0.6)+" L"+(s*0.6)+" "+(s*0.6),stroke:POL?"#9A9AB8":"#7E879C","stroke-width":1},p); },
+  cys:function(p,r){ var s=10+r()*6, d=""; for(var i=0;i<6;i++){ var a=Math.PI/3*i; d+=(i?"L":"M")+(Math.cos(a)*s).toFixed(1)+" "+(Math.sin(a)*s).toFixed(1)+" "; } SV("path",{d:d+"Z",fill:POL?"#5A5A78":"rgba(242,246,252,0.9)",stroke:POL?"#B8B8E8":"#7E879C","stroke-width":1.3},p); if(r()<0.5){ var d2=""; for(var j=0;j<6;j++){ var b=Math.PI/3*j; d2+=(j?"L":"M")+(Math.cos(b)*s*0.55+4).toFixed(1)+" "+(Math.sin(b)*s*0.55+3).toFixed(1)+" "; } SV("path",{d:d2+"Z",fill:"none",stroke:POL?"#B8B8E8":"#7E879C","stroke-width":1},p); } },
+  drug:function(p,r){ var n=5+Math.floor(r()*5), col=POL?"#FFF4C2":"#C9CCD8"; for(var i=0;i<n;i++){ var a=(r()-0.5)*0.9, L=18+r()*16; SV("line",{x1:-L*Math.cos(a),y1:-L*Math.sin(a),x2:L*Math.cos(a),y2:L*Math.sin(a),stroke:col,"stroke-width":1.4,"stroke-linecap":"round"},p); } },
+  bact:function(p,r){ SV("rect",{x:-2.2,y:-0.9,width:4.4,height:1.8,rx:0.9,fill:C("#6B6F84")},p); },
+  yeast:function(p,r){ SV("ellipse",{rx:4.2,ry:3.2,fill:C("#E4E8EE"),stroke:C("#8A93A8"),"stroke-width":0.9},p); if(r()<0.6) SV("ellipse",{cx:5.2,cy:-1.5,rx:2.2,ry:1.7,fill:C("#E4E8EE"),stroke:C("#8A93A8"),"stroke-width":0.8},p); }
+};
+function fatDrop(p,x,y,r){ var q=g(x,y,0,p); if(POL){ SV("circle",{r:r,fill:"#11111A",stroke:"#FFF4C2","stroke-width":0.6},q); SV("path",{d:"M"+(-r)+" 0 L"+r+" 0 M0 "+(-r)+" L0 "+r,stroke:"#FFF4C2","stroke-width":1.3},q); } else { SV("circle",{r:r,fill:"#F6EFC6",stroke:"#B8A85A","stroke-width":0.6},q); SV("circle",{cx:-r*0.35,cy:-r*0.35,r:r*0.35,fill:"#fff"},q); } }
+function draw(){
+  svg.innerHTML="";
+  var defs=SV("defs",{},svg), cp=SV("clipPath",{id:"fld"},defs); SV("circle",{cx:CX,cy:CY,r:R},cp);
+  SV("circle",{cx:CX,cy:CY,r:R+6,fill:"#0B0B1F"},svg);
+  var F=SV("g",{"clip-path":"url(#fld)"},svg);
+  SV("circle",{cx:CX,cy:CY,r:R,fill:POL?"#0E0E16":"#F3F1EA"},F);
+  var keys=Object.keys(E).filter(function(k){ return ON[k]; });
+  var order=["squam","hya","waxy","gran","rbcc","wbcc","rtec","fat","rte","wbc","rbc","dys","yeast","bact","caoxd","caoxm","uric","struv","cys","drug"];
+  order.forEach(function(k){ if(!ON[k]) return; var r=rng(17+k.length*131+k.charCodeAt(0)*7);
+    for(var i=0;i<E[k].cnt;i++){ var pt=pos(r,E[k].g==="cast"?50:16), rot=r()*180; var p=g(pt[0],pt[1],rot,F); D[k](p,r); } });
+  if(!keys.length) SV("text",{x:CX,y:CY,"text-anchor":"middle","font-family":"IBM Plex Sans Thai, sans-serif","font-size":14,fill:"#9A9CB2",text:"Empty field: add elements"},F);
+  /* scale bar 20 um ~ 32 px (RBC 7.5 um ~ 13 px) */
+  SV("line",{x1:CX+90,y1:CY+168,x2:CX+122,y2:CY+168,stroke:POL?"#fff":"#0B0B1F","stroke-width":3},F);
+  SV("text",{x:CX+106,y:CY+160,"text-anchor":"middle","font-family":"Geist Mono, monospace","font-size":11,fill:POL?"#fff":"#0B0B1F",text:"20 µm"},F);
+  /* legend */
+  var lx=446, ly=34;
+  SV("text",{x:lx,y:ly,"font-family":"IBM Plex Sans Thai, sans-serif","font-size":13,"font-weight":600,fill:"#0B0B1F",text:POL?"Polarized light":"Bright field"},svg);
+  SV("text",{x:lx,y:ly+18,"font-family":"IBM Plex Sans Thai, sans-serif","font-size":11.5,fill:"#5E6075",text:"High power field (x400)"},svg);
+  keys.forEach(function(k,i){ var y=ly+48+i*24, hot=k===CUR;
+    SV("circle",{cx:lx+6,cy:y-4,r:4,fill:hot?"#5B4BFF":"#0B0B1F"},svg);
+    SV("text",{x:lx+18,y:y,"font-family":"IBM Plex Sans Thai, sans-serif","font-size":12,"font-weight":hot?600:400,fill:"#0B0B1F",text:E[k].en},svg);
+    if(POL&&E[k].bi) SV("text",{x:lx+18,y:y+12,"font-family":"IBM Plex Sans Thai, sans-serif","font-size":10,fill:"#A8842C",text:"birefringent"},svg); });
+}
+function interp(){
+  var f=[];
+  if(ON.rbcc||ON.dys) f.push(["GN","<b>Glomerular hematuria</b> ส่ง C3/C4, ANCA, anti-GBM, ANA, UPCR ถ้า Cr ขึ้นเร็วทำ biopsy ด่วน"]);
+  if(ON.gran||ON.rtec) f.push(["ATN","<b>ATN</b> หาสาเหตุ (ischemia, sepsis, nephrotoxin) หยุด nephrotoxin ประเมิน volume"]);
+  if(ON.wbcc) f.push(["WBC cast",ON.bact?"<b>Pyelonephritis</b> urine culture แล้วให้ antibiotic":"<b>Sterile WBC cast</b> นึกถึง AIN ทบทวนยา (ดู AKI-08)"]);
+  if(ON.fat) f.push(["Nephrotic","<b>Lipiduria</b> ตรวจ UPCR, albumin, lipid และพิจารณา biopsy"]);
+  if(ON.waxy) f.push(["Chronic","<b>Waxy/broad cast</b> ไตเรื้อรังหรือ rapidly progressive ประเมินขนาดไตและ chronicity"]);
+  if(ON.caoxm) f.push(["Oxalate","<b>CaOx monohydrate</b> ใน AKI ตรวจ osmolal gap และ anion gap หา ethylene glycol ซักประวัติอาหาร oxalate สูง"]);
+  if(ON.uric) f.push(["Urate","<b>Uric acid crystal</b> ดู urine pH, urate และ TLS risk"]);
+  if(ON.struv) f.push(["Struvite","<b>Struvite</b> urine culture หาเชื้อ urease และ imaging หานิ่ว"]);
+  if(ON.cys) f.push(["Cystine","<b>Cystine</b> ยืนยัน cystinuria ด้วย 24-h urine cystine"]);
+  if(ON.drug) f.push(["Drug","<b>Drug crystal</b> ทบทวนยา IV (acyclovir, sulfonamide, MTX) hydration ปรับขนาด"]);
+  if(!f.length&&ON.squam) f.push(["Contam","<b>ตัวอย่างปนเปื้อน</b> เก็บ midstream clean-catch ใหม่"]);
+  if(!f.length&&ON.wbc&&ON.bact) f.push(["UTI","<b>Pyuria + bacteriuria</b> urine culture"]);
+  return f;
+}
+function update(){
+  Object.keys(B).forEach(function(k){ B[k].setAttribute("aria-pressed",ON[k]?"true":"false"); B[k].classList.toggle("cur",k===CUR); });
+  draw();
+  var e=E[CUR], t=document.getElementById("info"); t.innerHTML="";
+  [["Element",e.n],["ลักษณะ",e.mean],["ความหมาย",e.ddx]].concat(e.ph?[["Urine pH",e.ph]]:[]).forEach(function(r){ t.appendChild(Sim.h("tr",{},[Sim.h("th",{text:r[0]}),Sim.h("td",{text:r[1]})])); });
+  var f=interp(), a=document.getElementById("act");
+  a.innerHTML="<b>Next step:</b> "+(f.length?f.map(function(x){ return x[1]; }).join(" และ "):"ยังไม่มี element ที่ช่วยแยกโรค เพิ่ม element จากรายการ หรือเลือก scenario");
+  a.className="act"+(f.length&&f[0][0]!=="Contam"?" bad":"");
+}
+Sim.mount({code:"MX-09", title:"Urine Sediment Atlas", lead:"สร้าง high power field ของ urine sediment จาก cell, cast และ crystal ดูลักษณะ ความหมาย และใช้ polarized light แยกผลึกและไขมัน แต่ละ scenario คือ field ที่พบบ่อยในข้อสอบ OSCE",
+  scenarios:S, order:ORDER, captureMs:600,
+  onChange:function(k,s){ ON={}; s.e.forEach(function(x){ ON[x]=true; }); CUR=s.e[0]; POL=false; polB.setState(false); update(); },
+  refs:["Perazella MA. The urine sediment as a biomarker of kidney disease. Am J Kidney Dis 2015, 66(5): 748-755",
+        "Fogazzi GB, Verdesca S, Garigali G. Urinalysis: core curriculum 2008. Am J Kidney Dis 2008, 51(6): 1052-1067",
+        "Perazella MA, Coca SG, Kanbay M, et al. Diagnostic value of urine microscopy for differential diagnosis of acute kidney injury in hospitalized patients. Clin J Am Soc Nephrol 2008, 3(6): 1615-1619",
+        "Köhler H, Wandel E, Brunck B. Acanthocyturia: a characteristic marker for glomerular bleeding. Kidney Int 1991, 40(1): 115-120",
+        "Cavanaugh C, Perazella MA. Urine sediment examination in the diagnosis and management of kidney disease: core curriculum 2019. Am J Kidney Dis 2019, 73(2): 258-272",
+        "Fogazzi GB. Crystalluria: a neglected aspect of urinary sediment analysis. Nephrol Dial Transplant 1996, 11(2): 379-387"],
+  note:"ภาพวาดเชิงสัญลักษณ์เพื่อการสอน รูปร่างและสีสื่อลักษณะสำคัญ ไม่ใช่ภาพถ่าย ขนาดโดยประมาณ (RBC ราว 7.5 µm)"
+});
+})();
+</script>
+</body>
+</html>

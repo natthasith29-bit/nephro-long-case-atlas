@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[HD-05] Recirculation and Access Flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(110px,150px) 1fr 108px}
+.ro.pair b{font-size:19px}
+.kv{display:grid;grid-template-columns:1fr auto;gap:2px 12px;font-size:13.5px;margin-top:10px}
+.kv span:nth-child(odd){color:var(--muted)}
+.kv span:nth-child(even){font-family:var(--mono);text-align:right}
+body.present .bench{grid-template-columns:1.45fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .readout{grid-template-columns:repeat(3,1fr)}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Access segment และตำแหน่งเข็ม</h2>
+      <div class="svgwrap"><svg id="acc" aria-label="Vascular access with needles and recirculation"></svg></div>
+      <div class="tools no-present">
+        <button class="tog" type="button" id="tRev" aria-pressed="false">สลับสาย arterial และ venous</button>
+        <button class="tog" type="button" id="tAvg" aria-pressed="false">เป็น AV graft</button>
+      </div>
+      <p class="hint no-present">จุดสีแดง = เลือดจากหัวใจที่ยังไม่ถูกฟอก จุดสีเข้ม = เลือดที่ผ่าน dialyzer แล้ว ถ้าเลือดสีเข้มไหลเข้าเข็ม arterial คือ access recirculation</p>
+    </div>
+    <div class="card">
+      <h2>Flow และผลต่อ dose</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roAR"><b>-</b><span>Access recirculation (%)</span></div>
+        <div class="ro" id="roUR"><b>-</b><span>Urea R% (low-flow, 3 samples)</span></div>
+        <div class="ro" id="roCP"><b>-</b><span>Cardiopulmonary loss (%)</span></div>
+        <div class="ro pair" id="roK"><b>-</b><span>K effective (ml/min)</span></div>
+        <div class="ro pair" id="roKtv"><b>-</b><span>Kt/V delivered vs prescribed</span></div>
+        <div class="ro pair" id="roPA"><b>-</b><span>Arterial / venous pressure</span></div>
+      </div>
+      <div class="kv secondary" id="kv"></div>
+      <details class="secondary" style="margin-top:12px"><summary style="cursor:pointer;color:var(--accent);font-weight:500">Worked steps</summary><ol class="steps" id="stepList"></ol></details>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/circuit.js"></script>
+<script>
+(function(){
+"use strict";
+var S = {
+  normal:{name:"AVF ปกติ", p:{Qa:1000,Qb:350,CO:5.5,t:240,W:70,rev:false,avg:false,lesion:null},
+    rows:[["Access","AVF Qa 1,000 ml/min Qb 350 ml/min เข็มวางถูกทิศ"],["Recirculation","access recirculation 0% เพราะ Qa มากกว่า Qb ชัดเจน"],["CPR","เลือดที่ฟอกแล้วบางส่วนวนกลับผ่านหัวใจและปอดเข้าสู่ access ทำให้ K effective ลดลงเล็กน้อย"]],
+    take:["Access recirculation เกิดเมื่อ Qb มากกว่า Qa หรือเข็มสลับทิศ ไม่เกิดจาก Qa สูง","Urea recirculation ด้วย low-flow two-needle method ค่าปกติไม่เกิน 10%","Cardiopulmonary recirculation มีใน AV access ทุกราย (ไม่มีใน catheter) และไม่ถูกวัดโดย low-flow method"],
+    quiz:[{q:"AVF Qa 1,000 ml/min Qb 350 วัด urea recirculation ด้วย low-flow method ได้ 3% spKt/V 1.4 ข้อใดถูกต้อง",opts:["มี access recirculation ต้องส่ง fistulogram","ค่าอยู่ในเกณฑ์ปกติ ไม่ต้องทำอะไรเพิ่ม","ควรสลับเข็มเพื่อลด recirculation","ควรลด Qb เป็น 250"],ans:1,why:"urea recirculation ไม่เกิน 10% ด้วย two-needle low-flow method ถือว่าปกติ และ Kt/V ผ่านเป้า"}]},
+  reversed:{name:"สลับเข็ม", p:{Qa:1000,Qb:350,CO:5.5,t:240,W:70,rev:true,avg:false,lesion:null},
+    rows:[["เหตุการณ์","ต่อสาย arterial เข้ากับเข็มฝั่ง downstream โดยไม่ตั้งใจ"],["Recirculation","R ≈ Qb / (Qa + Qb) ราว 26% แม้ access flow ดี"],["ผล","K effective และ Kt/V ลดลงชัดเจน"]],
+    take:["เข็มสลับทิศ recirculation = Qb / (Qa + Qb) ขึ้นกับ Qa","ตรวจทิศเข็มก่อนสงสัย access stenosis","หลักการเดียวกันนี้ใช้วัด Qa ด้วย ultrasound dilution (ตั้งใจสลับสาย)","Catheter ที่สลับสายมี recirculation ราว 10–20%"],
+    quiz:[{q:"spKt/V ลดจาก 1.45 เป็น 1.05 ใน session เดียว ความดันทุกตัวปกติ Qa ล่าสุด 950 ml/min พยาบาลใหม่เป็นคนแทงเข็ม ขั้นต่อไปที่เหมาะที่สุดคือข้อใด",opts:["ส่ง fistulogram ด่วน","ตรวจตำแหน่งและทิศของเข็ม arterial และ venous","เพิ่ม Qb เป็น 450","เปลี่ยน dialyzer"],ans:1,why:"Kt/V ลดลงฉับพลันโดยความดันปกติและ Qa ดี ให้นึกถึงเข็มสลับทิศ ซึ่งทำให้ recirculation ราว Qb/(Qa+Qb)"}]},
+  inflow:{name:"Inflow stenosis Qa ต่ำ", p:{Qa:280,Qb:350,CO:5.5,t:240,W:70,rev:false,avg:false,lesion:"in"},
+    rows:[["Lesion","juxta-anastomotic stenosis"],["Flow","Qa 280 ml/min ต่ำกว่า Qb เลือดที่ฟอกแล้วไหลย้อนจากเข็ม venous มาเข็ม arterial"],["Pressure","arterial pressure ติดลบมาก pump ดึงเลือดไม่พอ"]],
+    take:["Qa < Qb ทำให้เกิด recirculation = (Qb − Qa) / Qb","Inflow stenosis มี arterial pressure ติดลบมาก และ pulse augmentation อ่อน","ลด Qb เพียงชั่วคราว แก้ที่ lesion (angioplasty หรือ surgical revision)"],
+    quiz:[{q:"AVF 8 เดือน arterial pressure −280 mmHg ที่ Qb 350 urea recirculation 18% pulse augmentation อ่อน ขั้นต่อไปที่เหมาะที่สุดคือข้อใด",opts:["สลับเข็มถาวร","ลด Qb เหลือ 250 แล้วคงไว้","ส่ง fistulography พร้อม angioplasty","เพิ่มเวลาฟอก 1 ชั่วโมงอย่างเดียว"],ans:2,why:"recirculation ร่วมกับ arterial pressure ติดลบมากและ augmentation อ่อน บ่งชี้ inflow stenosis ต้องแก้ lesion การลด Qb เป็นเพียงชั่วคราว"}]},
+  outflow:{name:"Outflow stenosis AVG", p:{Qa:350,Qb:400,CO:5.5,t:240,W:70,rev:false,avg:true,lesion:"out"},
+    rows:[["Access","AV graft มี venous anastomosis stenosis"],["Flow","Qa 350 ต่ำกว่า Qb 400 เลือดที่คืนทางเข็ม venous ไหลไม่ออก วนกลับเข้าเข็ม arterial"],["Pressure","venous pressure สูง เลือดออกนานหลังถอนเข็ม"]],
+    take:["AVG ที่ Qa < 600 ml/min หรือลดลง > 25% เสี่ยง thrombosis ถ้ามี clinical indicator ร่วม (venous pressure สูง, เลือดออกนาน, PE ผิดปกติ) ให้ส่งตรวจ","Outflow stenosis: venous pressure สูง, prolonged bleeding, pulse แรงแบบ water-hammer","Recirculation เป็น late sign เพราะเกิดเมื่อ Qa ต่ำกว่า Qb แล้ว"],
+    quiz:[{q:"AVG venous pressure สูงขึ้นต่อเนื่อง 3 สัปดาห์ เลือดออกนานหลังถอนเข็ม Qa 350 ml/min (เดิม 900) urea recirculation 12% ขั้นต่อไปที่เหมาะที่สุดคือข้อใด",opts:["เพิ่ม heparin","ส่ง angiography และ angioplasty ที่ venous anastomosis","ลด Qb และติดตามต่อ","เปลี่ยนเป็น catheter ทันที"],ans:1,why:"Qa ลดลงมากกว่า 25% ร่วมกับ venous pressure สูงและ recirculation บ่งชี้ venous outflow stenosis ของ graft ต้องส่งแก้ไขก่อน thrombosis"}]},
+  measure:{name:"วัด Qa ด้วย dilution", p:{Qa:850,Qb:300,CO:5.5,t:240,W:70,rev:true,avg:true,lesion:null},
+    rows:[["วิธี","ultrasound dilution (Krivitski) ตั้งใจสลับสายชั่วคราว แล้ววัด recirculation"],["สูตร","Qa = Qb × (1 − R) / R"],["ผล","R 26% ที่ Qb 300 คำนวณ Qa ได้ราว 850 ml/min"]],
+    take:["สลับสายทำให้ R = Qb / (Qa + Qb) จึงคำนวณย้อนหา Qa ได้","AVG: Qa < 600 หรือลด > 25% ส่งตรวจ AVF: Qa < 400–500 ส่งตรวจ","Routine surveillance อย่างเดียวไม่เพิ่ม patency แต่ค่าที่ผิดปกติร่วมกับ clinical sign ยังเป็นเหตุให้ส่งตรวจ"],
+    quiz:[{q:"วัด access flow ของ AVG ด้วย ultrasound dilution ที่ Qb 300 ขณะสลับสาย ได้ recirculation 40% ข้อใดถูกต้อง",opts:["Qa ราว 450 ml/min ควรส่งตรวจหา stenosis","Qa ราว 1,200 ml/min ปกติ","ค่า recirculation 40% แปลว่ามี stenosis รุนแรง","ต้องวัดซ้ำด้วยสายปกติเท่านั้น"],ans:0,why:"Qa = Qb × (1 − R)/R = 300 × 0.6/0.4 = 450 ml/min ต่ำกว่า 600 สำหรับ AVG จึงควรส่งตรวจ"}]},
+  highflow:{name:"High-flow AVF", p:{Qa:2600,Qb:350,CO:6.5,t:240,W:70,rev:false,avg:false,lesion:null},
+    rows:[["Access","brachiocephalic AVF Qa 2,600 ml/min"],["Qa/CO","ราว 40% ของ cardiac output"],["ผล","ไม่มี access recirculation แต่ cardiopulmonary loss สูงขึ้นเล็กน้อย และเสี่ยง high-output heart failure"]],
+    take:["Qa สูงไม่ทำให้ access recirculation","Qa > 1.5–2 L/min หรือ Qa/CO > 0.3 ร่วมกับอาการ HF ให้พิจารณา flow reduction (banding, MILLER)","ดูต่อใน HD-02 Access complications"],
+    quiz:[{q:"AVF Qa 2,600 ml/min CO 6.5 L/min ผู้ป่วยเหนื่อยง่ายขึ้น echo มี RV dilatation ข้อใดเหมาะที่สุด",opts:["ไม่ต้องทำอะไรเพราะไม่มี recirculation","พิจารณา flow reduction เช่น banding หรือ MILLER procedure","เพิ่ม Qb เป็น 500 เพื่อใช้ flow ให้คุ้ม","สลับเข็มเพื่อลด CPR"],ans:1,why:"Qa สูงกว่า 2 L/min และ Qa/CO ราว 0.4 ร่วมกับอาการ high-output HF ควรลด flow ของ access"}]}
+};
+var ORDER=["normal","reversed","inflow","outflow","measure","highflow"];
+
+/* ---------- controls ---------- */
+var box=document.getElementById("ctls"), C={};
+function sl(k,o){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); box.appendChild(C[k].el); return C[k]; }
+sl("Qa",{label:"Access flow (Qa)",min:150,max:3000,step:10,value:1000,unit:"ml/min"});
+sl("Qb",{label:"Qb",min:150,max:500,step:10,value:350,unit:"ml/min"});
+sl("CO",{label:"Cardiac output",min:3,max:9,step:0.1,value:5.5,unit:"L/min",fmt:function(v){return v.toFixed(1);}}).el.classList.add("secondary");
+sl("t",{label:"Time",min:180,max:300,step:15,value:240,unit:"min"}).el.classList.add("secondary");
+sl("W",{label:"Dry weight",min:40,max:110,step:1,value:70,unit:"kg"}).el.classList.add("secondary");
+var st={rev:false,avg:false,lesion:null};
+function tog(id,key){ var b=document.getElementById(id); b.addEventListener("click",function(){ st[key]=!st[key]; b.setAttribute("aria-pressed",st[key]?"true":"false"); update(); }); return b; }
+var bRev=tog("tRev","rev"), bAvg=tog("tAvg","avg");
+
+/* ---------- circuit drawing (CORE-05) ---------- */
+var svg=document.getElementById("acc"), c=null, built=null;
+function build(rev, avg, lesion){
+  if(c) c.destroy();
+  c=Circuit.create(svg,{w:600,h:300});
+  var y=220, xa=rev?390:210, xv=rev?210:390;
+  c.add("box","DZ",{x:300,y:52,w:130,h:44,title:"Dialyzer",fs:14});
+  c.add("pump","BP",{x:xa,y:118,r:18,showRate:false,label:""});
+  c.add("text","T1",{x:24,y:y+50,text:avg?"From arterial anastomosis":"From anastomosis",anchor:"start",size:13});
+  c.add("text","T2",{x:576,y:y+50,text:"To central vein",anchor:"end",size:13});
+  c.add("text","NA",{x:xa,y:y+36,text:"A needle",size:14,color:"#B4232A",weight:500});
+  c.add("text","NV",{x:xv,y:y+36,text:"V needle",size:14,color:"#3B2C8F",weight:500});
+  c.add("junction","JA",{x:xa,y:y,r:5,color:"#B4232A"});
+  c.add("junction","JV",{x:xv,y:y,r:5,color:"#3B2C8F"});
+  var vw=avg?16:20;
+  c.tube("v1",{pts:[[20,y],[Math.min(xa,xv),y]],fluid:"art",w:vw,flow:0,spacing:24,labelAt:0.78});
+  c.tube("v2",{pts:[[Math.min(xa,xv),y],[Math.max(xa,xv),y]],fluid:"art",w:vw,flow:0,spacing:24});
+  c.tube("v3",{pts:[[Math.max(xa,xv),y],[580,y]],fluid:"ven",w:vw,flow:0,spacing:24});
+  c.tube("al",{pts:[[xa,y],[xa,136]],fluid:"art",w:6,flow:0});
+  c.tube("al2",{pts:[[xa,100],[xa,52],[rev?365:235,52]],fluid:"art",w:6,flow:0});
+  c.tube("vl",{pts:[[rev?235:365,52],[xv,52],[xv,y]],fluid:"ven",w:6,flow:0});
+  if(lesion){ var lx=lesion==="in"?90:500; c.set(lesion==="in"?"v1":"v3",{occl:0.8,occlAt:lesion==="in"?(lx-20)/(Math.min(xa,xv)-20):(lx-Math.max(xa,xv))/(580-Math.max(xa,xv)),occlLabel:lesion==="in"?"inflow stenosis":"outflow stenosis"}); }
+  c.start();
+  built=[rev,avg,lesion].join("|");
+}
+
+/* ---------- model ---------- */
+function dialyzerK(Qb){ var qb=Qb*0.86, koa=1200*0.7, Qd=500, r=qb/Qd, z=koa/qb*(1-r), e=Math.exp(z); return qb*(e-1)/(e-r); }
+function compute(p){
+  var Qa=p.Qa, Qb=p.Qb, AR;
+  if(p.rev) AR=Qb/(Qa+Qb); else AR=Qa>=Qb?0:(Qb-Qa)/Qb;
+  var K=dialyzerK(Qb);
+  // Schneditz: effective clearance with access recirculation
+  var Kar=K*(1-AR)/(1-AR*(1-K/Qb));
+  var COm=p.CO*1000, cpf=(COm-Qa)/(COm-Qa+Kar), Keff=Kar*cpf;
+  var V=0.55*p.W*1000, ktvP=K*p.t/V, ktvD=Keff*p.t/V;
+  // three-sample low-flow urea method: S systemic, A arterial line, V venous line
+  var Sb=70, A=Sb*(1-AR)/(1-AR*(1-K/Qb)), Vb=A*(1-K/Qb), UR=(Sb-A)/(Sb-Vb);
+  var hd=Circuit.model.hd({Qb:Qb,needle:15,Qa:(p.rev||p.lesion==="out")?undefined:Qa,outflow:p.lesion==="out"?0.9:0});
+  return {AR:AR,K:K,Kar:Kar,Keff:Keff,cpLoss:1-cpf,ktvP:ktvP,ktvD:ktvD,S:Sb,A:A,V:Vb,UR:UR,PA:hd.PA,PV:hd.PV,QaCO:Qa/COm};
+}
+function params(){ return {Qa:C.Qa.get(),Qb:C.Qb.get(),CO:C.CO.get(),t:C.t.get(),W:C.W.get(),rev:st.rev,avg:st.avg,lesion:st.lesion}; }
+function update(){
+  var p=params(), r=compute(p);
+  var key=[p.rev,p.avg,p.lesion].join("|"); if(key!==built) build(p.rev,p.avg,p.lesion);
+  // flows in the access segment
+  var Qa=p.Qa, Qb=p.Qb;
+  var lo=Math.min(Qa,Qb);
+  if(!p.rev){
+    var mid=Qa-Qb; // between A (upstream) and V (downstream)
+    c.set("v1",{flow:Qa}); c.set("v3",{flow:Qa, fluid:"ven"});
+    c.set("v2",{flow:mid, fluid:mid<0?"ven":"art", label:mid<0?"Reverse "+Math.round(-mid):Math.round(mid)+" ml/min", labelDy:-18, labelSize:13});
+  } else {
+    c.set("v1",{flow:Qa}); c.set("v2",{flow:Qa+Qb, fluid:"blood", label:"Qa + Qb (mixed)", labelDy:-18, labelSize:13}); c.set("v3",{flow:Qa, fluid:"blood"});
+  }
+  c.set("v1",{label:"Qa "+Qa, labelDy:-18, labelSize:13});
+  ["al","al2","vl"].forEach(function(k){ c.set(k,{flow:Qb}); });
+  c.set("al",{fluid:r.AR>0.005?"blood":"art"}); c.set("al2",{fluid:r.AR>0.005?"blood":"art"});
+  c.set("BP",{rate:Qb, speed:Qb});
+  c.alarm(r.AR>=0.1?{text:"Access recirculation "+Math.round(r.AR*100)+"%"}:(r.PA<-250?{text:"Arterial pressure "+r.PA+" mmHg",level:"amber"}:(r.PV>250?{text:"Venous pressure +"+r.PV+" mmHg",level:"amber"}:null)));
+  Sim.ro("roAR",Sim.fmt(r.AR*100,0),r.AR>=0.1?"flag":(r.AR<0.01?"ok":false));
+  Sim.ro("roUR",Sim.fmt(r.UR*100,0),r.UR>0.1?"flag":"ok");
+  Sim.ro("roCP",Sim.fmt(r.cpLoss*100,1));
+  Sim.ro("roK",Sim.fmt(r.Keff,0)+" / "+Sim.fmt(r.K,0),r.Keff<0.85*r.K?"flag":false);
+  Sim.ro("roKtv",Sim.fmt(r.ktvD,2)+" / "+Sim.fmt(r.ktvP,2),r.ktvD<1.2?"flag":false);
+  Sim.ro("roPA",Sim.fmt(r.PA,0)+" / +"+Sim.fmt(r.PV,0),(r.PA<-250||r.PV>250)?"flag":false);
+  var kv=document.getElementById("kv"); kv.innerHTML="";
+  [["Qa / CO",Sim.fmt(r.QaCO*100,0)+" %"],["K หลัง access recirculation",Sim.fmt(r.Kar,0)+" ml/min"],["Qa ย้อนคำนวณจาก R (ถ้าสลับสาย)",p.rev?Sim.fmt(Qb*(1-r.AR)/r.AR,0)+" ml/min":"สลับสายเพื่อวัด"],["Surveillance cut-off",p.avg?"AVG Qa < 600 หรือลด > 25%":"AVF Qa < 400–500 หรือลด > 25%"]].forEach(function(x){ kv.appendChild(Sim.h("span",{text:x[0]})); kv.appendChild(Sim.h("span",{text:x[1]})); });
+  var L=document.getElementById("stepList"); L.innerHTML="";
+  ["ลด Qb เหลือ 100–120 ml/min 15–30 วินาที แล้วเจาะ S จากสาย arterial (ตัด recirculation ออก) A และ V เจาะขณะ Qb ตามสั่ง",
+   "S = "+r.S.toFixed(1)+"  A = "+r.A.toFixed(1)+"  V = "+r.V.toFixed(1)+" mg/dL",
+   "R% = (S − A) / (S − V) × 100 = ("+r.S.toFixed(1)+" − "+r.A.toFixed(1)+") / ("+r.S.toFixed(1)+" − "+r.V.toFixed(1)+") × 100 = "+(r.UR*100).toFixed(1)+"%",
+   "K effective = K(1 − R) / [1 − R(1 − K/Qb)] = "+r.Kar.toFixed(0)+" ml/min แล้วคูณ cardiopulmonary factor (CO − Qa)/(CO − Qa + K) ได้ "+r.Keff.toFixed(0),
+   p.rev?"สลับสาย: Qa = Qb × (1 − R)/R = "+Qb+" × "+(1-r.AR).toFixed(2)+"/"+r.AR.toFixed(2)+" = "+(Qb*(1-r.AR)/r.AR).toFixed(0)+" ml/min":"เมื่อสายถูกทิศ access recirculation = (Qb − Qa)/Qb เฉพาะเมื่อ Qa < Qb"
+  ].forEach(function(s){ L.appendChild(Sim.h("li",{},[Sim.h("code",{text:s})])); });
+}
+
+Sim.mount({code:"HD-05", title:"Recirculation and Access Flow", lead:"ปรับ access flow, Qb และทิศเข็ม แล้วดู recirculation, K effective และ Kt/V ที่ได้จริง",
+  scenarios:S, order:ORDER, captureMs:2500,
+  onChange:function(k,s){ var p=s.p; ["Qa","Qb","CO","t","W"].forEach(function(x){ C[x].set(p[x]); }); st.rev=p.rev; st.avg=p.avg; st.lesion=p.lesion; bRev.setAttribute("aria-pressed",p.rev?"true":"false"); bAvg.setAttribute("aria-pressed",p.avg?"true":"false"); update(); },
+  refs:["Lok CE, Huber TS, Lee T, et al. KDOQI Clinical Practice Guideline for Vascular Access: 2019 Update. Am J Kidney Dis 2020, 75(4 Suppl 2): S1-S164",
+        "National Kidney Foundation. KDOQI Clinical Practice Guidelines for Vascular Access 2006 (recirculation and access flow measurement). Am J Kidney Dis 2006, 48(Suppl 1): S176-S247",
+        "Krivitski NM. Theory and validation of access flow measurement by dilution technique during hemodialysis. Kidney Int 1995, 48(1): 244-250",
+        "Schneditz D, Kaufman AM, Polaschegg HD, Levin NW, Daugirdas JT. Cardiopulmonary recirculation during hemodialysis. Kidney Int 1992, 42(6): 1450-1456",
+        "Daugirdas JT, Blake PG, Ing TS. Handbook of Dialysis. 5th ed. Wolters Kluwer 2015"],
+  note:"Recirculation model: สายถูกทิศ R = (Qb − Qa)/Qb เมื่อ Qa < Qb, สายสลับ R = Qb/(Qa + Qb), dialyzer KoA 1,200 Qd 500, urea S = 70 mg/dL ค่าเพื่อการสอน"
+});
+})();
+</script>
+</body>
+</html>

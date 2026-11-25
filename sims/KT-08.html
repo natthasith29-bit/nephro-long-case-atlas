@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[KT-08] Graft Dysfunction by Time After Transplant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.4fr 1fr}}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.ro b{font-size:19px}
+.sub{font-size:12.5px;color:var(--muted);margin:12px 0 2px}
+.tools{margin-top:6px;gap:6px}
+.tog{font-size:12.5px;padding:5px 10px}
+.wk{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--ink);color:#fff;font-size:14px}
+.wk b{font-weight:600;color:var(--accent2)}
+.act{margin-top:10px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .act{display:none}
+body.present .card{padding:14px 18px}
+body.present .tools{margin-top:2px;gap:4px}
+body.present .tog{padding:3px 8px;font-size:11.5px}
+body.present .sub{margin:4px 0 1px}
+body.present .ro{padding:5px 10px}
+body.present .ro b{font-size:16px}
+body.present .wk{margin-top:6px;padding:7px 12px;font-size:13px}
+body.present .svgwrap svg{max-height:460px}
+body.present .wk span{display:none}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>สาเหตุตามช่วงเวลา และ probability หลังใส่ clue</h2>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 700 500" role="img" aria-label="Time windows of causes of graft dysfunction with posterior probability bars"></svg></div>
+      <p class="hint no-present">แถบสีอ่อนคือช่วงเวลาที่สาเหตุนั้นพบบ่อย (แกน log ของวันหลังปลูกถ่าย) เส้นดำคือเวลาที่เลือก แท่งขวาคือ probability หลังรวม clue ด้วย naive Bayes ตัวเลข prior และ likelihood ratio เป็นค่าประมาณเพื่อการสอน</p>
+    </div>
+    <div class="card">
+      <h2>เวลาและ clue</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="sub">Clinical</div><div class="tools" id="tC"></div>
+      <div class="sub">Imaging</div><div class="tools" id="tI"></div>
+      <div class="sub">Lab และ drug level</div><div class="tools" id="tL"></div>
+      <div class="readout">
+        <div class="ro" id="roT"><b>-</b><span>ช่วงเวลา</span></div>
+        <div class="ro" id="ro1"><b>-</b><span>สาเหตุนำ</span></div>
+        <div class="ro" id="ro2"><b>-</b><span>อันดับสอง</span></div>
+      </div>
+      <div class="wk" id="wk"></div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script>
+(function(){
+"use strict";
+/* windows in days: [start, peakStart, peakEnd, end], w = relative weight */
+var CA = [
+  {id:"vasc", n:"Vascular thrombosis", win:[0,0,3,14], w:0.5},
+  {id:"hyper", n:"Accelerated ABMR", win:[0,0,5,14], w:0.25},
+  {id:"dgf", n:"DGF, ATN", win:[0,0,7,21], w:3},
+  {id:"leak", n:"Urine leak", win:[1,2,14,45], w:0.6},
+  {id:"oxal", n:"Oxalate, CaP crystals", win:[2,5,90,240], w:0.25},
+  {id:"recf", n:"Recurrent FSGS, aHUS", win:[1,3,60,365], w:0.35},
+  {id:"lymph", n:"Lymphocele", win:[7,21,120,365], w:0.6},
+  {id:"obstr", n:"Ureteric obstruction", win:[3,14,180,1460], w:0.8},
+  {id:"cni", n:"CNI toxicity", win:[3,7,3650,3650], w:1.4},
+  {id:"tcmr", n:"Acute TCMR", win:[5,10,365,3650], w:1.4},
+  {id:"pyelo", n:"Pyelonephritis", win:[7,14,3650,3650], w:0.9},
+  {id:"prer", n:"Prerenal, drugs", win:[0,0,3650,3650], w:1.3},
+  {id:"cmv", n:"CMV, viral", win:[30,45,240,540], w:0.3},
+  {id:"bk", n:"BK nephropathy", win:[30,60,365,1460], w:0.8},
+  {id:"tras", n:"Transplant RAS", win:[60,90,730,1460], w:0.5},
+  {id:"ptld", n:"PTLD", win:[60,180,3650,3650], w:0.12},
+  {id:"abmr", n:"ABMR (de novo DSA)", win:[60,365,3650,3650], w:0.8},
+  {id:"recl", n:"Recurrent IgAN, C3G, MN", win:[180,365,3650,3650], w:0.5},
+  {id:"iftac", n:"Chronic IFTA, non-adherence", win:[365,730,3650,3650], w:1.2}
+];
+var CL = {
+  oligo:{n:"Oliguria เฉียบพลัน", g:"tC", lr:{vasc:8, hyper:5, dgf:3, leak:2, obstr:3, prer:1.5}},
+  never:{n:"ไม่เคยทำงานดีตั้งแต่ผ่าตัด", g:"tC", lr:{dgf:6, hyper:2, vasc:2, oxal:2}},
+  pain:{n:"ปวดหรือบวมที่ graft", g:"tC", lr:{vasc:4, hyper:4, tcmr:1.8, pyelo:3, leak:3, lymph:1.5}},
+  fever:{n:"ไข้", g:"tC", lr:{pyelo:6, cmv:6, ptld:3, tcmr:1.4}},
+  diar:{n:"Diarrhea หรือ volume loss", g:"tC", lr:{prer:6, cni:2.5, cmv:1.8}},
+  htn:{n:"BP แย่ลง + bruit", g:"tC", lr:{tras:10, cni:1.5, recl:1.3}},
+  nonad:{n:"ขาดยา หรือ tac ต่ำ", g:"tC", lr:{tcmr:4, abmr:3, iftac:2.5, cni:0.3}},
+  native:{n:"Native FSGS, IgAN, C3G, aHUS", g:"tC", lr:{recf:8, recl:6}},
+  oxrisk:{n:"PH, bariatric หรือ severe HPT", g:"tC", lr:{oxal:12}},
+  doppNo:{n:"Doppler ไม่มี flow", g:"tI", lr:{vasc:40, hyper:5}},
+  ri:{n:"RI สูง > 0.8", g:"tI", lr:{dgf:2, hyper:3, vasc:3, tcmr:1.5, obstr:1.5}},
+  fluid:{n:"Fluid collection รอบไต", g:"tI", lr:{leak:8, lymph:10}},
+  hydro:{n:"Hydronephrosis", g:"tI", lr:{obstr:10, lymph:4, leak:1.5}},
+  psv:{n:"PSV renal artery สูง", g:"tI", lr:{tras:20}},
+  mass:{n:"Mass หรือ lymph node", g:"tI", lr:{ptld:25}},
+  fcr:{n:"Fluid Cr สูงกว่า serum มาก", g:"tL", lr:{leak:30, lymph:0.1}},
+  tacHi:{n:"Tacrolimus trough สูง", g:"tL", lr:{cni:6}},
+  dsa:{n:"New DSA", g:"tL", lr:{abmr:12, hyper:4, iftac:3, tcmr:1.5}},
+  bkv:{n:"Plasma BK > 10,000", g:"tL", lr:{bk:20}},
+  prot:{n:"Proteinuria > 1 g/d", g:"tL", lr:{recf:5, recl:4, abmr:4, iftac:2.5}},
+  hemat:{n:"Dysmorphic hematuria", g:"tL", lr:{recl:5, abmr:1.5}},
+  pyuria:{n:"Pyuria + culture บวก", g:"tL", lr:{pyelo:15}},
+  leuko:{n:"Leukopenia + LFT สูง", g:"tL", lr:{cmv:8}},
+  lowplt:{n:"Platelet ต่ำ + LDH สูง", g:"tL", lr:{recf:5, cni:2, abmr:1.5}}
+};
+function Z(d, on){ return {day:d, on:on}; }
+var S = {
+  dgf:{name:"วันที่ 2: DGF", p:Z(2, ["never","oligo"]),
+    rows:[["Donor","Deceased donor อายุ 58 ปี cold ischemia 22 ชม."],["Clinical","Urine 15 ml/h ตั้งแต่ผ่าตัด"],["Doppler","มี flow RI 0.82"],["Course","ต้องฟอกเลือดในสัปดาห์แรก"]],
+    take:["DGF คือการต้องฟอกเลือดภายใน 7 วันหลังผ่าตัด สาเหตุหลักคือ ATN","ต้อง Doppler ตัด vascular thrombosis และ obstruction ก่อน","Biopsy ถ้า DGF นานกว่า 7–10 วันเพื่อหา rejection ที่ซ่อนอยู่"]},
+  vasc:{name:"วันที่ 1: anuria ทันที", p:Z(1, ["oligo","pain","doppNo"]),
+    rows:[["Clinical","Urine 200 ml/h แล้วหยุดทันที ปวด graft"],["Doppler","ไม่มี arterial และ venous flow"],["Lab","LDH สูง hematuria"],["DDx","Renal vein หรือ artery thrombosis"]],
+    take:["Anuria ทันทีหลังจากที่เคยมีปัสสาวะดีให้คิด vascular thrombosis หรือ obstruction ของ catheter","Doppler ด่วน ถ้าไม่มี flow ต้องผ่าตัดทันที","Graft มักเสียถ้าแก้ไม่ทันในไม่กี่ชั่วโมง"]},
+  leak:{name:"วันที่ 10: urine leak", p:Z(10, ["pain","fluid","fcr"]),
+    rows:[["Clinical","Urine ลดลง ปวดท้อง มีน้ำออกจากแผล"],["US","Fluid collection รอบไต"],["Aspirate","Fluid Cr 40 mg/dL serum Cr 2.1"],["DDx","Urine leak จาก ureteroneocystostomy"]],
+    take:["Fluid Cr สูงกว่า serum มากคือ urine leak","Lymphocele มี fluid Cr เท่ากับ serum","รักษาด้วย bladder catheter, nephrostomy หรือผ่าตัดแก้"]},
+  tcmr:{name:"สัปดาห์ที่ 6: Cr ขึ้น", p:Z(42, ["nonad","ri"]),
+    rows:[["Clinical","Cr 1.1 เป็น 1.6 ไม่มีอาการ"],["Tacrolimus","Trough 3.5 ng/mL"],["Imaging","ไม่มี hydronephrosis"],["Plan","Biopsy"]],
+    take:["Cr ขึ้นช่วง 1–6 เดือนหลังตัด prerenal และ obstruction แล้วต้อง biopsy","Tac ต่ำเพิ่มโอกาส TCMR","CNI toxicity กับ rejection แยกจาก trough อย่างเดียวไม่ได้"]},
+  bk:{name:"เดือนที่ 5: BK", p:Z(150, ["bkv"]),
+    rows:[["Clinical","Cr 1.3 เป็น 1.7"],["Lab","Plasma BK 85,000 copies/mL"],["Biopsy","SV40 บวก"],["Plan","ลด immunosuppression"]],
+    take:["BK nephropathy พบมากในปีแรก","Plasma BK สูงร่วม Cr ขึ้นต้องแยก BKVAN กับ rejection ด้วย biopsy","ดูรายละเอียดใน KT-06"]},
+  tras:{name:"เดือนที่ 8: HT + bruit", p:Z(240, ["htn","psv"]),
+    rows:[["Clinical","BP ขึ้นต้องใช้ยา 3 ตัว มี bruit ที่ graft"],["Lab","Cr ขึ้น 40% หลังเริ่ม ACEi"],["Doppler","PSV renal artery 380 cm/s"],["Plan","Angioplasty + stent"]],
+    take:["Transplant RAS พบช่วง 3 เดือนถึง 2 ปี","HT ดื้อยา, bruit และ Cr ขึ้นหลัง ACEi เป็น clue","Doppler PSV สูงแล้วยืนยันด้วย angiography"]},
+  late:{name:"ปีที่ 6: ค่อยๆ เสื่อม", p:Z(2190, ["nonad","dsa","prot"]),
+    rows:[["Clinical","Cr 1.2 เป็น 2.0 ใน 2 ปี proteinuria 2 g"],["Tacrolimus","Trough แกว่ง 2–8"],["DSA","Class II DSA ใหม่"],["Biopsy","Chronic active ABMR"]],
+    take:["Graft loss ระยะยาวเกิดจาก chronic ABMR และ non-adherence เป็นหลัก","Proteinuria ใหม่ใน graft ให้คิด ABMR, recurrent GN และ mTORi","ตรวจ DSA เมื่อ function แย่ลงหรือ adherence เป็นปัญหา"]},
+  recf:{name:"วันที่ 5: proteinuria", p:Z(5, ["native","prot"]),
+    rows:[["Native disease","Primary FSGS ไตเสียใน 3 ปี"],["Clinical","Proteinuria 8 g/d วันที่ 5"],["Biopsy","Diffuse foot process effacement"],["Plan","Plasma exchange + rituximab"]],
+    take:["Recurrent FSGS เกิดได้ภายในวันถึงสัปดาห์","Native disease ที่ดำเนินเร็วเสี่ยง recurrence สูง","PLEX เร็วเพิ่มโอกาส remission (ดู KT-12)"]},
+  lymph:{name:"สัปดาห์ที่ 8: lymphocele", p:Z(56, ["fluid","hydro"]),
+    rows:[["Clinical","ขาบวมข้างเดียว Cr ขึ้น"],["US","Fluid collection กด ureter + hydronephrosis"],["Aspirate","Fluid Cr เท่า serum lymphocyte เด่น"],["Plan","Laparoscopic fenestration"]],
+    take:["Lymphocele พบช่วงสัปดาห์ถึงเดือน","กด ureter ทำให้ hydronephrosis และขาบวม","mTOR inhibitor เพิ่มความเสี่ยง lymphocele"]}
+};
+var ORDER = ["dgf","vasc","leak","tcmr","bk","tras","late","recf","lymph"];
+/* time slider uses log scale: v 0..100 -> day 0.5..3650 */
+function v2d(v){ return Math.round(Math.pow(10, Math.log10(0.5) + v / 100 * (Math.log10(3650) - Math.log10(0.5))) * 2) / 2; }
+function d2v(d){ return (Math.log10(Math.max(0.5, d)) - Math.log10(0.5)) / (Math.log10(3650) - Math.log10(0.5)) * 100; }
+function dTxt(d){ return d < 14 ? "Day " + Math.round(d) : d < 90 ? "Week " + Math.round(d / 7) : d < 730 ? "Month " + Math.round(d / 30) : "Year " + (d / 365).toFixed(1); }
+var C = {};
+C.t = Sim.slider({id:"sT", label:"เวลาหลังผ่าตัด", min:0, max:100, step:0.5, value:d2v(2), unit:"", fmt:function(v){ return dTxt(v2d(v)); }, onInput:update}); document.getElementById("ctls").appendChild(C.t.el);
+var T = {};
+Object.keys(CL).forEach(function(k){ T[k] = Sim.toggle(CL[k].n, update, false); document.getElementById(CL[k].g).appendChild(T[k]); });
+function on(k){ return T[k].getAttribute("aria-pressed") === "true"; }
+
+function winF(w, d){
+  var L = function(x){ return Math.log10(Math.max(0.5, x)); }, x = L(d);
+  if(d < w[0] - 0.01) return 0.02;
+  if(d > w[3] + 0.01) return 0.05;
+  if(d >= w[1] && d <= w[2]) return 1;
+  if(d < w[1]) return 0.15 + 0.85 * (x - L(w[0])) / Math.max(0.05, L(w[1]) - L(w[0]));
+  return 0.15 + 0.85 * (L(w[3]) - x) / Math.max(0.05, L(w[3]) - L(w[2]));
+}
+function post(d){
+  var act = Object.keys(CL).filter(on);
+  var s = CA.map(function(c){ var p = c.w * winF(c.win, d); act.forEach(function(k){ var lr = CL[k].lr[c.id]; p *= lr !== undefined ? lr : (k === "native" || k === "oxrisk" ? 1 : 0.45); }); return p; });
+  var tot = s.reduce(function(a, b){ return a + b; }, 0);
+  return s.map(function(v){ return v / tot; });
+}
+var svg = document.getElementById("vis"), FT = "IBM Plex Sans Thai, sans-serif", MO = "Geist Mono, monospace";
+function SV(t, a, p){ var o = {}; Object.keys(a).forEach(function(k){ if(a[k] !== null && a[k] !== undefined) o[k] = a[k]; }); return Sim.svg(t, o, p); }
+var X0 = 170, X1 = 520;
+function X(d){ return X0 + (X1 - X0) * d2v(d) / 100; }
+function draw(d, pr){
+  svg.innerHTML = "";
+  var order = pr.map(function(v, i){ return [v, i]; }).sort(function(a, b){ return b[0] - a[0]; }), top = order.slice(0, 3).map(function(x){ return x[1]; });
+  [[1,"1d"],[7,"1w"],[30,"1m"],[90,"3m"],[365,"1y"],[1825,"5y"]].forEach(function(t){ SV("line", {x1:X(t[0]), y1:30, x2:X(t[0]), y2:24 + CA.length * 22 + 8, stroke:"#E6E7F0"}, svg); SV("text", {x:X(t[0]), y:22, "text-anchor":"middle", "font-family":MO, "font-size":10.5, fill:"#9A9CB2", text:t[1]}, svg); });
+  SV("text", {x:540, y:22, "font-family":FT, "font-size":11, fill:"#9A9CB2", text:"Probability"}, svg);
+  CA.forEach(function(c, i){
+    var y = 32 + i * 22, isTop = top.indexOf(i) >= 0, w = c.win;
+    SV("text", {x:X0 - 8, y:y + 12, "text-anchor":"end", "font-family":FT, "font-size":12, "font-weight":isTop ? 600 : 400, fill:isTop ? "#0B0B1F" : "#5E6075", text:c.n}, svg);
+    SV("rect", {x:X(Math.max(0.5, w[0])), y:y + 4, width:Math.max(3, X(Math.min(3650, w[3])) - X(Math.max(0.5, w[0]))), height:11, rx:5, fill:"#EFEDFF"}, svg);
+    SV("rect", {x:X(Math.max(0.5, w[1])), y:y + 4, width:Math.max(3, X(Math.min(3650, w[2])) - X(Math.max(0.5, w[1]))), height:11, rx:5, fill:isTop ? "#5B4BFF" : "#C9C3FF"}, svg);
+    var pv = pr[i], bw = 120 * pv;
+    SV("rect", {x:540, y:y + 3, width:120, height:13, rx:5, fill:"#F4F5F9"}, svg);
+    SV("rect", {x:540, y:y + 3, width:Math.max(1.5, bw), height:13, rx:5, fill:isTop ? (top[0] === i ? "#B4232A" : "#D9731A") : "#9A9CB2"}, svg);
+    SV("text", {x:666, y:y + 13, "font-family":MO, "font-size":10.5, fill:"#5E6075", text:pv >= 0.995 ? "99%" : pv < 0.01 ? "<1%" : Math.round(pv * 100) + "%"}, svg);
+  });
+  var yb = 32 + CA.length * 22;
+  SV("line", {x1:X(d), y1:28, x2:X(d), y2:yb + 4, stroke:"#0B0B1F", "stroke-width":2}, svg);
+  SV("text", {x:X(d), y:yb + 20, "text-anchor":"middle", "font-family":MO, "font-size":11.5, fill:"#0B0B1F", text:dTxt(d)}, svg);
+  SV("text", {x:16, y:yb + 40, "font-family":FT, "font-size":11, fill:"#9A9CB2", text:"Pale band: possible window. Solid band: peak window. Posterior = prior(time) x likelihood ratios of active clues."}, svg);
+  return top;
+}
+var WK = {
+  vasc:"Doppler ด่วนและกลับห้องผ่าตัดทันทีถ้าไม่มี flow",
+  hyper:"DSA และ crossmatch ซ้ำ biopsy ด่วน เริ่ม PLEX + IVIG",
+  dgf:"Doppler ตัด thrombosis และ obstruction ตรวจ tac level ฟอกตามข้อบ่งชี้ biopsy ถ้า DGF > 7–10 วัน",
+  leak:"Aspirate fluid เทียบ Cr กับ serum ใส่ Foley หรือ nephrostomy ปรึกษาศัลยแพทย์",
+  oxal:"Biopsy ดู crystal ตรวจ urine oxalate, Ca, PTH ให้น้ำมาก แก้ hyperparathyroidism",
+  recf:"UPCR, biopsy (EM effacement) เริ่ม PLEX ร่วม rituximab เร็ว ถ้า aHUS ให้ C5 inhibitor",
+  lymph:"Aspirate (Cr เท่า serum) drain ถ้ามีอาการ fenestration ถ้ากลับซ้ำ",
+  obstr:"US ดู hydronephrosis ใส่ nephrostomy แล้ว antegrade pyelogram หาตำแหน่งตีบ",
+  cni:"ดู tacrolimus trough และยาที่ให้ร่วม ลด dose แล้วดู Cr biopsy ถ้าไม่ดีขึ้น",
+  tcmr:"Biopsy ก่อนรักษา ตรวจ DSA และ BK steroid pulse ถ้ายืนยัน TCMR",
+  pyelo:"Urine culture, blood culture ยาฆ่าเชื้อ ตรวจ reflux หรือ obstruction ถ้าเป็นซ้ำ",
+  prer:"ประเมิน volume หยุด NSAID/diuretic ดู tac (diarrhea เพิ่มระดับยา) ให้สารน้ำแล้วดู Cr",
+  cmv:"CMV PCR เริ่ม valganciclovir หรือ ganciclovir ลด MPA ตรวจ BK ร่วม",
+  bk:"Plasma BK PCR ถ้า Cr ขึ้นให้ biopsy แยก rejection ลด immunosuppression เป็นขั้น",
+  tras:"Doppler แล้ว angiography และ angioplasty หรือ stent ระวังเมื่อเริ่ม ACEi",
+  ptld:"CT, biopsy ดู CD20 และ EBER ตรวจ EBV PCR ลด immunosuppression",
+  abmr:"DSA, biopsy (MVI, C4d, cg) ปรับ tac ให้พอ แก้ adherence ดู KT-05",
+  recl:"UPCR, urine sediment, biopsy ดู recurrence ของ native disease ให้ RAASi",
+  iftac:"Biopsy แยก chronic ABMR กับ IFTA ไม่จำเพาะ ตรวจ DSA ประเมิน adherence และ BP"
+};
+function update(){
+  var d = v2d(C.t.get()), pr = post(d), top = draw(d, pr);
+  var per = d <= 7 ? "สัปดาห์แรก" : d <= 90 ? "1–12 สัปดาห์" : d <= 365 ? "3–12 เดือน" : "> 1 ปี";
+  Sim.ro("roT", per);
+  Sim.ro("ro1", CA[top[0]].n.split(",")[0] + " " + Math.round(pr[top[0]] * 100) + "%", pr[top[0]] > 0.5 ? "flag" : null);
+  Sim.ro("ro2", CA[top[1]].n.split(",")[0] + " " + Math.round(pr[top[1]] * 100) + "%");
+  document.getElementById("wk").innerHTML = "<b>Work-up:</b> " + WK[CA[top[0]].id] + (pr[top[1]] > 0.15 ? "<br><span style='opacity:.8;font-size:13px'>แยกจาก " + CA[top[1]].n + ": " + WK[CA[top[1]].id] + "</span>" : "");
+  var base = d <= 7 ? "สัปดาห์แรกให้นึกถึง surgical และ vascular ก่อน (Doppler ภายในชั่วโมง) แล้วจึง DGF/ATN" : d <= 90 ? "ช่วงนี้ตัด prerenal, obstruction และ CNI level แล้ว biopsy ถ้า Cr ยังขึ้น" : d <= 365 ? "ช่วง 3–12 เดือนอย่าลืม BK, CMV และ TRAS นอกจาก rejection" : "หลัง 1 ปีคิด non-adherence, chronic ABMR, recurrent GN และ IFTA ตรวจ DSA และ UPCR";
+  document.getElementById("act").innerHTML = "<b>Next step:</b> " + base;
+}
+Sim.mount({code:"KT-08", title:"Graft Dysfunction by Time After Transplant",
+  lead:"เลื่อนเวลาหลังผ่าตัดและเปิด clue ดูว่าสาเหตุของ graft dysfunction เปลี่ยนตามช่วงเวลาอย่างไร probability เปลี่ยนเท่าไร และควร work-up อะไรก่อน",
+  scenarios:S, order:ORDER, captureMs:700,
+  onChange:function(k, s){ C.t.set(d2v(s.p.day)); Object.keys(T).forEach(function(x){ T[x].setState(s.p.on.indexOf(x) >= 0); }); update(); },
+  refs:["Kidney Disease: Improving Global Outcomes (KDIGO) Transplant Work Group. KDIGO clinical practice guideline for the care of kidney transplant recipients. Am J Transplant 2009, 9(Suppl 3): S1-S155",
+        "Sellarés J, de Freitas DG, Mengel M, et al. Understanding the causes of kidney transplant failure: the dominant role of antibody-mediated rejection and nonadherence. Am J Transplant 2012, 12(2): 388-399",
+        "Yarlagadda SG, Coca SG, Formica RN Jr, et al. Association between delayed graft function and allograft and patient survival: a systematic review and meta-analysis. Nephrol Dial Transplant 2009, 24(3): 1039-1047",
+        "Buttigieg J, Agius-Anastasi A, Sharma A, Halawa A. Early urological complications after kidney transplantation: an overview. World J Transplant 2018, 8(5): 142-149",
+        "Bruno S, Remuzzi G, Ruggenenti P. Transplant renal artery stenosis. J Am Soc Nephrol 2004, 15(1): 134-141",
+        "Fishman JA. Infection in organ transplantation. Am J Transplant 2017, 17(4): 856-879"],
+  note:"Naive Bayes เพื่อการสอน: prior = น้ำหนักพื้นฐาน x หน้าต่างเวลาแบบ trapezoid บนแกน log ของวัน clue ที่เปิดคูณ likelihood ratio ของแต่ละสาเหตุ (สาเหตุที่ clue ไม่เกี่ยวคูณ 0.45) ค่าทั้งหมดเป็นค่าประมาณ ไม่ใช่ prediction model"
+});
+})();
+</script>
+</body>
+</html>

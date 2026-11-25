@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[PD-05] Acute and Urgent-Start PD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(120px,160px) 1fr 100px}
+.sel{display:grid;grid-template-columns:minmax(120px,160px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.grp{font:500 11.5px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin:10px 0 0}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:760px){.pair{grid-template-columns:1fr}}
+.pair h3{margin:0 0 4px;font-size:13.5px;font-weight:600}
+.readout{grid-template-columns:repeat(3,1fr)}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,1fr)}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.act ul{margin:6px 0 0;padding-left:18px}
+.hide{display:none!important}
+body.present .bench{grid-template-columns:1.3fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present #steps,body.present .grp{display:none}
+body.present .card{padding:16px 20px}
+body.present .ctls{gap:4px 18px;grid-template-columns:1fr 1fr}
+body.present .ctl{grid-template-columns:96px 1fr 62px;gap:6px;font-size:12.5px}
+body.present .ctl output{font-size:12.5px}
+body.present .sel{grid-template-columns:96px minmax(0,1fr);gap:6px;font-size:12.5px}
+body.present select{font-size:12px;padding:3px 6px}
+body.present .ro{padding:8px 12px}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+body.present .act li:nth-child(n+3){display:none}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Acute PD: น้ำยาในท้องและ BUN</h2>
+      <div class="pair">
+        <div><h3>ปริมาตรในท้อง 8 ชม. แรก</h3><div id="chV"></div></div>
+        <div><h3>BUN 3 วัน</h3><div id="chB"></div></div>
+      </div>
+      <p class="hint no-present">ซ้าย: เส้นประคือ reserve volume ที่ค้างไว้ใน tidal PD (drain เพียงบางส่วนแล้วเติมใหม่) ขวา: one-compartment urea model เทียบกับไม่ฟอก เส้นประ ใช้ urea clearance ที่ได้จาก prescription และ urea generation ของผู้ป่วย</p>
+      <div id="steps" class="no-present"></div>
+    </div>
+    <div class="card">
+      <h2>Prescription</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roKtV"><b>-</b><span>Weekly Kt/V</span></div>
+        <div class="ro" id="roVol"><b>-</b><span>น้ำยา (L/วัน)</span></div>
+        <div class="ro" id="roUF"><b>-</b><span>Net UF (ml/วัน)</span></div>
+        <div class="ro" id="roK"><b>-</b><span>Urea clearance (ml/min)</span></div>
+        <div class="ro" id="roLeak"><b>-</b><span>Leak risk</span></div>
+        <div class="ro" id="roGlu"><b>-</b><span>Glucose ดูดซึม (g/วัน)</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/calc.js"></script>
+<script src="../core/pd.js"></script>
+<script>
+(function(){
+"use strict";
+function P(o){ var d={ctx:"aki",fl:"g25",buf:"lac",hours:24,cyc:120,fill:2000,tidal:70,area:1.1,w:70,bun:110,gen:18,kru:0,day:2,pos:"supine",liver:"no"}; for(var k in o) d[k]=o[k]; return d; }
+var S = {
+  septic:{name:"Septic AKI + น้ำเกิน", p:P({}),
+    rows:[["ผู้ป่วย","septic shock AKI 70 kg BUN 110 น้ำเกิน on ventilator catheter ใส่โดย nephrologist"],["Prescription","APD 24 ชม. fill 2 L cycle 2 ชม. tidal 70% 2.5%"],["ผล","น้ำยาราว 17 L/วัน UF ราว 2.5 L/วัน Kt/V ราว 2.3 ผ่านเกณฑ์ขั้นต่ำ"]],
+    take:["เป้า weekly Kt/V 2.2 ให้ผลใกล้เคียง daily HD ส่วน dose ที่สูงกว่า (3.5) ไม่เพิ่มประโยชน์","Tidal PD ใช้แก้ drain pain และ outflow ช้า ไม่ได้เพิ่ม clearance ที่ปริมาตรเท่ากัน","Acute PD ต้องวัด K, HCO3, glucose และ fluid balance ทุกวัน"]},
+  full:{name:"เพิ่ม dose (36 L/วัน)", p:P({cyc:60,tidal:100,fill:1500,fl:"g15"}),
+    rows:[["Prescription","fill 1.5 L cycle 1 ชม. ไม่ใช้ tidal 1.5% 24 ชม."],["ผล","น้ำยาราว 36 L/วัน Kt/V ขยับใกล้ 3"],["ข้อแลก","dwell สั้นมาก ได้ clearance ต่อลิตรต่ำลง ต้นทุนและงานพยาบาลเพิ่ม"]],
+    take:["เพิ่ม clearance ด้วยปริมาตรรวมต่อวัน (cycle ถี่ขึ้น) ได้ผลแบบผลตอบแทนลดลง","Cycle สั้นมากเสียเวลา fill/drain สัดส่วนสูง","ใช้ glucose ต่ำสุดที่ได้ UF ตามเป้า"]},
+  under:{name:"Dose ไม่พอ", p:P({cyc:360,tidal:100,fl:"g15",gen:22}),
+    rows:[["Prescription","exchange ด้วยมือทุก 6 ชม. 2 L (8 L/วัน)"],["ผล","Kt/V ราว 1.3 BUN ยังเพิ่มขึ้นในผู้ป่วย catabolic"],["แก้","เปลี่ยนเป็น cycle 1–2 ชม. ต่อเนื่อง 24 ชม. หรือใช้ cycler"]],
+    take:["CAPD แบบ chronic ไม่พอสำหรับ AKI ที่ catabolic","ติดตาม BUN, K, HCO3 ทุกวันเพื่อปรับ dose","ถ้าไม่ถึงเป้าแม้ปรับเต็มที่ ให้พิจารณาเปลี่ยน modality"]},
+  urgent:{name:"Urgent-start ESKD", p:P({ctx:"urgent",hours:9,cyc:108,fill:1200,tidal:100,fl:"g15",w:60,bun:95,gen:8,kru:3,day:3,pos:"supine"}),
+    rows:[["ผู้ป่วย","ESKD เพิ่งวินิจฉัย ไม่มี HD access ใส่ PD catheter 3 วันก่อน ยังมีปัสสาวะ"],["Prescription","APD กลางคืน 9 ชม. ท่านอน fill 1.2 L 5 cycles กลางวันท้องว่าง"],["ผล","clearance พอร่วมกับ RKF leak risk ต่ำเพราะ fill น้อยและนอนราบ"]],
+    take:["Urgent-start PD (ภายใน 2 สัปดาห์หลังใส่สาย) ทำได้ด้วย fill volume น้อยในท่านอน","Dry day ในช่วงแรกลด intra-abdominal pressure ลด leak และ hernia","ค่อยๆ เพิ่ม fill และเปลี่ยนเป็น prescription ระยะยาวหลัง 2–4 สัปดาห์"]},
+  leak:{name:"Urgent-start leak", p:P({ctx:"urgent",hours:24,cyc:240,fill:2000,tidal:100,fl:"g15",w:60,bun:95,gen:8,kru:3,day:2,pos:"upright"}),
+    rows:[["Prescription","catheter อายุ 2 วัน แต่ทำ CAPD 4 x 2 L เดินไปมา"],["ผล","IPP สูงตั้งแต่ทางออกของ catheter ยังไม่ heal เกิด pericatheter leak"],["แก้","หยุดหรือลด fill ทำ supine APD ปริมาตรน้อย หรือ HD ชั่วคราว 1–3 สัปดาห์"]],
+    take:["Leak risk สูงสุดเมื่อใช้ fill มากในท่าตั้งตรงภายใน 2 สัปดาห์แรก","สังเกต drain น้อยกว่า fill, ผิวหนังบวมชื้นรอบ exit site, glucose strip บวก","ป้องกันด้วย fill น้อย ท่านอน และ dry day"]},
+  liver:{name:"AKI + liver failure", p:P({liver:"yes",buf:"lac",w:65,bun:70,gen:12}),
+    rows:[["ผู้ป่วย","AKI ใน acute-on-chronic liver failure lactate 6 mmol/L"],["ปัญหา","น้ำยา lactate-based ต้องอาศัยตับเปลี่ยนเป็น bicarbonate lactate สะสมเพิ่ม"],["แก้","เปลี่ยนเป็นน้ำยา bicarbonate-based ติดตาม lactate และ HCO3"]],
+    take:["ผู้ป่วยวิกฤตที่ตับเสียหรือ lactate สูงควรใช้ bicarbonate-containing solution","Ascites ทำให้ fill volume และ UF แปลผลยาก ต้องคำนวณ balance ละเอียด","ระวัง protein loss ทางน้ำยาและ hypoalbuminemia"]}
+};
+var ORDER=["septic","full","under","urgent","leak","liver"];
+
+var box=document.getElementById("ctls"), C={}, SEL={};
+function sel(k,label,opts,cls){ var s=Sim.h("select",{id:"s"+k},opts.map(function(o){ return Sim.h("option",{value:o[0],text:o[1]}); })); s.addEventListener("change",update); var w=Sim.h("div",{class:"sel"+(cls?" "+cls:"")},[Sim.h("label",{"for":"s"+k,text:label}),s]); box.appendChild(w); SEL[k]={el:w,s:s}; return s; }
+function sl(k,o,cls){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); if(cls) C[k].el.classList.add(cls); box.appendChild(C[k].el); return C[k]; }
+function grp(t){ box.appendChild(Sim.h("p",{class:"grp",text:t})); }
+sel("ctx","บริบท",[["aki","AKI ในผู้ป่วยวิกฤต"],["urgent","Urgent-start ESKD"]]);
+sel("fl","น้ำยา",[["g15","Glucose 1.5%"],["g25","Glucose 2.5%"],["g425","Glucose 4.25%"]]);
+sel("buf","Buffer",[["lac","Lactate 40 mmol/L"],["bic","Bicarbonate (± low lactate)"]]);
+sl("hours",{label:"ชม. ต่อวัน",min:6,max:24,step:1,value:24,unit:"ชม."});
+sl("cyc",{label:"Cycle time",min:45,max:360,step:15,value:120,unit:"min"});
+sl("fill",{label:"Fill volume",min:500,max:2500,step:100,value:2000,unit:"ml"});
+sl("tidal",{label:"Tidal",min:50,max:100,step:5,value:70,unit:"%"});
+grp("ผู้ป่วย");
+sl("area",{label:"Surface area",min:0.5,max:2.2,step:0.05,value:1.1,fmt:function(v){ return "×"+v.toFixed(2); }},"secondary");
+sl("w",{label:"น้ำหนัก",min:40,max:100,step:1,value:70,unit:"kg"});
+sl("bun",{label:"BUN เริ่มต้น",min:40,max:180,step:5,value:110,unit:"mg/dL"});
+sl("gen",{label:"Urea N generation",min:4,max:30,step:1,value:18,unit:"g/วัน"});
+sl("kru",{label:"Kru",min:0,max:8,step:0.5,value:0,unit:"ml/min"});
+sl("day",{label:"อายุ catheter",min:0,max:28,step:1,value:2,unit:"วัน"});
+sel("pos","ท่าระหว่าง dwell",[["supine","นอนราบ (APD กลางคืน หรือ ICU)"],["upright","ลุกเดิน หรือมี day dwell"]]);
+sel("liver","Liver failure/lactate สูง",[["no","ไม่มี"],["yes","มี"]],"secondary");
+
+var A=Plot.colors;
+var chV=Plot.chart(document.getElementById("chV"),{height:Sim.present?180:220,aria:"Intraperitoneal volume during the first 8 hours",x:{min:0,max:8,step:2,label:"h"},y:{min:0,max:3,step:0.5,label:"L"},
+  series:[{id:"v",name:"IP volume",color:A.accent,data:[],width:1.8,fill:Plot.alpha("#5B4BFF",0.12)}]});
+var chB=Plot.chart(document.getElementById("chB"),{height:Sim.present?180:220,aria:"BUN over three days",x:{min:0,max:72,step:12,label:"h"},y:{min:0,max:200,step:40,label:"BUN mg/dL"},
+  series:[{id:"none",name:"No dialysis",color:A.muted,data:[],width:1.4,dash:[5,4]},{id:"pd",name:"PD",color:A.accent,data:[],width:2.6}],legend:true});
+
+function params(){ var o={}; for(var k in C) o[k]=C[k].get(); for(var j in SEL) o[j]=SEL[j].s.value; return o; }
+function bunCurve(p,Kml,hoursOn){
+  var V=0.6*p.w, M=p.bun*10*V, outN=[], outP=[], M0=M;
+  for(var h=0;h<=72;h++){
+    outP.push([h,M/V/10]); outN.push([h,M0/V/10]);
+    var on=(h%24)<hoursOn, k=(on?Kml:0)+p.kru;  /* ml/min */
+    M+= p.gen*1000/24 - k*0.06*(M/V);  M0+= p.gen*1000/24 - p.kru*0.06*(M0/V);
+  }
+  return {pd:outP,none:outN};
+}
+function update(){
+  var p=params(), aki=p.ctx==="aki";
+  var n=Math.max(1,Math.floor(p.hours*60/p.cyc));
+  var T=PD.tidal({fluid:p.fl,fillMl:p.fill,tidalPct:p.tidal,cycles:n,cycleMin:p.cyc,area:p.area,bun:p.bun});
+  var V=0.6*p.w, ureaDay=T.ureaL, Kml=ureaDay*1000/(T.hours*60);
+  var renalL=p.kru*1.44;
+  var kt=Calc.pdKtV({dpUrea:+(T.ureaL/T.drainL).toFixed(3),drainL:+T.drainL.toFixed(2),upUrea:renalL?+renalL.toFixed(2):0,urineL:renalL?1:0,v:+V.toFixed(1),target:aki?2.2:1.7});
+  /* charts */
+  chV.setSeries("v",T.series.filter(function(d){ return d[0]<=8; }).map(function(d){ return [d[0],d[1]/1000]; }));
+  chV.update({hlines:p.tidal<100?[{y:T.reserveMl/1000,label:"reserve",color:A.muted,dash:[4,4]}]:[],y:{min:0,max:Math.max(2.5,Math.ceil((p.fill+800)/500)/2),step:0.5,label:"L"}});
+  var B=bunCurve(p,Kml,T.hours), mx=Math.max.apply(null,B.none.concat(B.pd).map(function(d){ return d[1]; }));
+  chB.update({y:{min:0,max:Math.ceil(mx/40)*40,step:40,label:"BUN mg/dL"},hlines:[{y:100,color:A.red,dash:[2,4],label:"100"}]});
+  chB.setSeries("none",B.none); chB.setSeries("pd",B.pd);
+  /* leak risk */
+  var base=p.day<3?3:p.day<14?2:1, vol=p.fill/1500, upr=p.pos==="upright"?1.6:0.7, score=base*vol*upr;
+  var leak=p.day>=14&&score<2.2?"Low":score>=3.2?"High":score>=1.8?"Moderate":"Low";
+  Sim.ro("roKtV",kt.value.toFixed(2),aki?(kt.value<2.2?"flag":"ok"):(kt.value<1.7?"flag":"ok"));
+  Sim.ro("roVol",T.fillL.toFixed(1));
+  Sim.ro("roUF",Math.round(T.ufMl));
+  Sim.ro("roK",Kml.toFixed(1));
+  Sim.ro("roLeak",leak,leak==="High"?"flag":leak==="Low"?"ok":false);
+  Sim.ro("roGlu",Math.round(T.gluG),T.gluG>150?"flag":false);
+  Calc.renderSteps("steps",kt,{title:"Weekly Kt/V (V = 0.6 x น้ำหนัก = "+V.toFixed(0)+" L, PD "+T.hours+" ชม./วัน)"});
+  /* next step */
+  var act=document.getElementById("act"), L=[], bad=false;
+  if(p.liver==="yes"&&p.buf==="lac"){ bad=true; L.push("เปลี่ยนเป็น <b>bicarbonate-based solution</b> เพราะ liver failure/lactate สูง"); }
+  if(leak==="High"){ bad=true; L.push("<b>Leak risk สูง</b>: ลด fill (≤ 1–1.5 L) ทำในท่านอน dry day หรือพักใช้ HD ชั่วคราว"); }
+  if(aki&&kt.value<2.2){ bad=true; L.push("<b>Dose ต่ำ</b>: ทำต่อเนื่อง 24 ชม. cycle 1–2 ชม. เพิ่มปริมาตรรวมเป็น 18–24 L/วันขึ้นไป"); }
+  else if(!aki&&kt.value<1.7){ bad=true; L.push("<b>Clearance ไม่พอ</b>: เพิ่มชั่วโมงบน cycler หรือจำนวน cycle ก่อนเพิ่ม fill ในช่วงแรก"); }
+  if(aki&&kt.value>3.6) L.push("Kt/V เกิน 3.5 ไม่ได้เพิ่มประโยชน์ ลดปริมาตรได้ถ้า BUN, K, HCO3 คุมได้");
+  if(T.gluG>150) L.push("Glucose ดูดซึม "+Math.round(T.gluG)+" g/วัน เฝ้าระวัง hyperglycemia ใช้ glucose ต่ำสุดที่ได้ UF ตามเป้า");
+  if(p.tidal<100) L.push("Tidal "+p.tidal+"% ใช้เมื่อมี drain pain หรือ outflow ช้า clearance ต่อลิตรต่ำกว่า full drain");
+  if(!L.length) L.push("Prescription เหมาะสม ติดตาม BUN, K, HCO3, glucose และ balance ทุกวัน");
+  act.innerHTML="<b>Next step:</b><ul>"+L.map(function(x){ return "<li>"+x+"</li>"; }).join("")+"</ul>"; act.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"PD-05", title:"Acute and Urgent-Start PD", lead:"ตั้ง acute PD สำหรับ AKI หรือ urgent-start ESKD ปรับชั่วโมง cycle fill และ tidal แล้วดู Kt/V, UF, BUN 3 วัน และความเสี่ยง leak",
+  scenarios:S, order:ORDER, captureMs:2000,
+  onChange:function(k,s){ var p=s.p; ["ctx","fl","buf","pos","liver"].forEach(function(x){ SEL[x].s.value=p[x]; }); ["hours","cyc","fill","tidal","area","w","bun","gen","kru","day"].forEach(function(x){ C[x].set(p[x]); }); update(); },
+  refs:["Cullis B, Al-Hwiesh A, Kilonzo K, et al. ISPD guidelines for peritoneal dialysis in acute kidney injury: 2020 update (adults). Perit Dial Int 2021, 41(1): 15-31",
+        "Gabriel DP, Caramori JT, Martim LC, Barretti P, Balbi AL. High volume peritoneal dialysis vs daily hemodialysis: a randomized, controlled trial in patients with acute kidney injury. Kidney Int Suppl 2008, (108): S87-S93",
+        "Crabtree JH, Shrestha BM, Chow KM, et al. Creating and maintaining optimal peritoneal dialysis access in the adult patient: 2019 update. Perit Dial Int 2019, 39(5): 414-436",
+        "Htay H, Johnson DW, Craig JC, et al. Urgent-start peritoneal dialysis versus haemodialysis for people with chronic kidney disease. Cochrane Database Syst Rev 2021, 1: CD012913"],
+  note:"Model เพื่อการสอน (core/pd.js v1.2 PD.tidal) ทุก cycle เสียเวลา fill และ drain 10 นาที V = 0.6 x น้ำหนัก BUN ใช้ one-compartment model กับ urea clearance เฉลี่ยของ prescription คะแนน leak risk เป็นการประมาณจากอายุ catheter, fill volume และท่า ไม่ใช่ score ที่ validate แล้ว"
+});
+})();
+</script>
+</body>
+</html>

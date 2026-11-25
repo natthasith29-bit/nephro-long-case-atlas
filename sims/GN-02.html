@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[GN-02] Deposit Location Explorer: LM, IF and EM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.bench{grid-template-columns:1.25fr 1fr}
+@media (max-width:900px){.bench{grid-template-columns:1fr}}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pair figure{margin:0}
+.pair figcaption{font:600 12px var(--mono);letter-spacing:.06em;color:var(--muted);margin:0 0 6px}
+.seg{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.seg .tog{padding:5px 10px;font-size:13px}
+.seg .lab{font-size:12.5px;color:var(--muted);align-self:center;margin-right:4px;min-width:26px}
+.sel{display:grid;grid-template-columns:minmax(80px,110px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px;margin-bottom:10px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.ifgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin-top:10px;font:500 11.5px var(--mono);text-align:center}
+.ifgrid div{padding:5px 2px;border-radius:7px;background:var(--canvas);color:var(--muted)}
+.ifgrid div.on{background:#0B1F0B;color:#B8FFB0}
+.ifgrid div b{display:block;font-size:12.5px;color:inherit}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.key{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px;font-size:12.5px;color:var(--muted)}
+body.present .bench{grid-template-columns:1.15fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint, body.present .key{display:none}
+body.present .card{padding:14px 18px}
+body.present #em{max-height:330px;width:auto!important;margin:0 auto}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+body.present .sel{display:none}
+body.present .seg{margin-top:4px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>EM: ตำแหน่ง deposit บน capillary wall</h2>
+      <div class="svgwrap"><svg id="em" aria-label="Electron microscopy schematic of deposit location"></svg></div>
+      <div class="tools no-present" id="tools"></div>
+      <div class="key no-present"><span>Subepithelial = ระหว่าง GBM กับ podocyte</span><span>Subendothelial = ระหว่าง GBM กับ endothelium</span><span>Intramembranous = ใน GBM</span><span>Mesangial = ใน matrix ของ mesangium</span></div>
+      <div class="act" id="act"></div>
+    </div>
+    <div class="card">
+      <h2>LM และ IF</h2>
+      <div class="sel no-present"><label for="sdz">โรค</label><select id="sdz"></select></div>
+      <div class="pair">
+        <figure><figcaption>LIGHT MICROSCOPY</figcaption><div class="svgwrap"><svg id="lm" aria-label="Light microscopy"></svg></div></figure>
+        <figure><figcaption>IMMUNOFLUORESCENCE</figcaption><div class="svgwrap"><svg id="if" aria-label="Immunofluorescence"></svg></div></figure>
+      </div>
+      <div class="seg" id="lmSeg"><span class="lab">LM</span></div>
+      <div class="seg" id="ifSeg"><span class="lab">IF</span></div>
+      <div class="ifgrid" id="ifgrid" aria-label="IF panel summary"></div>
+      <p class="hint no-present">กดชื่อ stain เพื่อดู pattern ของแต่ละ stain ตาราง 7 ช่องสรุปความเข้มของทั้ง panel (0 ถึง 3+) ช่องสีเขียวคือ stain ที่เลือกอยู่</p>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/patho.js"></script>
+<script>
+(function(){
+"use strict";
+var STAINS = ["IgG","IgA","IgM","C3","C1q","κ","λ"];
+function F(a){ var o = {}; STAINS.forEach(function(s, i){ o[s] = a[i] || ["negative", 0]; }); return o; }
+var N = ["negative", 0];
+/* each disease: lm (Patho.glom), lmStain, em (Patho.loop), hi (deposit site), ifm (stain -> [pattern, intensity]), dom (default stain), rows, take, next */
+var D = {
+  mn:{name:"Membranous (PLA2R)", lmStain:"silver", lm:{thick:0.6, spikes:true}, em:{deposits:[{site:"subepi", n:10}], spikes:true, effacement:0.85}, hi:"subepi",
+    ifm:F([["granular-cap",3],N,N,["granular-cap",1.5],N,["granular-cap",2.5],["granular-cap",2.5]]), dom:"IgG",
+    rows:[["LM","GBM หนา silver stain เห็น spikes เซลล์ไม่เพิ่ม"],["IF","IgG และ C3 granular ตาม capillary wall (IgG4 เด่น, PLA2R +) ไม่มี C1q"],["EM","Subepithelial deposits + spikes, effacement กว้าง"],["Serology","Anti-PLA2R + complement ปกติ"],["Clue","Nephrotic ผู้ใหญ่ ไม่มี active sediment"]],
+    take:["Subepithelial deposit ไม่สัมผัสเลือด จึงไม่มี inflammation และ sediment ไม่ active","IgG4 + PLA2R ชี้ primary MN แต่ทุกรายยังต้องหา secondary cause และ screen malignancy ตามอายุ ถ้ามี C1q หรือ full-house ให้นึกถึง lupus","Anti-PLA2R ใช้ทั้งวินิจฉัยและติดตามการรักษา"],
+    next:"Anti-PLA2R titer แล้วหา secondary cause (HBV, SLE, malignancy ตามอายุ, ยา) แบ่ง risk ด้วย proteinuria, eGFR และ titer เพื่อเลือก observe หรือ immunosuppression (rituximab, cyclophosphamide + steroid หรือ CNI ตาม risk) ให้ anticoagulant เมื่อ albumin ต่ำมากและเสี่ยง bleeding ต่ำ"},
+  ln5:{name:"Lupus nephritis class V", lmStain:"silver", lm:{thick:0.5, spikes:true, hyper:0.4, mesExpand:0.3}, em:{deposits:[{site:"subepi", n:9}, {site:"mesangial", n:6}], spikes:true, effacement:0.7, mesCells:2}, hi:"subepi",
+    ifm:F([["mes-cap",3],["mes-cap",2],["mes-cap",2],["mes-cap",2],["mes-cap",2.5],["mes-cap",2.5],["mes-cap",2.5]]), dom:"C1q",
+    rows:[["LM","GBM หนา spikes ร่วมกับ mesangial hypercellularity"],["IF","Full-house (IgG, IgA, IgM, C3, C1q) granular ทั้ง capillary wall และ mesangium"],["EM","Subepithelial + mesangial deposits อาจเห็น tubuloreticular inclusion"],["Serology","ANA, anti-dsDNA (อาจไม่สูง) C3/C4 ต่ำได้ PLA2R ลบ"],["Clue","หญิงอายุน้อย nephrotic + mesangial deposits"]],
+    take:["Membranous ที่มี mesangial deposit และ C1q ชี้ secondary MN โดยเฉพาะ lupus","Full-house IF และ tubuloreticular inclusion ชี้ไปทาง lupus (ไม่ pathognomonic เช่น tubuloreticular inclusion พบใน HIV ได้)","PLA2R ลบ อาจเป็น EXT1/EXT2 ใน lupus MN"],
+    next:"ตรวจ ANA, anti-dsDNA, C3/C4 ถ้า proteinuria nephrotic range ให้ immunosuppression (MMF, CNI หรือ rituximab ร่วม steroid) และ hydroxychloroquine ทุกราย"},
+  ln4:{name:"Lupus nephritis class IV", lmStain:"PAS", lm:{endocap:0.8, hyper:0.8, wireloop:0.5, crescent:"cellular", crescentFrac:0.25, necrosis:0.2, thick:0.3, thrombi:0.1, thrombusType:"hyaline"}, em:{deposits:[{site:"subendo", n:4, size:1.3}, {site:"mesangial", n:8}, {site:"subepi", n:3}], effacement:0.6, mesCells:3, mesExpand:0.5}, hi:"subendo",
+    ifm:F([["chunky",3],["chunky",2],["chunky",2],["chunky",3],["chunky",3],["chunky",3],["chunky",3]]), dom:"IgG",
+    rows:[["LM","Endocapillary proliferation, wire loop, hyaline thrombi, crescent"],["IF","Full-house granular หนาเป็นก้อน (wire loop) C1q เด่น"],["EM","Subendothelial deposits ขนาดใหญ่ + mesangial ± subepithelial"],["Serology","Anti-dsDNA สูง C3 และ C4 ต่ำ"],["Clue","Active sediment, hypertension, eGFR ลด"]],
+    take:["Subendothelial deposit สัมผัสเลือดในหลอดเลือด จึงกระตุ้น inflammation และ proliferation","Wire loop คือ subendothelial deposit ขนาดใหญ่ที่เห็นได้ใน LM","Active class III/IV ต้อง induction therapy ทันที"],
+    next:"Induction ด้วย glucocorticoid ร่วม MMF หรือ low-dose IV cyclophosphamide และพิจารณา add-on (belimumab, CNI หรือ anti-CD20) ให้ hydroxychloroquine และ RAASi ติดตาม proteinuria เป้า response ใน 6–12 เดือน"},
+  psgn:{name:"Post-infectious GN", lmStain:"HE", lm:{endocap:1, neutrophils:0.8, hyper:0.6}, em:{deposits:[{site:"hump", n:2}, {site:"mesangial", n:3}, {site:"subendo", n:2, size:0.8}], effacement:0.4, mesCells:2}, hi:"subepi",
+    ifm:F([["coarse-cap",1.2],N,["coarse-cap",0.8],["coarse-cap",3],N,["coarse-cap",1],["coarse-cap",1]]), dom:"C3",
+    rows:[["LM","Diffuse endocapillary proliferation มี neutrophil ในหลอดเลือด"],["IF","C3 granular หยาบ (starry sky หรือ garland) IgG น้อยกว่า"],["EM","Subepithelial humps + mesangial และ subendothelial เล็กน้อย"],["Serology","C3 ต่ำ C4 ปกติ ASO หรือ anti-DNase B สูง"],["Clue","Nephritic syndrome 1–3 สัปดาห์หลังคออักเสบหรือ 3–6 สัปดาห์หลังติดเชื้อผิวหนัง"]],
+    take:["Hump คือ subepithelial deposit ก้อนใหญ่ เด่นใน post-infectious GN","C3 เด่นกว่า IgG และ C4 ปกติ บ่งการกระตุ้น alternative pathway","C3 ควรกลับปกติใน 8–12 สัปดาห์"],
+    next:"ดูแลแบบ supportive (คุมความดัน, loop diuretic, จำกัดเกลือ) รักษาการติดเชื้อที่ยังมี ตรวจ C3 ซ้ำ ถ้ายังต่ำเกิน 12 สัปดาห์ให้คิด C3 glomerulopathy และตรวจ complement work-up"},
+  iga:{name:"IgA nephropathy", lmStain:"PAS", lm:{hyper:0.8, mesExpand:0.6}, em:{deposits:[{site:"mesangial", n:9, size:1.2}], effacement:0.3, mesCells:3, mesExpand:0.6}, hi:"mesangium",
+    ifm:F([["mesangial",1],["mesangial",3],["mesangial",1],["mesangial",2],N,["mesangial",1.5],["mesangial",2.5]]), dom:"IgA",
+    rows:[["LM","Mesangial hypercellularity และ matrix เพิ่ม (MEST-C)"],["IF","IgA เด่นใน mesangium C3 ร่วม λ มากกว่า κ C1q ลบ"],["EM","Mesangial และ paramesangial electron-dense deposits"],["Serology","Complement ปกติ"],["Clue","Gross hematuria พร้อมคออักเสบ (synpharyngitic) หรือ microscopic hematuria + proteinuria"]],
+    take:["IgA nephropathy วินิจฉัยด้วย IF ว่า IgA dominant หรือ codominant ใน mesangium","C1q เด่นร่วมด้วยควรนึกถึง lupus มากกว่า","ความเสี่ยงขึ้นกับ proteinuria, eGFR และ MEST-C"],
+    next:"ให้ RAASi ขนาดสูงสุดที่ทนได้ร่วม SGLT2i คุมความดัน ถ้า proteinuria ยัง > 0.5–1 g/d ให้พิจารณา targeted-release budesonide, systemic steroid ขนาดลด หรือ sparsentan ตามความเสี่ยง"},
+  antigbm:{name:"Anti-GBM disease", lmStain:"PAS", lm:{crescent:"cellular", crescentFrac:0.75, necrosis:0.5}, em:{gbmBreak:true, effacement:0.5}, hi:"gbm",
+    ifm:F([["linear",3],N,N,["linear",1.5],N,["linear",3],["linear",3]]), dom:"IgG",
+    rows:[["LM","Crescent cellular ในเกือบทุก glomerulus อายุเดียวกัน fibrinoid necrosis"],["IF","IgG linear ตาม GBM C3 linear หรือ granular"],["EM","ไม่มี immune deposit GBM ขาดเป็นช่อง"],["Serology","Anti-GBM antibody บวก (ราว 10% seronegative ต้องวินิจฉัยจาก biopsy) และตรวจ ANCA ร่วมทุกราย"],["Clue","RPGN ± pulmonary hemorrhage"]],
+    take:["Linear IgG คือ antibody จับ α3(IV) collagen ใน GBM โดยตรง จึงไม่มี discrete deposit บน EM","Crescent ทั้งหมดอยู่ระยะเดียวกันเพราะ injury เกิดพร้อมกัน","Dialysis-dependent + crescent 100% ไม่มี DAH ฟื้นตัวน้อยมาก"],
+    next:"เริ่ม plasma exchange ทุกวันร่วม steroid ขนาดสูงและ cyclophosphamide ทันทีโดยไม่รอผล biopsy ถ้าสงสัยมาก ตรวจ ANCA (double positive มี relapse แบบ AAV)"},
+  pauci:{name:"Pauci-immune (ANCA)", lmStain:"PAS", lm:{crescent:"fibrocellular", crescentFrac:0.55, necrosis:0.6}, em:{gbmBreak:true, effacement:0.4}, hi:"gbm",
+    ifm:F([N,N,N,["mesangial",0.6],N,N,N]), dom:"IgG",
+    rows:[["LM","Necrotizing crescentic GN crescent หลายระยะ"],["IF","ไม่มีหรือมีน้อยมาก (≤ 1+)"],["EM","ไม่มี deposit GBM ขาด fibrin ใน Bowman space"],["Serology","MPO หรือ PR3-ANCA (ราว 10% ANCA ลบ) complement ปกติ"],["Clue","RPGN ร่วม systemic vasculitis (ปอด ไซนัส ผิวหนัง)"]],
+    take:["Pauci-immune = IF แทบไม่มี immune deposit ต่างจาก anti-GBM และ immune complex GN","Crescent หลายระยะ (cellular ถึง fibrous) บ่งโรคเป็นพักๆ","Fibrous crescent และ sclerosis มากทำนาย renal outcome ไม่ดี"],
+    next:"Induction ด้วย rituximab หรือ cyclophosphamide ร่วม glucocorticoid แบบลดขนาด พิจารณา plasma exchange ใน Cr สูงมากหรือ DAH รุนแรง แล้ว maintenance ด้วย rituximab"},
+  c3gn:{name:"C3 glomerulonephritis", lmStain:"PAS", lm:{lobular:true, hyper:0.8, mesExpand:0.6, doubleContour:true, endocap:0.3}, em:{deposits:[{site:"mesangial", n:7}, {site:"subendo", n:4}, {site:"hump", n:1, size:0.8}], effacement:0.5, mesCells:3, mesExpand:0.5, doubleContour:true}, hi:"subendo",
+    ifm:F([N,N,["mesangial",0.6],["mes-cap",3],N,N,N]), dom:"C3",
+    rows:[["LM","MPGN pattern หรือ mesangial proliferative"],["IF","C3 dominant (มากกว่า Ig อย่างน้อย 2 ระดับ)"],["EM","Mesangial + subendothelial ± subepithelial deposits ไม่หนาเป็นแถบ"],["Serology","C3 มักต่ำ (ปกติได้) C4 ปกติ C3NeF, factor H/I, sC5b-9"],["Clue","Low C3 ที่ไม่กลับปกติ ผู้ใหญ่อายุมากต้องหา monoclonal gammopathy"]],
+    take:["C3 dominant IF = alternative pathway ทำงานผิดปกติ ไม่ใช่ immune complex","แยกจาก post-infectious GN ด้วยการติดตาม C3 และ clinical course","อายุ > 50 ปี ต้องตรวจ SPEP, immunofixation และ serum FLC"],
+    next:"ตรวจ complement work-up (C3NeF, factor H/I/B, CFHR, sC5b-9) และ monoclonal protein ให้ supportive care ระดับปานกลางถึงรุนแรงใช้ MMF ร่วม steroid ถ้าดื้อพิจารณา complement inhibitor (iptacopan หรือ pegcetacoplan)"},
+  ddd:{name:"Dense deposit disease", lmStain:"PAS", lm:{thick:0.7, mesExpand:0.5, hyper:0.5, lobular:true}, em:{ribbon:true, deposits:[{site:"mesangial", n:4}], effacement:0.5}, hi:"intramembranous",
+    ifm:F([N,N,N,["smudgy",3],N,N,N]), dom:"C3",
+    rows:[["LM","GBM หนาเป็นแถบ refractile ± MPGN pattern"],["IF","C3 แบบ linear-ribbon ตาม GBM และวงรอบ mesangium (mesangial rings)"],["EM","Intramembranous deposit หนาทึบเป็นแถบยาว (sausage-like)"],["Serology","C3 ต่ำมาก C3NeF บ่อย อาจมี partial lipodystrophy และ drusen"],["Clue","เด็กหรือวัยรุ่น nephritic + low C3"]],
+    take:["DDD วินิจฉัยด้วย EM: osmiophilic deposit อยู่ภายใน lamina densa","C3NeF ทำให้ C3 convertase อยู่นานจน C3 ถูกใช้หมด","Recurrence หลังปลูกถ่ายไตสูงมาก"],
+    next:"ตรวจ C3NeF, factor H และตรวจตา (drusen) ให้ RAASi และ immunosuppression ตามความรุนแรงเหมือน C3G พิจารณา complement inhibitor ในรายดื้อ"},
+  icmpgn:{name:"IC-MPGN (HCV cryo)", lmStain:"silver", lm:{lobular:true, hyper:1, doubleContour:true, endocap:0.5, thrombi:0.15, thrombusType:"hyaline"}, em:{deposits:[{site:"subendo", n:5, size:1.2}, {site:"mesangial", n:6}], doubleContour:true, mesCells:3, effacement:0.5}, hi:"subendo",
+    ifm:F([["mes-cap",2.5],N,["mes-cap",3],["mes-cap",3],["mes-cap",1.5],["mes-cap",3],["mes-cap",1]]), dom:"IgM",
+    rows:[["LM","Lobular accentuation, double contour (silver), hyaline (cryo) thrombi"],["IF","IgM, IgG, C3 granular ทั้ง mesangium และ capillary wall κ มากกว่า λ"],["EM","Subendothelial deposits + mesangial interposition (อาจมี microtubular substructure)"],["Serology","C4 ต่ำมาก C3 ต่ำ cryoglobulin type II, RF +, HCV RNA"],["Clue","Purpura, arthralgia, neuropathy ร่วม hepatitis C"]],
+    take:["Double contour เกิดจาก subendothelial deposit กระตุ้นให้สร้าง GBM ใหม่และ mesangial interposition","IC-MPGN ต้องหาสาเหตุ: infection (HCV), autoimmune และ monoclonal gammopathy","C4 ต่ำมากใน cryoglobulinemia เพราะ classical pathway ถูกใช้"],
+    next:"ตรวจ HCV RNA, cryoglobulin, RF, SPEP และ serum FLC รักษาสาเหตุ (DAA สำหรับ HCV) ถ้า cryoglobulinemic GN รุนแรงพิจารณา rituximab ± plasma exchange"},
+  mcd:{name:"Minimal change disease", lmStain:"PAS", lm:{}, em:{effacement:1}, hi:"podocyte",
+    ifm:F([N,N,["mesangial",0.4],N,N,N,N]), dom:"IgG",
+    rows:[["LM","ปกติ"],["IF","ลบ (อาจมี IgM trace)"],["EM","Foot process effacement กระจายทั่ว ไม่มี deposit"],["Serology","ปกติ (anti-nephrin antibody ในบางราย)"],["Clue","Nephrotic ฉับพลัน selective proteinuria"]],
+    take:["MCD ไม่มี immune deposit ความผิดปกติอยู่ที่ podocyte","LM และ IF ปกติ ต้องใช้ EM ยืนยัน","ตอบสนองต่อ steroid ดีในเด็กและผู้ใหญ่ส่วนใหญ่"],
+    next:"เริ่ม glucocorticoid ขนาดสูง ถ้า frequent relapse หรือ steroid-dependent ใช้ CNI, rituximab หรือ cyclophosphamide หา secondary cause (NSAID, lymphoma) ในผู้ใหญ่"},
+  fsgs:{name:"FSGS", lmStain:"PAS", lm:{sclerosis:0.22}, em:{effacement:0.6}, hi:"podocyte",
+    ifm:F([N,N,["mesangial",1],["mesangial",1],N,N,N]), dom:"IgM",
+    rows:[["LM","Segmental sclerosis + hyalinosis + adhesion บางส่วนของ glomeruli"],["IF","IgM และ C3 เฉพาะใน sclerotic segment (trapping) ไม่ใช่ immune complex"],["EM","Effacement: กระจาย (primary) หรือเป็นหย่อม (adaptive)"],["Serology","ปกติ ตรวจ genetic ในรายที่เหมาะสม"],["Clue","ขอบเขตของ effacement และ clinical ช่วยแยก primary, genetic, adaptive"]],
+    take:["IgM และ C3 ใน FSGS เป็น non-specific trapping","Effacement กระจายร่วม full-blown nephrotic syndrome ชี้ primary FSGS","Effacement เป็นหย่อมและไม่มี hypoalbuminemia ชี้ adaptive FSGS"],
+    next:"แยก primary, genetic, adaptive และ drug-related ก่อน primary ให้ steroid หรือ CNI ส่วน adaptive ใช้ RAASi + SGLT2i ลดน้ำหนัก ไม่ใช้ immunosuppression"},
+  dkd:{name:"Diabetic nephropathy", lmStain:"PAS", lm:{nodules:1, thick:0.6, mesExpand:0.8}, em:{gbm:2.2, mesExpand:1, effacement:0.4}, hi:"gbm",
+    ifm:F([["pseudolinear",2],N,["mesangial",0.8],["mesangial",0.6],N,["pseudolinear",2],["pseudolinear",2]]), dom:"IgG",
+    rows:[["LM","Mesangial expansion, Kimmelstiel-Wilson nodule, arteriolar hyalinosis"],["IF","IgG และ albumin แบบ linear จางตาม GBM และ TBM (non-immunologic)"],["EM","GBM หนาสม่ำเสมอ mesangial matrix เพิ่ม ไม่มี deposit"],["Serology","ปกติ"],["Clue","เบาหวานนานพร้อม retinopathy"]],
+    take:["Linear IgG ในเบาหวานจางและมี albumin ร่วม ต่างจาก anti-GBM ที่ IgG เด่น","GBM หนาเป็นการเปลี่ยนแปลงแรกสุดที่เห็นใน EM","ไม่มี retinopathy หรือมี active sediment ให้หาโรคอื่นร่วม (ไม่มี retinopathy ไม่ได้ตัด DKD ใน T2DM)"],
+    next:"Biopsy มักไม่จำเป็นถ้า clinical เข้ากัน รักษาด้วย RAASi, SGLT2i, finerenone หรือ GLP-1RA ตาม albuminuria และ eGFR คุมความดันและน้ำตาล"},
+  alport:{name:"Alport syndrome", lmStain:"PAS", lm:{hyper:0.2}, em:{alport:true, effacement:0.5}, hi:"gbm",
+    ifm:F([N,N,N,N,N,N,N]), dom:"IgG",
+    rows:[["LM","ไม่จำเพาะ อาจมี interstitial foam cells"],["IF","ลบ การย้อม collagen α5(IV) อาจหายไป (X-linked)"],["EM","GBM หนาบางสลับ lamellation (basket-weave)"],["Serology","ปกติ ตรวจ COL4A3/4/5"],["Clue","Hematuria ในครอบครัว sensorineural deafness ตาผิดปกติ (lenticonus)"]],
+    take:["Basket-weave GBM บน EM เป็นลักษณะเฉพาะของ Alport","IF ปกติ แต่ collagen IV α-chain staining ช่วยแยก X-linked","ผู้ป่วยชาย X-linked ที่ได้ไตใหม่เสี่ยงเกิด anti-GBM"],
+    next:"ส่ง genetic testing (COL4A3, COL4A4, COL4A5) เริ่ม RAASi ตั้งแต่ระยะ albuminuria ตรวจการได้ยินและตา คัดกรองญาติ"},
+  tma:{name:"Thrombotic microangiopathy", lmStain:"PAS", lm:{thrombi:0.35, doubleContour:true}, em:{tma:1, doubleContour:true}, hi:"subendo",
+    ifm:F([N,N,["mesangial",0.8],N,N,N,N]), dom:"IgG",
+    rows:[["LM","Fibrin thrombi ใน capillary และ arteriole (PAS ลบหรือติดจาง ต่างจาก hyaline thrombi ของ cryo หรือ lupus ที่ PAS บวก), mesangiolysis, double contour (chronic)"],["IF","ไม่มี immune complex อาจมี fibrinogen"],["EM","Subendothelial space บวมและใส (lucent) endothelial swelling ไม่มี deposit"],["Serology","Hemolysis, schistocyte, platelet ต่ำ ADAMTS13, complement"],["Clue","AKI + MAHA + thrombocytopenia (renal-limited TMA อาจไม่มี MAHA หรือ platelet ต่ำ)"]],
+    take:["TMA เป็น endothelial injury ไม่ใช่ immune complex จึง IF ลบ","Fibrin thrombi ติด PAS จางหรือไม่ติด ส่วน hyaline (immune) thrombi ติด PAS เข้ม","Subendothelial lucency คือ fluid และ debris ไม่ใช่ deposit","Double contour ใน TMA เรื้อรังเลียนแบบ MPGN แต่ไม่มี deposit"],
+    next:"ตรวจ ADAMTS13 ก่อนเริ่ม PLEX ถ้า < 10% เป็น TTP หา trigger (ยา, malignant HT, pregnancy, scleroderma, STEC) ถ้าสงสัย complement-mediated TMA ให้ C5 inhibitor"},
+  pgnmid:{name:"PGNMID (IgG3κ)", lmStain:"PAS", lm:{lobular:true, hyper:0.8, endocap:0.4, doubleContour:true}, em:{deposits:[{site:"subendo", n:4}, {site:"mesangial", n:6}], doubleContour:true, mesCells:3, effacement:0.5}, hi:"subendo",
+    ifm:F([["mes-cap",3],N,N,["mes-cap",2.5],["mes-cap",1],["mes-cap",3],N]), dom:"κ",
+    rows:[["LM","MPGN pattern หรือ endocapillary proliferative"],["IF","IgG เดียว (subclass เดียว มัก IgG3) และ light chain ชนิดเดียว (κ) C3 ร่วม"],["EM","Granular subendothelial + mesangial deposits ไม่มี organized substructure"],["Serology","Monoclonal protein ในเลือดตรวจพบเพียงส่วนน้อย"],["Clue","MGRS: clone เล็กแต่ทำลายไต"]],
+    take:["Light chain ชนิดเดียวใน IF คือ monotypic deposit ต้องคิด MGRS","IgG3 จับ complement ได้ดี จึงเลียนแบบ immune complex GN","SPEP มักลบ ต้องใช้ serum FLC, immunofixation และ bone marrow"],
+    next:"ตรวจ SPEP, immunofixation, serum FLC และ bone marrow biopsy ส่งต่อ hematology เพื่อ clone-directed therapy (bortezomib หรือ daratumumab-based) แม้ clone เล็ก"}
+};
+var ORDER = ["mn","ln5","ln4","psgn","iga","antigbm","pauci","c3gn","ddd","icmpgn","mcd","fsgs","dkd","alport","tma","pgnmid"];
+var S = {};
+ORDER.forEach(function(k){ S[k] = {name:D[k].name, rows:D[k].rows, take:D[k].take}; });
+
+/* ---------- views ---------- */
+var em = Patho.loop("em", {}), lm = Patho.glom("lm", {}), iff = Patho.ifStain("if", {});
+var st = {k:"mn", stain:"IgG", lmStain:"PAS", emLook:false, hi:true};
+var tools = document.getElementById("tools");
+var tEm = Sim.toggle("EM look (grayscale)", function(on){ st.emLook = on; drawEM(); }, false);
+var tHi = Sim.toggle("Highlight deposit site", function(on){ st.hi = on; drawEM(); }, true);
+tools.appendChild(tEm); tools.appendChild(tHi);
+function segGroup(id, items, cur, cb){
+  var box = document.getElementById(id), btns = {};
+  items.forEach(function(it){ var b = Sim.h("button", {class:"tog", type:"button", text:it[1], "aria-pressed":"false"}); b.addEventListener("click", function(){ cb(it[0]); }); btns[it[0]] = b; box.appendChild(b); });
+  return function(v){ Object.keys(btns).forEach(function(k){ btns[k].setAttribute("aria-pressed", k === v ? "true" : "false"); }); };
+}
+var setLmSeg = segGroup("lmSeg", [["PAS","PAS"],["HE","H&E"],["silver","Silver"]], "PAS", function(v){ st.lmStain = v; drawLM(); });
+var setIfSeg = segGroup("ifSeg", STAINS.map(function(s){ return [s, s]; }), "IgG", function(v){ st.stain = v; drawIF(); });
+var sel = document.getElementById("sdz");
+ORDER.forEach(function(k){ sel.appendChild(Sim.h("option", {value:k, text:D[k].name})); });
+sel.addEventListener("change", function(){ Sim.setScenario(sel.value); });
+
+function drawEM(){
+  var d = D[st.k], o = {deposits:[], effacement:0, spikes:false, ribbon:false, doubleContour:false, tma:0, alport:false, thin:false, gbmBreak:false, gbm:1, mesExpand:0, mesCells:1};
+  Object.keys(d.em).forEach(function(n){ o[n] = d.em[n]; });
+  o.mode = st.emLook ? "em" : "schematic";
+  o.highlight = st.hi ? d.hi : null;
+  o.title = d.name;
+  em.update(o);
+}
+function drawLM(){
+  var d = D[st.k], o = {hyper:0, endocap:0, neutrophils:0, mesExpand:0, nodules:0, thick:0, wireloop:0, crescent:"none", crescentFrac:0, sclerosis:0, collapse:false, thrombi:0, thrombusType:"fibrin", necrosis:0, lobular:false, spikes:false, doubleContour:false};
+  Object.keys(d.lm).forEach(function(n){ o[n] = d.lm[n]; });
+  o.stain = st.lmStain; setLmSeg(st.lmStain);
+  lm.update(o);
+}
+function grade(i){ return i <= 0 ? "0" : i < 1 ? "tr" : i < 2 ? "1+" : i < 3 ? "2+" : "3+"; }
+function drawIF(){
+  var d = D[st.k], m = d.ifm[st.stain];
+  var cres = d.lm.crescent && d.lm.crescent !== "none" ? Math.min(0.5, d.lm.crescentFrac) : 0;
+  iff.update({pattern:m[0], intensity:m[1], label:st.stain, tbm:m[0] === "pseudolinear" || (st.k === "antigbm" && st.stain === "IgG"), crescent:cres});
+  setIfSeg(st.stain);
+  var g = document.getElementById("ifgrid"); g.innerHTML = "";
+  STAINS.forEach(function(s){ var v = d.ifm[s]; g.appendChild(Sim.h("div", {class:s === st.stain ? "on" : ""}, [Sim.h("b", {text:grade(v[1])}), Sim.h("span", {text:s})])); });
+}
+function render(){
+  var d = D[st.k];
+  sel.value = st.k;
+  drawEM(); drawLM(); drawIF();
+  document.getElementById("act").innerHTML = "<b>Next step:</b> " + d.next;
+}
+Sim.mount({code:"GN-02", title:"Deposit Location Explorer: LM, IF and EM",
+  lead:"เลือกโรคแล้วดูตำแหน่ง deposit บน capillary wall ใน EM ภาพ light microscopy และ pattern ของ immunofluorescence ทีละ stain เพื่อฝึกอ่าน biopsy แบบ OSCE",
+  scenarios:S, order:ORDER, captureMs:1000,
+  onChange:function(k){ st.k = k; st.stain = D[k].dom; st.lmStain = D[k].lmStain; render(); },
+  refs:["Fogo AB, Lusco MA, Najafian B, Alpers CE. AJKD Atlas of Renal Pathology. Am J Kidney Dis 2015–2017 (series)",
+        "Jennette JC, D'Agati VD, Olson JL, Silva FG. Heptinstall's Pathology of the Kidney. 7th ed. Wolters Kluwer 2015",
+        "Sethi S, Haas M, Markowitz GS, et al. Mayo Clinic/Renal Pathology Society consensus report on pathologic classification, diagnosis, and reporting of GN. J Am Soc Nephrol 2016, 27(5): 1278-1287",
+        "KDIGO 2021 Clinical Practice Guideline for the Management of Glomerular Diseases. Kidney Int 2021, 100(4S): S1-S276",
+        "KDIGO 2024 Clinical Practice Guideline for the Management of Lupus Nephritis. Kidney Int 2024, 105(1S): S1-S69",
+        "Bajema IM, Wilhelmus S, Alpers CE, et al. Revision of the ISN/RPS classification for lupus nephritis. Kidney Int 2018, 93(4): 789-796",
+        "Smith RJH, Appel GB, Blom AM, et al. C3 glomerulopathy: understanding a rare complement-driven renal disease. Nat Rev Nephrol 2019, 15(3): 129-143",
+        "Leung N, Bridoux F, Batuman V, et al. The evaluation of monoclonal gammopathy of renal significance: a consensus report of the IKMG. Nat Rev Nephrol 2019, 15(1): 45-59"],
+  note:"ภาพเป็น schematic เพื่อการสอน ไม่ใช่ภาพ biopsy จริง ความเข้มของ IF เป็นรูปแบบที่พบบ่อย ผู้ป่วยจริงแปรผันได้"
+});
+})();
+</script>
+</body>
+</html>

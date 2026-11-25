@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[GN-04] Organized Deposits and Paraprotein: EM Ruler</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.bench{grid-template-columns:1.3fr 1fr}
+@media (max-width:900px){.bench{grid-template-columns:1fr}}
+.pair{display:grid;grid-template-columns:1fr 1.5fr;gap:12px;margin-top:12px;align-items:start}
+@media (max-width:560px){.pair{grid-template-columns:1fr}}
+.pair figure{margin:0}
+.pair figcaption{font:600 12px var(--mono);letter-spacing:.06em;color:var(--muted);margin:0 0 6px}
+.sel{display:grid;grid-template-columns:minmax(110px,150px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px;margin:6px 0}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.dx{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--ink);color:#fff;font-size:14px}
+.dx .t{font:600 18px var(--display);letter-spacing:-.01em}
+.dx .s{color:#C9CAE6;margin-top:4px}
+.act{margin-top:10px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+body.present .bench{grid-template-columns:1.2fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:14px 18px}
+body.present #fib{max-height:230px;width:auto!important;margin:0 auto}
+body.present #tree{max-height:190px;width:auto!important;margin:0 auto}
+body.present #cr{max-height:190px;width:auto!important;margin:0 auto}
+body.present .act{display:none}
+body.present .tools{display:none}
+body.present .sel{margin:2px 0}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>EM ที่กำลังขยายสูง และ Congo red</h2>
+      <div class="svgwrap"><svg id="fib" aria-label="High magnification electron microscopy with ruler"></svg></div>
+      <div class="pair">
+        <figure><figcaption>CONGO RED</figcaption><div class="svgwrap"><svg id="cr" viewBox="0 0 300 300" role="img" aria-label="Congo red stain"></svg></div></figure>
+        <figure><figcaption>DIAGNOSTIC PATH</figcaption><div class="svgwrap"><svg id="tree" viewBox="0 0 460 296" role="img" aria-label="Diagnostic algorithm for organized deposits"></svg></div></figure>
+      </div>
+      <div class="tools no-present" id="tools"></div>
+      <p class="hint no-present">กล่องขยายมุมซ้ายบนวัดเส้นผ่านศูนย์กลางของ fibril เทียบไม้บรรทัด nm แถบ scale bar มุมขวาล่างคือ 100 nm ที่กำลังขยายของภาพหลัก Congo red แสดงภาพใต้ polarized light เมื่อกดปุ่ม</p>
+    </div>
+    <div class="card">
+      <h2>ลักษณะที่เห็น</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="sel"><label for="sArr">Arrangement</label><select id="sArr">
+        <option value="random">Random, non-branching (solid)</option>
+        <option value="parallel">Parallel arrays (hollow microtubules)</option>
+        <option value="curved">Curved or annular (hollow)</option>
+        <option value="punctate">Powdery punctate along GBM/TBM</option>
+        <option value="granular">Granular, no substructure</option></select></div>
+      <div class="sel"><label for="sIF">IF light chain</label><select id="sIF">
+        <option value="poly">Polyclonal (κ และ λ)</option>
+        <option value="k">Monotypic κ</option>
+        <option value="l">Monotypic λ</option>
+        <option value="neg">Ig ลบ</option></select></div>
+      <div class="tools" id="tools2"></div>
+      <div class="dx" id="dx"></div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/patho.js"></script>
+<script>
+(function(){
+"use strict";
+var DX = {
+  amyloid:{t:"Amyloidosis", kind:"amyloid", path:["cr+"],
+    s:"Fibril 7–12 nm เรียงสุ่ม ไม่แตกแขนง Congo red + (apple-green birefringence)",
+    next:"Typing ด้วย laser microdissection + mass spectrometry (หรือ IHC) แยก AL, AA, ALECT2, ATTR, AFib ถ้า AL ตรวจ serum FLC, immunofixation, bone marrow, troponin/NT-proBNP เพื่อ staging แล้วส่ง hematology (daratumumab-based)"},
+  fibrillary:{t:"Fibrillary GN", kind:"fibrillary", path:["cr-","rand","mid"],
+    s:"Fibril 12–24 nm เรียงสุ่ม Congo red ลบ DNAJB9 + ส่วนใหญ่ polyclonal IgG (IgG4, IgG1)",
+    next:"ย้อม DNAJB9 เพื่อยืนยัน ตรวจ monoclonal protein (พบส่วนน้อย), HCV, autoimmune และ malignancy ยังไม่มีการรักษามาตรฐาน พิจารณา rituximab ในรายที่ก้าวหน้า"},
+  itg:{t:"Immunotactoid GN", kind:"immunotactoid", path:["cr-","hol","par"],
+    s:"Microtubule กลวงขนาด > 30 nm เรียงขนานเป็นกลุ่ม มักเป็น monotypic IgG",
+    next:"ตรวจ CLL หรือ lymphoproliferative disorder, SPEP, immunofixation, serum FLC, flow cytometry และ bone marrow ส่ง hematology เพื่อรักษา clone"},
+  cryo:{t:"Cryoglobulinemic GN", kind:"cryo", path:["cr-","hol","curv"],
+    s:"Microtubule กลวง 20–35 nm โค้งหรือเป็นวง ร่วมกับ intracapillary (hyaline) thrombi",
+    next:"ตรวจ cryoglobulin (เก็บเลือดที่ 37 °C), RF, C4 (ต่ำมาก), HCV RNA, HBV, HIV, SPEP รักษาสาเหตุ (DAA สำหรับ HCV) ถ้ารุนแรงให้ rituximab ± plasma exchange"},
+  lcdd:{t:"Light chain deposition disease (MIDD)", kind:"lcdd", path:["cr-","punc"],
+    s:"Powdery electron-dense ไม่มี fibril เรียงตามด้านในของ GBM และ TBM ส่วนมาก κ",
+    next:"ตรวจ serum FLC, immunofixation และ bone marrow ส่ง hematology เพื่อ clone-directed therapy (bortezomib-based) เป้าลด involved FLC มากที่สุด"},
+  pgnmid:{t:"PGNMID / immune complex GN", kind:"none", path:["cr-","gran"],
+    s:"Granular deposits ไม่มี organized substructure ถ้า IF light chain ชนิดเดียว = PGNMID",
+    next:"ถ้า monotypic ทำ IgG subclass staining, SPEP, immunofixation, serum FLC และ bone marrow ถ้า polyclonal ให้หาสาเหตุของ immune complex GN"},
+  amb:{t:"Fibril ขนาดเล็ก Congo red ลบ", kind:"amyloid", path:["cr-","rand","small"],
+    s:"ขนาดเข้ากับ amyloid แต่ Congo red ลบ อาจเป็นการย้อมบางเกินไปหรือ fibrillary GN ขนาดเล็ก",
+    next:"ย้อม Congo red ซ้ำด้วย section หนา 8–10 μm และดูใต้ polarized light ย้อม DNAJB9 ส่ง mass spectrometry ถ้ายังไม่ชัด"},
+  big:{t:"Fibril ใหญ่กว่า amyloid แต่ Congo red +", kind:"fibrillary", path:["cr+"],
+    s:"Congo red + กับ fibril > 14 nm ไม่เข้ากับ amyloid ทั่วไป ทบทวนการวัดและ Congo red (false positive จาก section หนาเกิน)",
+    next:"ทบทวน Congo red ใต้ polarized light (ต้องเห็น apple-green) และวัด fibril ใหม่ ส่ง mass spectrometry ร่วม DNAJB9"}
+};
+function classify(p){
+  if(p.arr === "punctate") return "lcdd";
+  if(p.arr === "granular") return "pgnmid";
+  if(p.congo) return p.size > 14 ? "big" : "amyloid";
+  if(p.arr === "curved") return "cryo";
+  if(p.arr === "parallel" || p.size >= 30) return "itg";
+  if(p.size < 12) return "amb";
+  return "fibrillary";
+}
+var S = {
+  al:{name:"AL amyloid (λ)", p:{size:10, congo:true, arr:"random", lc:"l", dnajb9:false},
+    rows:[["EM","Fibril 8–12 nm สุ่ม ไม่แตกแขนง ใน mesangium และ GBM (spicules)"],["LM","Mesangial expansion acellular สีชมพูซีด PAS อ่อน silver ลบ"],["Congo red","สีส้มแดง apple-green birefringence ใต้ polarized light"],["IF","λ เด่น (AL λ พบมากกว่า κ ราว 3 เท่า)"],["Associated","Plasma cell dyscrasia nephrotic, cardiac, neuropathy, macroglossia"]],
+    take:["Congo red + ร่วมกับ fibril 7–12 nm คือ amyloid","IF ไม่พอระบุชนิด ต้อง typing ด้วย mass spectrometry","AL ต้องประเมินหัวใจก่อนเลือกการรักษา"]},
+  fgn:{name:"Fibrillary GN", p:{size:18, congo:false, arr:"random", lc:"poly", dnajb9:true},
+    rows:[["EM","Fibril 12–24 nm สุ่ม ใน mesangium และ GBM"],["LM","Mesangial expansion หรือ MPGN pattern บางรายมี crescent"],["Congo red","ลบ"],["IF","IgG (IgG4 หรือ IgG1) และ C3 polyclonal แบบ smudgy DNAJB9 +"],["Associated","Autoimmune, HCV, malignancy มี monoclonal ส่วนน้อย"]],
+    take:["Fibril หนากว่า amyloid และ Congo red ลบ คือ fibrillary GN","DNAJB9 เป็น marker ที่ไวและจำเพาะ","Prognosis ไม่ดี ครึ่งหนึ่งเป็น ESKD ในไม่กี่ปี"]},
+  itg:{name:"Immunotactoid GN", p:{size:38, congo:false, arr:"parallel", lc:"k", dnajb9:false},
+    rows:[["EM","Microtubule กลวง 30–50 nm เรียงขนานเป็นกลุ่ม"],["LM","MPGN หรือ membranous-like pattern"],["Congo red","ลบ"],["IF","IgG monotypic (κ หรือ λ) ส่วนใหญ่"],["Associated","CLL, small lymphocytic lymphoma, MGUS"]],
+    take:["Microtubule กลวงเรียงขนานขนาด > 30 nm คือ immunotactoid","ส่วนใหญ่ monotypic จึงต้องหา lymphoproliferative clone","รักษา clone แล้วไตตอบสนองได้"]},
+  cryo:{name:"Cryoglobulinemic GN", p:{size:28, congo:false, arr:"curved", lc:"k", dnajb9:false},
+    rows:[["EM","Microtubule กลวงโค้งหรือเป็นวง 20–35 nm subendothelial และใน thrombi"],["LM","MPGN pattern, intracapillary hyaline thrombi, monocyte"],["Congo red","ลบ"],["IF","IgM κ (monoclonal) + IgG polyclonal + C3 (type II)"],["Associated","HCV, Sjögren, SLE, B-cell lymphoma"]],
+    take:["Curved microtubule + hyaline thrombi + C4 ต่ำมาก ชี้ cryoglobulinemia","Type II = monoclonal IgM κ ที่มี RF activity ร่วม polyclonal IgG","HCV เป็นสาเหตุหลัก รักษาด้วย DAA"]},
+  lcdd:{name:"LCDD (κ)", p:{size:0, congo:false, arr:"punctate", lc:"k", dnajb9:false},
+    rows:[["EM","Powdery punctate deposit ตามด้านในของ GBM และ TBM ไม่มี fibril"],["LM","Nodular sclerosing GN คล้าย diabetic nodule TBM หนา"],["Congo red","ลบ"],["IF","κ linear ตาม GBM และ TBM (κ ราว 80%)"],["Associated","Myeloma หรือ MGUS proteinuria + eGFR ลด"]],
+    take:["Linear κ ตาม TBM และ GBM ร่วม powdery deposit คือ LCDD","Nodule คล้าย diabetic แต่ IF เป็น light chain เดียว","รักษา clone เพื่อรักษาไตแม้ไม่ครบเกณฑ์ myeloma"]},
+  pgnmid:{name:"PGNMID", p:{size:0, congo:false, arr:"granular", lc:"k", dnajb9:false},
+    rows:[["EM","Granular subendothelial และ mesangial deposits ไม่มี substructure"],["LM","MPGN หรือ endocapillary proliferative"],["Congo red","ลบ"],["IF","IgG subclass เดียว (IgG3) light chain เดียว"],["Associated","MGRS พบ clone ในไขกระดูกเพียงส่วนน้อย"]],
+    take:["Deposit ไม่มี substructure แต่ monotypic คือ PGNMID","ต้องย้อม IgG subclass และ light chain ทุกครั้งที่สงสัย","Recurrence หลังปลูกถ่ายไตบ่อย"]}
+};
+
+/* ---------- controls ---------- */
+var box = document.getElementById("ctls");
+var sSize = Sim.slider({id:"sSize", label:"Fibril diameter", min:4, max:55, step:1, value:10, unit:"nm", onInput:update});
+box.appendChild(sSize.el);
+var arr = document.getElementById("sArr"), lc = document.getElementById("sIF");
+arr.addEventListener("change", update); lc.addEventListener("change", update);
+var congo = false, dnaj = false, pol = true;
+var tCongo = Sim.toggle("Congo red +", function(on){ congo = on; update(); }, false);
+var tDna = Sim.toggle("DNAJB9 +", function(on){ dnaj = on; update(); }, false);
+document.getElementById("tools2").appendChild(tCongo);
+document.getElementById("tools2").appendChild(tDna);
+var tPol = Sim.toggle("Polarized light", function(on){ pol = on; drawCR(); }, true);
+document.getElementById("tools").appendChild(tPol);
+function P(){ return {size:sSize.get(), congo:congo, arr:arr.value, lc:lc.value, dnajb9:dnaj}; }
+
+/* ---------- EM with inset ruler ---------- */
+var fibSvg = document.getElementById("fib"), F = Patho.fibrils(fibSvg, {});
+function drawEM(p, dk){
+  var d = DX[dk], kind = d.kind === "none" ? "granular" : d.kind;
+  var size = p.arr === "punctate" || p.arr === "granular" ? 0 : p.size;
+  if(kind === "granular"){
+    F.update({kind:"lcdd", size:0});
+    fibSvg.innerHTML = "";
+    Sim.svg("rect", {x:0, y:0, width:600, height:320, fill:"#CFCFCF"}, fibSvg);
+    var r = Patho.rng(4);
+    Sim.svg("rect", {x:0, y:110, width:600, height:60, fill:"#8E8E8E"}, fibSvg);
+    for(var i = 0; i < 16; i++){ var x = 20 + i * 37 + r() * 12; Sim.svg("ellipse", {cx:x, cy:180 + r() * 12, rx:14 + r() * 8, ry:9 + r() * 4, fill:"#161616", opacity:0.92}, fibSvg); }
+    Sim.svg("text", {x:16, y:300, "font-family":"IBM Plex Sans Thai, sans-serif", "font-size":13, fill:"#111", text:"Granular subendothelial deposits, no substructure"}, fibSvg);
+  } else {
+    F.update({kind:kind, size:Math.max(4, size), seed:9});
+  }
+  // inset ruler
+  var g = Sim.svg("g", {}, fibSvg), k = 1.8, ox = 12, oy = 12, w = 200, h = 140;
+  Sim.svg("rect", {x:ox, y:oy, width:w, height:h, rx:8, fill:"#FFFFFF", opacity:0.94, stroke:"#0B0B1F", "stroke-width":1}, g);
+  Sim.svg("text", {x:ox + 10, y:oy + 18, "font-family":"Geist Mono, monospace", "font-size":11, fill:"#5E6075", text:"Inset x3  ruler (nm)"}, g);
+  var cy = oy + 82, x0 = ox + 52, x1 = ox + w - 12;
+  if(size > 0){
+    var bw = size * k, hollow = kind === "immunotactoid" || kind === "cryo";
+    Sim.svg("rect", {x:x0, y:cy - bw / 2, width:x1 - x0, height:bw, fill:"#2A2A2A"}, g);
+    if(hollow) Sim.svg("rect", {x:x0, y:cy - bw * 0.21, width:x1 - x0, height:bw * 0.42, fill:"#D8D8D8"}, g);
+    // caliper
+    Sim.svg("line", {x1:x1 - 30, y1:cy - bw / 2, x2:x1 - 4, y2:cy - bw / 2, stroke:"#5B4BFF", "stroke-width":1.6}, g);
+    Sim.svg("line", {x1:x1 - 30, y1:cy + bw / 2, x2:x1 - 4, y2:cy + bw / 2, stroke:"#5B4BFF", "stroke-width":1.6}, g);
+  } else {
+    Sim.svg("text", {x:x0, y:cy + 4, "font-family":"IBM Plex Sans Thai, sans-serif", "font-size":12, fill:"#5E6075", text:"No fibrils to measure"}, g);
+  }
+  // vertical ruler 0-50 nm centred on fibril
+  var top = cy - 25 * k, bot = cy + 25 * k;
+  Sim.svg("line", {x1:ox + 40, y1:top, x2:ox + 40, y2:bot, stroke:"#0B0B1F", "stroke-width":1.2}, g);
+  for(var n = 0; n <= 50; n += 5){ var y = top + n * k, big = n % 10 === 0; Sim.svg("line", {x1:ox + 40 - (big ? 8 : 4), y1:y, x2:ox + 40, y2:y, stroke:"#0B0B1F", "stroke-width":1}, g); if(big) Sim.svg("text", {x:ox + 28, y:y + 3.5, "text-anchor":"end", "font-family":"Geist Mono, monospace", "font-size":9.5, fill:"#0B0B1F", text:n}, g); }
+  if(size > 0) Sim.svg("text", {x:x1 - 2, y:oy + h - 8, "text-anchor":"end", "font-family":"Geist Mono, monospace", "font-size":12, fill:"#5B4BFF", text:"≈ " + size + " nm"}, g);
+}
+
+/* ---------- Congo red panel ---------- */
+var cr = document.getElementById("cr");
+function drawCR(){
+  cr.innerHTML = "";
+  var dk = LAST, pos = dk === "amyloid" || dk === "big", r = Patho.rng(5), G = Patho.tuftGeom(3, 150, 150, 100);
+  var dark = pol;
+  Sim.svg("rect", {x:0, y:0, width:300, height:300, fill:dark ? "#0C0C10" : "#F7E9EC"}, cr);
+  Sim.svg("circle", {cx:150, cy:150, r:132, fill:dark ? "#121218" : "#FBF3F5", stroke:dark ? "#2A2A33" : "#C97A92", "stroke-width":2}, cr);
+  G.loops.forEach(function(L){ Sim.svg("circle", {cx:L.x, cy:L.y, r:L.r, fill:dark ? "#15151C" : "#FFFFFF", stroke:dark ? "#24242E" : "#D9A0B4", "stroke-width":1.4}, cr); });
+  if(pos){
+    G.mes.forEach(function(M){ Sim.svg("path", {d:pathBlob(M.x, M.y, M.r * 2.1, r), fill:dark ? "#9BEA5A" : "#E6704F", opacity:dark ? 0.85 : 0.8}, cr); });
+    G.loops.forEach(function(L){ if(r() < 0.5){ var a = r() * 6.28; Sim.svg("path", {d:"M" + (L.x + Math.cos(a) * L.r) + "," + (L.y + Math.sin(a) * L.r) + " A" + L.r + "," + L.r + " 0 0 1 " + (L.x + Math.cos(a + 1.3) * L.r) + "," + (L.y + Math.sin(a + 1.3) * L.r), fill:"none", stroke:dark ? "#C8F25C" : "#E6704F", "stroke-width":4, opacity:0.85}, cr); } });
+  }
+  Sim.svg("text", {x:12, y:22, "font-family":"Geist Mono, monospace", "font-size":12, fill:dark ? "#E9FFE6" : "#6B2A55", text:(pol ? "Polarized  " : "Bright field  ") + (pos ? "positive" : "negative")}, cr);
+}
+function pathBlob(cx, cy, rad, r){ var d = ""; for(var i = 0; i < 8; i++){ var a = i / 8 * 6.28, f = 0.75 + r() * 0.45; d += (i ? "L" : "M") + (cx + Math.cos(a) * rad * f).toFixed(1) + "," + (cy + Math.sin(a) * rad * f * 0.8).toFixed(1); } return d + "Z"; }
+
+/* ---------- decision tree ---------- */
+var tree = document.getElementById("tree");
+function drawTree(dk){
+  tree.innerHTML = "";
+  var path = DX[dk].path, on = function(id){ return path.indexOf(id) >= 0; };
+  var FT = "IBM Plex Sans Thai, sans-serif";
+  function node(x, y, w, t, id, leaf){ var hot = id === "root" || on(id);
+    Sim.svg("rect", {x:x - w / 2, y:y - 14, width:w, height:28, rx:8, fill:hot ? (leaf ? "#0B0B1F" : "#EFEDFF") : "#FFFFFF", stroke:hot ? "#5B4BFF" : "#D3D5E2", "stroke-width":hot ? 1.6 : 1}, tree);
+    Sim.svg("text", {x:x, y:y + 4, "text-anchor":"middle", "font-family":FT, "font-size":10, fill:hot && leaf ? "#FFFFFF" : "#0B0B1F", text:t}, tree); }
+  function edge(pts, id){ var d = "M" + pts.map(function(p){ return p.join(","); }).join(" L"); Sim.svg("path", {d:d, fill:"none", stroke:on(id) ? "#5B4BFF" : "#D3D5E2", "stroke-width":on(id) ? 2 : 1.2}, tree); }
+  edge([[230,34],[80,56]], "cr+"); edge([[230,34],[300,56]], "cr-");
+  edge([[80,84],[80,106]], "cr+");
+  edge([[300,84],[170,106]], "punc"); edge([[300,84],[245,106]], "gran"); edge([[300,84],[320,106]], "rand"); edge([[300,84],[405,106]], "hol");
+  edge([[170,134],[170,162]], "punc"); edge([[245,134],[245,162]], "gran");
+  edge([[320,134],[320,162]], "mid"); edge([[292,134],[284,134],[284,226],[282,226]], "small");
+  edge([[405,134],[405,162]], "par"); edge([[445,120],[452,120],[452,226],[445,226]], "curv");
+  node(230, 20, 190, "Organized or paraprotein deposit", "root");
+  node(80, 70, 118, "Congo red +", "cr+");
+  node(300, 70, 118, "Congo red −", "cr-");
+  node(80, 120, 128, dk === "big" ? "Recheck: atypical" : "Amyloid: typing", "cr+", true);
+  node(170, 120, 70, "Punctate", "punc");
+  node(245, 120, 70, "Granular", "gran");
+  node(320, 120, 70, "Random", "rand");
+  node(405, 120, 80, "Hollow tubules", "hol");
+  node(170, 176, 70, "LCDD", "punc", true);
+  node(245, 176, 70, "PGNMID/IC", "gran", true);
+  node(320, 176, 76, "12–24 nm: FGN", "mid", true);
+  node(405, 176, 80, "Parallel: ITG", "par", true);
+  node(320, 226, 76, "< 12 nm: recheck", "small", true);
+  node(405, 226, 80, "Curved: cryo", "curv", true);
+  Sim.svg("text", {x:16, y:286, "font-family":FT, "font-size":10.5, fill:"#9A9CB2", text:"FGN fibrillary GN  ITG immunotactoid GN  IC immune complex GN"}, tree);
+}
+
+/* ---------- update ---------- */
+var LAST = "amyloid";
+function update(){
+  var p = P(), dk = classify(p), d = DX[dk];
+  LAST = dk;
+  sSize.el.style.opacity = p.arr === "punctate" || p.arr === "granular" ? 0.4 : 1;
+  drawEM(p, dk); drawCR(); drawTree(dk);
+  var notes = [];
+  if(dk === "fibrillary" && !p.dnajb9) notes.push("ย้อม DNAJB9 เพื่อยืนยัน fibrillary GN");
+  if(dk === "fibrillary" && p.lc !== "poly") notes.push("Fibrillary GN แบบ monotypic พบได้ส่วนน้อย ต้องตรวจ monoclonal protein");
+  if(dk === "itg" && p.lc === "poly") notes.push("Immunotactoid ส่วนใหญ่ monotypic ถ้า polyclonal ทบทวน cryo และ fibrillary");
+  if(dk === "pgnmid" && p.lc === "poly") notes.push("Polyclonal granular deposit = immune complex GN ทั่วไป ไม่ใช่ PGNMID");
+  if(dk === "lcdd" && p.lc === "l") notes.push("LCDD ส่วนมากเป็น κ แต่ λ พบได้");
+  if(dk === "amyloid" && p.lc === "neg") notes.push("Ig ลบใน amyloid ให้คิด AA, ALECT2, ATTR, AFib ส่ง mass spectrometry");
+  if(p.dnajb9 && dk !== "fibrillary") notes.push("DNAJB9 + ชี้ fibrillary GN ทบทวนขนาดและ Congo red");
+  var dx = document.getElementById("dx"); dx.innerHTML = "";
+  dx.appendChild(Sim.h("div", {class:"t", text:d.t}));
+  dx.appendChild(Sim.h("div", {class:"s", text:d.s}));
+  notes.forEach(function(n){ dx.appendChild(Sim.h("div", {class:"s", style:"color:#FFDE59", text:"• " + n})); });
+  document.getElementById("act").innerHTML = "<b>Next step:</b> " + d.next;
+}
+Sim.mount({code:"GN-04", title:"Organized Deposits and Paraprotein: EM Ruler",
+  lead:"วัดขนาด fibril ด้วยไม้บรรทัด nm เลือกการเรียงตัว ผล Congo red และ IF light chain แล้วดูว่า algorithm นำไปสู่ amyloid, fibrillary, immunotactoid, cryoglobulinemic GN, LCDD หรือ PGNMID",
+  scenarios:S, order:["al","fgn","itg","cryo","lcdd","pgnmid"], captureMs:1000,
+  onChange:function(k, s){ sSize.set(s.p.size || 10); arr.value = s.p.arr; lc.value = s.p.lc; congo = s.p.congo; dnaj = s.p.dnajb9; tCongo.setState(congo); tDna.setState(dnaj); update(); },
+  refs:["Nasr SH, Fogo AB. New developments in the diagnosis of fibrillary glomerulonephritis. Kidney Int 2019, 96(3): 581-592",
+        "Andeen NK, Yang HY, Dai DF, et al. DnaJ homolog subfamily B member 9 is a putative autoantigen in fibrillary GN. J Am Soc Nephrol 2018, 29(1): 231-239",
+        "Nasr SH, Kudose SS, Said SM, et al. Immunotactoid glomerulopathy is a rare entity with monoclonal and polyclonal variants. Kidney Int 2021, 99(2): 410-420",
+        "Leung N, Bridoux F, Batuman V, et al. The evaluation of monoclonal gammopathy of renal significance: a consensus report of the IKMG. Nat Rev Nephrol 2019, 15(1): 45-59",
+        "Sethi S, Theis JD, Leung N, et al. Mass spectrometry-based proteomic diagnosis of renal amyloidosis. Clin J Am Soc Nephrol 2013, 8(6): 915-921",
+        "Roccatello D, Saadoun D, Ramos-Casals M, et al. Cryoglobulinaemia. Nat Rev Dis Primers 2018, 4(1): 11",
+        "Sethi S, Rajkumar SV, D'Agati VD. The complexity and heterogeneity of monoclonal immunoglobulin-associated renal diseases. J Am Soc Nephrol 2018, 29(7): 1810-1823"],
+  note:"ขนาด fibril เป็นช่วงที่พบบ่อยและซ้อนกันได้ การวินิจฉัยจริงใช้ EM ร่วม Congo red, IF (รวม IgG subclass) และ DNAJB9 หรือ mass spectrometry"
+});
+})();
+</script>
+</body>
+</html>

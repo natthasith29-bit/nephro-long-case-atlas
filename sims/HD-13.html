@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[HD-13] CRRT Modality and Dose</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(120px,160px) 1fr 104px}
+.pgrid{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+@media (max-width:760px){.pgrid{grid-template-columns:1fr}}
+.sel{display:grid;grid-template-columns:minmax(120px,160px) 1fr;gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+.readout{grid-template-columns:repeat(3,1fr)}
+body.present #bench{grid-template-columns:1.55fr 1fr}
+body.present .pgrid{grid-template-columns:1fr;gap:6px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench one" id="bench">
+    <div class="card">
+      <h2>CRRT circuit</h2>
+      <div class="svgwrap"><svg id="circ" aria-label="CRRT circuit"></svg></div>
+      <p class="hint no-present">CVVH = convection (replacement), CVVHD = diffusion (dialysate), CVVHDF = ทั้งสอง Effluent = dialysate + replacement + net UF</p>
+    </div>
+    <div class="card">
+      <h2>Prescription และ delivered dose</h2>
+      <div class="pgrid"><div>
+        <div class="ctls" id="ctls"></div>
+      </div><div>
+        <div class="readout">
+          <div class="ro" id="roEff"><b>-</b><span>Effluent (ml/h)</span></div>
+          <div class="ro" id="roRx"><b>-</b><span>Prescribed (ml/kg/h)</span></div>
+          <div class="ro" id="roDel"><b>-</b><span>Delivered (ml/kg/h)</span></div>
+          <div class="ro" id="roFF"><b>-</b><span>Filtration fraction (%)</span></div>
+          <div class="ro" id="roLife"><b>-</b><span>Post-filter Hct / filter life (h)</span></div>
+          <div class="ro" id="roBal"><b>-</b><span>Net balance (ml/h)</span></div>
+        </div>
+        <details class="secondary" style="margin-top:12px" open><summary style="cursor:pointer;color:var(--accent);font-weight:500">Worked steps</summary><div id="steps"></div></details>
+      </div></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/circuit.js"></script>
+<script src="../core/calc.js"></script>
+<script>
+(function(){
+"use strict";
+function P(o){ var d={mode:"CVVHDF",Qb:150,Qd:1000,Qpre:600,Qpost:300,Qnet:100,hct:30,w:70,down:3,intake:150}; for(var k in o) d[k]=o[k]; return d; }
+var S = {
+  standard:{name:"CVVHDF มาตรฐาน", p:P({}),
+    rows:[["Prescription","Qb 150, dialysate 1,000, pre 600, post 300, net UF 100 ml/h น้ำหนัก 70 kg"],["Dose","effluent 2,000 ml/h ราว 29 ml/kg/h หลังแก้ predilution และ downtime 3 ชั่วโมงได้ราว 23"],["FF","ราว 14% ต่ำกว่า 20–25%"]],
+    take:["Delivered effluent 20–25 ml/kg/h จึงสั่ง 25–30 เผื่อ downtime และ predilution","Dose ที่สูงกว่านี้ไม่ลด mortality","วัด delivered dose จริงทุกวัน ไม่ใช่แค่ prescribed"],
+    quiz:[{q:"ผู้ป่วย 70 kg สั่ง CVVHDF effluent 2,000 ml/h แต่เครื่องหยุด 3 ชั่วโมงต่อวันเพราะ CT และเปลี่ยนถุง predilution factor 0.91 delivered dose ใกล้ค่าใดที่สุด",opts:["29 ml/kg/h","26 ml/kg/h","23 ml/kg/h","18 ml/kg/h"],ans:2,why:"2,000/70 = 28.6 × 0.91 = 26.0 × 21/24 = 22.8 ml/kg/h อยู่ในเป้า 20–25"}]},
+  highFF:{name:"CVVH post-dilution FF สูง", p:P({mode:"CVVH",Qb:120,Qd:0,Qpre:0,Qpost:2000,Qnet:150,down:2}),
+    rows:[["Prescription","CVVH post-dilution 2,000 ml/h ที่ Qb 120"],["FF","ราว 43% เกิน 25% post-filter Hct ราว 43%"],["ผล","filter clot เร็ว dose จริงตกเพราะ downtime"]],
+    take:["FF = (Qrep post + Qrep pre + net UF) / (Qp + Qrep pre)","Post-dilution ให้ clearance ต่อ ml สูงสุด แต่ FF สูงกว่า","ลด FF: เพิ่ม Qb, ย้ายบางส่วนเป็น pre-dilution, หรือเพิ่ม diffusion (CVVHDF)"],
+    quiz:[{q:"CVVH post-dilution 2,000 ml/h Qb 120 Hct 30% filter clot ทุก 8–10 ชั่วโมง ทั้งที่ใช้ heparin ข้อใดเหมาะที่สุด",opts:["เพิ่ม post-dilution เป็น 2,500","เพิ่ม Qb และย้าย replacement บางส่วนเป็น pre-dilution","ลด Qb เหลือ 100","หยุด anticoagulation"],ans:1,why:"FF ราว 43% เป็นสาเหตุหลักของ clotting เพิ่ม Qb และใช้ pre-dilution ลด FF ให้ต่ำกว่า 20–25%"}]},
+  downtime:{name:"Downtime มาก", p:P({down:9}),
+    rows:[["เหตุการณ์","หยุดเครื่อง 9 ชั่วโมงต่อวันจาก clotting, procedure, รอถุง"],["Prescribed","ราว 29 ml/kg/h"],["Delivered","เหลือราว 16 ml/kg/h ต่ำกว่าเป้า"]],
+    take:["Delivered dose มักต่ำกว่า prescribed 15–30% ในทางปฏิบัติ","แก้ที่สาเหตุของ downtime ก่อน (anticoagulation, access, logistics)","ถ้าแก้ไม่ได้ให้เพิ่ม prescribed dose ชดเชย"],
+    quiz:[{q:"สั่ง CVVHDF 30 ml/kg/h แต่ BUN ไม่ลด พบเครื่องทำงานเฉลี่ย 15 ชั่วโมงต่อวันเพราะ filter clot บ่อย ข้อใดเหมาะที่สุด",opts:["เพิ่ม dose เป็น 50 ml/kg/h","หาสาเหตุ clotting และปรับ anticoagulation (เช่น regional citrate) เพื่อลด downtime","เปลี่ยนเป็น intermittent HD ทันที","ลด dose"],ans:1,why:"delivered dose ต่ำเพราะ downtime จาก clotting การแก้ anticoagulation ตรงสาเหตุที่สุด KDIGO แนะนำ regional citrate เป็นอันดับแรกถ้าไม่มีข้อห้าม"}]},
+  predil:{name:"CVVH pre-dilution ล้วน", p:P({mode:"CVVH",Qb:150,Qd:0,Qpre:2500,Qpost:0,Qnet:100,down:3}),
+    rows:[["Prescription","CVVH pre-dilution 2,500 ml/h"],["Correction","predilution factor ราว 0.72 เลือดถูกเจือจางก่อนเข้า filter"],["ผล","effluent ดูสูงแต่ delivered dose ต่ำกว่าที่คิด FF ตามสูตรราว 30% แต่ post-filter Hct ต่ำ filter จึงอยู่นาน"]],
+    take:["Predilution factor = Qp / (Qp + Qrep pre)","Pre-dilution ลด hemoconcentration ใน filter และ clotting แต่ลด clearance ต่อ ml ของ replacement","คิด delivered dose ต้องคูณ predilution factor เสมอ"],
+    quiz:[{q:"CVVH pre-dilution 2,500 ml/h Qb 150 Hct 30% (Qp ราว 6,300 ml/h) predilution factor ใกล้ค่าใดที่สุด",opts:["0.95","0.85","0.72","0.50"],ans:2,why:"Qp/(Qp + Qpre) = 6,300/(6,300 + 2,500) = 0.72"}]},
+  intensive:{name:"Dose สูง 40 ml/kg/h", p:P({Qd:1600,Qpre:900,Qpost:400,Qnet:100,down:2}),
+    rows:[["Prescription","effluent ราว 3,000 ml/h เกิน 40 ml/kg/h"],["ผลที่ไม่ต้องการ","hypophosphatemia, hypokalemia, เสีย amino acid และ antibiotic, hypothermia"],["Evidence","RENAL และ ATN ไม่พบประโยชน์ต่อ mortality"]],
+    take:["Dose สูงกว่า 25 ml/kg/h (delivered) ไม่ลด mortality","ต้องปรับยา antibiotic ตาม effluent rate (เช่น meropenem, piperacillin)","ติดตาม phosphate และให้ทดแทน หรือใช้น้ำยาที่มี phosphate"],
+    quiz:[{q:"ผู้ป่วย septic AKI ได้ CVVHDF delivered 42 ml/kg/h วันที่ 4 phosphate 1.2 mg/dL K 3.1 ข้อใดเหมาะที่สุด",opts:["คง dose เดิมเพราะ dose สูงช่วย sepsis","ลด dose ให้ delivered 20–25 ml/kg/h ทดแทน phosphate และ K และทบทวนขนาด antibiotic","เปลี่ยนเป็น PD","เพิ่ม dose เป็น 50"],ans:1,why:"RENAL และ ATN ไม่พบประโยชน์ของ dose สูง แต่เพิ่ม electrolyte loss ควรลดเป็นเป้ามาตรฐานและแก้ electrolyte"}]},
+  balance:{name:"Fluid balance บวก", p:P({Qnet:100,intake:260}),
+    rows:[["Intake","ยา, nutrition, flush รวม 260 ml/h"],["Net UF","ตั้ง 100 ml/h"],["ผล","balance +160 ml/h หรือราว +3.8 L ต่อวันแม้เครื่องดึงน้ำอยู่"]],
+    take:["Net UF ต้องตั้งจาก intake ทั้งหมดบวกเป้าการดึงน้ำ","คิด balance รายชั่วโมงและปรับทุก 1–4 ชั่วโมงตาม hemodynamics","net UF > 1.75 ml/kg/h สัมพันธ์กับ mortality ดึงช้าแต่ต่อเนื่อง"],
+    quiz:[{q:"ผู้ป่วย 70 kg ได้ intake รวม 260 ml/h ตั้ง net UF 100 ml/h ต้องการ balance −50 ml/h ต้องตั้ง net UF เท่าใด",opts:["150 ml/h","210 ml/h","310 ml/h","360 ml/h"],ans:2,why:"net UF = intake + เป้าการดึง = 260 + 50 = 310 ml/h"}]}
+};
+var ORDER=["standard","highFF","downtime","predil","intensive","balance"];
+
+var box=document.getElementById("ctls"), C={};
+var mSel=Sim.h("select",{id:"sMode"},["CVVH","CVVHD","CVVHDF"].map(function(m){ return Sim.h("option",{value:m,text:m}); }));
+mSel.addEventListener("change",function(){ enforce(); update(); });
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"sMode",text:"Modality"}),mSel]));
+function sl(k,o){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); box.appendChild(C[k].el); return C[k]; }
+sl("Qb",{label:"Qb",min:80,max:300,step:10,value:150,unit:"ml/min"});
+sl("Qd",{label:"Dialysate",min:0,max:3000,step:100,value:1000,unit:"ml/h"});
+sl("Qpre",{label:"Replacement pre",min:0,max:3000,step:100,value:600,unit:"ml/h"});
+sl("Qpost",{label:"Replacement post",min:0,max:3000,step:100,value:300,unit:"ml/h"});
+sl("Qnet",{label:"Net UF",min:0,max:400,step:10,value:100,unit:"ml/h"});
+sl("intake",{label:"Intake อื่นทั้งหมด",min:0,max:400,step:10,value:150,unit:"ml/h"}).el.classList.add("secondary");
+sl("w",{label:"น้ำหนัก",min:40,max:120,step:1,value:70,unit:"kg"});
+sl("hct",{label:"Hct",min:20,max:45,step:1,value:30,unit:"%"}).el.classList.add("secondary");
+sl("down",{label:"Downtime",min:0,max:12,step:0.5,value:3,unit:"h/วัน",fmt:function(v){return v.toFixed(1);}});
+function enforce(){ var m=mSel.value; if(m==="CVVH" && C.Qd.get()>0) C.Qd.set(0); if(m==="CVVHD"){ C.Qpre.set(0); C.Qpost.set(0); } }
+
+var c=Circuit.preset.crrt(document.getElementById("circ"),{mode:"CVVHDF"});
+
+function update(){
+  var m=mSel.value, qd=m==="CVVH"?0:C.Qd.get(), qpre=m==="CVVHD"?0:C.Qpre.get(), qpost=m==="CVVHD"?0:C.Qpost.get();
+  var w=C.w.get(), qnet=C.Qnet.get(), qb=C.Qb.get(), hct=C.hct.get()/100, down=C.down.get();
+  var r=Calc.crrtDose({qb:qb,hct:hct,qd:qd,qpre:qpre,qpost:qpost,qnet:qnet,w:w});
+  var del=r.value*(24-down)/24, ff=r.ff/100;
+  var qb60=qb*60, uft=qpre+qpost+qnet, hctOut=hct*qb60/Math.max(1,qb60+qpre-uft);
+  var life=Math.max(4,Math.min(72,60*Math.exp(-Math.max(0,hctOut-0.30)*16)));
+  var bal=Calc.crrtBalance({intake:C.intake.get(),qnet:qnet});
+  c.setMode(m,{pre:qpre>0,post:qpost>0,citrate:false});
+  c.setFlows({Qb:qb,Qpre:qpre,Qpost:qpost,Qd:qd,Qeff:r.effluent});
+  var tmpPF=Math.round(90+0.4*qb+260*Math.max(0,ff-0.2));
+  c.setPressures({PA:Math.round(-0.55*qb),PF:tmpPF,PE:Math.round(-40-r.effluent/50-200*Math.max(0,ff-0.2)),PR:Math.round(50+0.3*qb)});
+  c.set("HF",{clot:Math.max(0,Math.min(0.9,(hctOut-0.33)*7))});
+  c.alarm(hctOut>0.38?{text:"Post-filter Hct "+Math.round(hctOut*100)+"%, filter clotting risk"}:(del<20?{text:"Delivered dose "+del.toFixed(1)+" ml/kg/h",level:"amber"}:null));
+  Sim.ro("roEff",Sim.fmt(r.effluent,0));
+  Sim.ro("roRx",Sim.fmt(r.uncorrected,1));
+  Sim.ro("roDel",Sim.fmt(del,1),del<20?"flag":(del>30?"flag":"ok"));
+  Sim.ro("roFF",Sim.fmt(r.ff,1),ff>0.25?"flag":(ff<=0.2?"ok":false));
+  Sim.ro("roLife",Sim.fmt(hctOut*100,0)+"% / "+Sim.fmt(life,0),life<24?"flag":"ok");
+  Sim.ro("roBal",(bal.value>0?"+":"")+Sim.fmt(bal.value,0),bal.value>0?"flag":"ok");
+  var steps={steps:r.steps.concat([{t:"Downtime correction",f:Calc.f(r.value,1)+" × (24 − "+down+")/24 = "+Calc.f(del,1)+" ml/kg/h"}]).concat([{t:"Post-filter Hct = Hct × Qb / (Qb + Qpre − UF ทั้งหมด)",f:Calc.f(hct,2)+" × "+qb60+" / ("+qb60+" + "+qpre+" − "+uft+") = "+Calc.f(hctOut*100,1)+"%"}]).concat(bal.steps), note:del<20?"Delivered ต่ำกว่า 20 ml/kg/h":(ff>0.25?"FF เกิน 25%":(del>30?"Dose เกินจำเป็น ไม่มีประโยชน์เพิ่ม":"Dose และ FF อยู่ในเป้า")), flag:(del<20||ff>0.25||del>30)?"flag":"ok"};
+  Calc.renderSteps(document.getElementById("steps"),steps);
+}
+Sim.mount({code:"HD-13", title:"CRRT Modality and Dose", lead:"เลือก modality ปรับ Qb น้ำยา และ net UF แล้วดู effluent dose, predilution, FF, filter life และ fluid balance",
+  scenarios:S, order:ORDER, captureMs:2500,
+  onChange:function(k,s){ var p=s.p; mSel.value=p.mode; ["Qb","Qd","Qpre","Qpost","Qnet","intake","w","hct","down"].forEach(function(x){ C[x].set(p[x]); }); update(); },
+  refs:["Kidney Disease: Improving Global Outcomes (KDIGO) Acute Kidney Injury Work Group. KDIGO Clinical Practice Guideline for Acute Kidney Injury. Kidney Int Suppl 2012, 2(1): 1-138",
+        "RENAL Replacement Therapy Study Investigators. Intensity of continuous renal-replacement therapy in critically ill patients. N Engl J Med 2009, 361(17): 1627-1638",
+        "VA/NIH Acute Renal Failure Trial Network (ATN). Intensity of renal support in critically ill patients with acute kidney injury. N Engl J Med 2008, 359(1): 7-20",
+        "Neri M, Villa G, Garzotto F, et al. Nomenclature for renal replacement therapy in acute kidney injury: basic principles. Crit Care 2016, 20(1): 318",
+        "Murugan R, Balakumar V, Kerti SJ, et al. Net ultrafiltration intensity and mortality in critically ill patients with fluid overload. Crit Care 2018, 22(1): 223"],
+  note:"Filter life เป็นค่าประมาณเพื่อการสอนจาก post-filter Hct (ไม่รวมผลของ anticoagulation) ดู citrate ใน HD-14"
+});
+})();
+</script>
+</body>
+</html>

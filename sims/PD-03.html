@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[PD-03] Dwell Time and Ultrafiltration Curves</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(120px,160px) 1fr 100px}
+.readout{grid-template-columns:repeat(3,1fr)}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,1fr)}}
+table.cmp{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:14px}
+table.cmp th,table.cmp td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:right}
+table.cmp th{font-weight:500;color:var(--muted);font-size:12px}
+table.cmp td{font-family:var(--mono);font-variant-numeric:tabular-nums}
+table.cmp td:first-child,table.cmp th:first-child{text-align:left;font-family:inherit}
+table.cmp tr.pick td{background:var(--accent-soft)}
+table.cmp .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:8px;vertical-align:-1px}
+.cmpwrap{overflow-x:auto}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+body.present .bench{grid-template-columns:1.4fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:16px 20px}
+body.present .ctls{gap:2px}
+body.present .ro{padding:8px 12px}
+body.present table.cmp td,body.present table.cmp th{padding:5px 8px}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Net UF ตลอด dwell แยกตามน้ำยา</h2>
+      <div id="chart"></div>
+      <div class="cmpwrap"><table class="cmp" id="cmp" aria-label="Comparison of solutions at the chosen dwell"></table></div>
+      <p class="hint no-present">ทุกเส้นใช้ membrane เดียวกัน เส้นตั้งคือ dwell ที่เลือก แถวที่เน้นคือน้ำยาที่ glucose น้อยที่สุดแต่ได้ UF ถึงเป้า ตัวเลข glucose คือที่ดูดซึมเข้าร่างกายต่อ exchange</p>
+    </div>
+    <div class="card">
+      <h2>Membrane และ dwell</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roPk"><b>-</b><span>Peak UF 2.5% ที่ (ชม.)</span></div>
+        <div class="ro" id="roZero"><b>-</b><span>2.5% UF กลับเป็น 0 ที่ (ชม.)</span></div>
+        <div class="ro" id="roX"><b>-</b><span>Icodextrin แซง 2.5% ที่ (ชม.)</span></div>
+        <div class="ro" id="roCr"><b>-</b><span>D/P Cr 4 ชม.</span></div>
+        <div class="ro" id="roPick"><b>-</b><span>น้ำยาที่แนะนำ</span></div>
+        <div class="ro" id="roKcal"><b>-</b><span>Glucose kcal ต่อ exchange</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/pd.js"></script>
+<script>
+(function(){
+"use strict";
+function P(o){ var d={area:1.1,dwell:240,fill:2000,L:0.3,target:200}; for(var k in o) d[k]=o[k]; return d; }
+var S = {
+  day:{name:"CAPD กลางวัน 4 ชม.", p:P({}),
+    rows:[["Prescription","exchange กลางวัน dwell 4 ชม. fast-average transporter"],["ผล","1.5% ได้ UF น้อย 2.5% ได้ราว 350 ml icodextrin ยังไม่ทันได้ผลเต็มที่"],["เลือก","ใช้ 1.5% เป็นหลัก เพิ่ม 2.5% เฉพาะ exchange ที่ต้องการ UF"]],
+    take:["Glucose UF peak ในช่วง 2–3 ชม. แรกแล้วลดลงเมื่อ gradient หาย","Icodextrin ให้ UF ช้าแต่ต่อเนื่อง จึงไม่เหมาะกับ dwell สั้น","เลือกน้ำยาที่ glucose ต่ำที่สุดที่ยังได้ UF ตามต้องการ"]},
+  night:{name:"CAPD กลางคืน 10 ชม.", p:P({dwell:600,target:100}),
+    rows:[["Prescription","long dwell กลางคืน 10 ชม."],["ผล","1.5% ติดลบ 2.5% เหลือไม่มาก icodextrin ได้ UF ราว 550 ml โดยไม่ดูด glucose 4.25% ได้มากกว่าแต่ดูด glucose ราว 60 g"],["เลือก","icodextrin หรือ 2.5% ถ้าไม่มี icodextrin"]],
+    take:["Long dwell เป็นช่วงที่เสีย UF มากที่สุดใน CAPD","Icodextrin ใน long dwell เพิ่ม UF และลด glucose exposure","4.25% ใน long dwell ได้ UF แต่ดูด glucose สูงมาก"]},
+  apdDay:{name:"APD long day dwell (fast)", p:P({area:1.9,dwell:840,target:100}),
+    rows:[["Prescription","APD กลางคืน แล้วค้างน้ำยากลางวัน 14 ชม. fast transporter"],["ผล","1.5% และ 2.5% ติดลบหลายร้อย ml 4.25% เหลือเกือบศูนย์ icodextrin ยัง UF บวกราว 700 ml"],["เลือก","icodextrin สำหรับ day dwell หรือเพิ่ม mid-day exchange"]],
+    take:["Fast transporter + long day dwell ด้วย glucose = UF ติดลบ","Icodextrin หรือแบ่ง day dwell เป็น 2 exchange","ถ้าไม่ทำอะไร น้ำเกินสะสมแม้ทำ APD ได้ UF ดีตอนกลางคืน"]},
+  apdNight:{name:"APD cycles สั้น 1.5 ชม.", p:P({area:1.9,dwell:90,target:150}),
+    rows:[["Prescription","APD dwell 1.5 ชม. ต่อ cycle fast transporter"],["ผล","glucose gradient ยังสูง UF ดีแม้ใช้ 1.5%"],["ข้อควรระวัง","dwell สั้นมากเสีย Na removal เพราะ sodium sieving"]],
+    take:["Dwell สั้นใช้ประโยชน์จาก UF ช่วงต้นของ fast transporter","น้ำในช่วงต้นผ่าน aquaporin มาก จึงพา Na ออกน้อย","APD ที่ cycle สั้นมากต้องดู Na balance และ BP"]},
+  slow:{name:"Slow transporter long dwell", p:P({area:0.55,dwell:600,target:200}),
+    rows:[["Membrane","slow transporter D/P Cr ราว 0.48"],["ผล","glucose gradient อยู่นาน 2.5% ยังได้ UF บวกที่ 10 ชม."],["เลือก","glucose ใช้ได้ดีใน long dwell ปัญหาคือ clearance มากกว่า UF"]],
+    take:["Slow transporter UF peak ช้าและสูง","Long dwell ด้วย glucose ยังใช้ได้","ต้องเฝ้าระวัง small solute clearance แทน"]},
+  dm:{name:"DM ลด glucose exposure", p:P({area:1.2,dwell:480,target:200}),
+    rows:[["ผู้ป่วย","DM HbA1c สูง ใช้ 2.5% และ 4.25% บ่อย"],["ผล","exchange ละราว 25–60 g glucose ถูกดูดเข้าไป"],["เลือก","icodextrin สำหรับ long dwell และ 1.5% ใน dwell สั้น"]],
+    take:["Glucose ที่ดูดซึมจาก PD เป็นพลังงานส่วนเกินวันละหลายร้อย kcal","Glucose-sparing ลด HbA1c และ triglyceride","ต้องคุม Na และน้ำดื่มเพื่อลดความต้องการ hypertonic glucose"]}
+};
+var ORDER=["day","night","apdDay","apdNight","slow","dm"];
+var FL=[["g15","#19C8E6"],["g25","#5B4BFF"],["g425","#0B0B1F"],["ico","#1F7A72"]];
+
+var box=document.getElementById("ctls"), C={};
+function sl(k,o){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); box.appendChild(C[k].el); return C[k]; }
+sl("area",{label:"Surface area",min:0.4,max:2.4,step:0.05,value:1.1,fmt:function(v){ return "×"+v.toFixed(2); }});
+sl("dwell",{label:"Dwell ที่เลือก",min:60,max:900,step:15,value:240,fmt:function(v){ return (v/60).toFixed(1)+" ชม."; }});
+sl("target",{label:"UF ที่ต้องการ",min:0,max:800,step:50,value:200,unit:"ml"});
+sl("fill",{label:"Fill volume",min:1000,max:3000,step:100,value:2000,unit:"ml"});
+sl("L",{label:"Lymphatic flow",min:0.1,max:3,step:0.1,value:0.3,unit:"ml/min"}).el.classList.add("secondary");
+
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?260:300,aria:"Net ultrafiltration versus dwell time for four solutions",
+  x:{min:0,max:16,step:2,label:"Dwell (h)"},y:{min:-800,max:1200,label:"Net UF (ml)"},
+  series:FL.map(function(f){ return {id:f[0],name:PD.FLUIDS[f[0]].short,color:f[1],data:[],width:f[0]==="g425"?2:2.4,dash:f[0]==="ico"?[7,4]:null}; }),legend:true});
+
+function params(){ return {area:C.area.get(),dwell:C.dwell.get(),target:C.target.get(),fill:C.fill.get(),L:C.L.get()}; }
+function cross(R,key){ for(var i=10;i<R.uf.length;i++) if(R.uf[i-1]>0&&R.uf[i]<=0) return R.t[i]; return null; }
+function update(){
+  var p=params(), RR={}, hMax=Math.max(10,Math.ceil(p.dwell/60/2)*2+2), all=[];
+  FL.forEach(function(f){ RR[f[0]]=PD.dwell({fluid:f[0],fillMl:p.fill,dwellMin:hMax*60,area:p.area,L:p.L}); var s=PD.series(RR[f[0]],"uf",{every:10,hours:true}); chart.setSeries(f[0],s); s.forEach(function(d){ all.push(d[1]); }); });
+  var lo=Math.min.apply(null,all), hi=Math.max.apply(null,all), st=Plot.niceStep(hi-lo,5);
+  chart.update({x:{min:0,max:hMax,step:hMax>12?2:1,label:"Dwell (h)"},y:{min:Math.floor(lo/st)*st,max:Math.ceil(hi/st)*st,step:st,label:"Net UF (ml)"},
+    vlines:[{x:p.dwell/60,label:(p.dwell/60).toFixed(1)+" h"}],hlines:[{y:0,color:A.muted,dash:[1,3]},{y:p.target,color:A.red,dash:[4,4],label:"Target "+p.target}]});
+  /* table */
+  var rows=FL.map(function(f){ var R=RR[f[0]], a=R.at(p.dwell), pk=PD.peak(R); return {k:f[0],col:f[1],uf:a.uf,pk:pk,glu:PD.FLUIDS[f[0]].glu?a.gluAbsorbedG:0,na:a.naRemoved}; });
+  /* pick: น้ำยา glucose ต่ำสุดที่ถึงเป้า ลำดับ 1.5 → (ico ถ้า dwell ≥ 6 ชม.) → 2.5 → 4.25 */
+  var pref=p.dwell>=360?["g15","ico","g25","g425"]:["g15","g25","ico","g425"], pick=null;
+  for(var i=0;i<pref.length;i++){ var r=rows.filter(function(x){ return x.k===pref[i]; })[0]; if(r.uf>=p.target){ pick=r; break; } }
+  var tb=document.getElementById("cmp"); tb.innerHTML="";
+  tb.appendChild(Sim.h("tr",{},["น้ำยา","UF ที่ dwell","Peak (ml @ ชม.)","Glucose ดูดซึม (g)","Na removal (mmol)"].map(function(t){ return Sim.h("th",{text:t}); })));
+  rows.forEach(function(r){
+    var name=Sim.h("td",{},[Sim.h("span",{class:"sw"}),document.createTextNode(PD.FLUIDS[r.k].short)]); name.firstChild.style.background=r.col;
+    var tr=Sim.h("tr",{class:pick&&pick.k===r.k?"pick":""},[name,Sim.h("td",{text:Math.round(r.uf)}),Sim.h("td",{text:Math.round(r.pk.uf)+" @ "+(r.pk.t/60).toFixed(1)}),Sim.h("td",{text:r.k==="ico"?"ราว 0":Math.round(r.glu)}),Sim.h("td",{text:Math.round(r.na)})]);
+    if(r.uf<0) tr.children[1].className="flag-txt";
+    tb.appendChild(tr);
+  });
+  var R25=RR.g25, pk25=PD.peak(R25), z=cross(R25), x=null;
+  for(var j=10;j<R25.uf.length;j++) if(RR.ico.uf[j]>R25.uf[j]){ x=R25.t[j]; break; }
+  var cr4=RR.g25.dpCr[240];
+  Sim.ro("roPk",(pk25.t/60).toFixed(1));
+  Sim.ro("roZero",z?(z/60).toFixed(1):"> "+hMax,z&&z<p.dwell?"flag":false);
+  Sim.ro("roX",x?(x/60).toFixed(1):"-");
+  Sim.ro("roCr",cr4.toFixed(2)+"");
+  Sim.ro("roPick",pick?PD.FLUIDS[pick.k].short:"ไม่ถึงเป้า",pick?"ok":"flag");
+  Sim.ro("roKcal",pick?Math.round(pick.glu*3.4)+"":"-",pick&&pick.glu*3.4>150?"flag":false);
+  var act=document.getElementById("act"), m, bad=false;
+  if(!pick){ bad=true; m="<b>ไม่มีน้ำยาใดถึงเป้าที่ dwell นี้</b> ย่น dwell ให้ใกล้ peak UF แบ่งเป็น 2 exchange หรือทบทวนว่า UF ต่ำจาก membrane (ทำ PET 4.25%)"; }
+  else if(pick.k==="g425"){ bad=true; m="<b>ต้องใช้ 4.25% จึงถึงเป้า</b> ลองลด dwell หรือเปลี่ยนเป็น icodextrin ใน long dwell และลด IDWG ด้วยการจำกัด Na เพื่อลดความต้องการ hypertonic glucose"; }
+  else if(pick.k==="ico") m="<b>ใช้ icodextrin</b> สำหรับ dwell นี้ (วันละ 1 exchange) ได้ UF ต่อเนื่องและแทบไม่ดูด glucose";
+  else m="<b>ใช้ "+PD.FLUIDS[pick.k].short+"</b> เพียงพอสำหรับเป้า UF นี้ หลีกเลี่ยงความเข้มข้นที่สูงเกินจำเป็น";
+  if(z && z<p.dwell && pick && pick.k!=="ico") m+=" 2.5% เริ่มดูดน้ำกลับหลัง "+(z/60).toFixed(1)+" ชม.";
+  act.innerHTML="<b>Next step:</b> "+m; act.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"PD-03", title:"Dwell Time and Ultrafiltration Curves", lead:"เทียบ 1.5%, 2.5%, 4.25% และ icodextrin บน membrane เดียวกัน ปรับ transport, dwell และเป้า UF แล้วดูว่าน้ำยาไหนพอโดย glucose น้อยที่สุด",
+  scenarios:S, order:ORDER, captureMs:1800,
+  onChange:function(k,s){ var p=s.p; ["area","dwell","target","fill","L"].forEach(function(x){ C[x].set(p[x]); }); update(); },
+  refs:["Mistry CD, Gokal R, Peers E (MIDAS). A randomized multicenter clinical trial comparing isosmolar icodextrin with hyperosmolar glucose solutions in CAPD. Kidney Int 1994, 46(2): 496-503",
+        "Finkelstein F, Healy H, Abu-Alfa A, et al. Superiority of icodextrin compared with 4.25% dextrose for peritoneal ultrafiltration. J Am Soc Nephrol 2005, 16(2): 546-554",
+        "Goossen K, Becker M, Marshall MR, et al. Icodextrin versus glucose solutions for the once-daily long dwell in peritoneal dialysis: an enriched systematic review and meta-analysis of randomized controlled trials. Am J Kidney Dis 2020, 75(6): 830-846",
+        "Li PK, Culleton BF, Ariza A, et al (IMPENDIA/EDEN). Randomized, controlled trial of glucose-sparing peritoneal dialysis in diabetic patients. J Am Soc Nephrol 2013, 24(11): 1889-1900",
+        "Rippe B, Stelin G, Haraldsson B. Computer simulations of peritoneal fluid transport in CAPD. Kidney Int 1991, 40(2): 315-325"],
+  note:"Model เพื่อการสอน (core/pd.js) kcal จาก glucose ใช้ 3.4 kcal/g ค่าที่ได้เป็นต่อ exchange UF จริงขึ้นกับ residual volume, การ drain และ fluid absorption ของแต่ละคน"
+});
+})();
+</script>
+</body>
+</html>

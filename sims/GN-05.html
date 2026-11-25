@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[GN-05] Complement Pathways and Thrombotic Microangiopathy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.bench{grid-template-columns:1.2fr 1fr}
+@media (max-width:900px){.bench{grid-template-columns:1fr}}
+.pair{display:grid;grid-template-columns:1.25fr 1fr;gap:12px;margin-top:12px;align-items:start}
+@media (max-width:560px){.pair{grid-template-columns:1fr}}
+.pair figure{margin:0}
+.pair.one{grid-template-columns:1fr}.pair.one svg{max-width:460px;display:block;margin:0 auto}
+.pair figcaption{font:600 12px var(--mono);letter-spacing:.06em;color:var(--muted);margin:0 0 6px}
+.sel{display:grid;grid-template-columns:minmax(110px,150px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px;margin:6px 0}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.readout{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:520px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.sub{font:600 12px var(--mono);letter-spacing:.06em;color:var(--muted);margin:14px 0 6px}
+.dx{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--ink);color:#fff;font-size:14px}
+.dx .t{font:600 17px var(--display);letter-spacing:-.01em}
+.dx .s{color:#C9CAE6;margin-top:4px}
+.act{margin-top:10px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+body.present .bench{grid-template-columns:1.1fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .act,body.present .tools,body.present .sub{display:none}
+body.present .card{padding:14px 18px}
+body.present #casc{max-height:240px;width:auto!important;margin:0 auto}
+body.present .pair{grid-template-columns:1fr}
+body.present .pair svg{max-height:190px}
+body.present .ctls{grid-template-columns:1fr 1fr;column-gap:22px}
+body.present .sel{margin:2px 0}
+body.present .readout .ro{padding:6px 10px}
+body.present .dx{margin-top:8px;padding:8px 12px}
+body.present #roC3,body.present #roMac,body.present #roD28,body.present #roRRT{display:none}
+body.present .dx .s{display:none}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Complement cascade และ ADAMTS13</h2>
+      <div class="svgwrap"><svg id="casc" viewBox="0 0 640 310" role="img" aria-label="Complement cascade activity"></svg></div>
+      <div class="pair one">
+        <figure><figcaption>VWF AND ADAMTS13</figcaption><div class="svgwrap"><svg id="vwf" viewBox="0 0 300 190" role="img" aria-label="von Willebrand factor multimers and ADAMTS13"></svg></div></figure>
+      </div>
+      <p class="hint no-present">ความหนาของลูกศรคือ flux ของแต่ละ pathway ✕ แดงคือ regulator ที่บกพร่อง ป้ายสีม่วงคือตำแหน่งที่ยาออกฤทธิ์และเปิดใช้อยู่ ภาพล่างคือ ULvWF ที่ ADAMTS13 ตัดไม่ทันจนเกล็ดเลือดเกาะเป็นสาย</p>
+      <details class="more"><summary>ภาพ capillary wall (EM) ตอนวินิจฉัย</summary><div class="more-body"><div class="svgwrap"><svg id="loop" aria-label="TMA capillary wall"></svg></div></div></details>
+    </div>
+    <div class="card">
+      <h2>กลไก ยา และ trajectory 28 วัน</h2>
+      <div class="sel"><label for="sDef">Complement</label><select id="sDef">
+        <option value="none">ปกติ</option><option value="cfh">CFH variant</option><option value="cfi">CFI variant</option><option value="mcp">MCP (CD46) variant</option>
+        <option value="c3">C3 gain-of-function</option><option value="cfb">CFB gain-of-function</option><option value="afh">Anti-factor H antibody</option></select></div>
+      <div class="sel"><label for="sTrig">Trigger</label><select id="sTrig">
+        <option value="none">ไม่มี</option><option value="inf">Infection (URI, GI)</option><option value="stec">Shiga toxin (STEC)</option><option value="drug">ยา (gemcitabine, anti-VEGF, CNI)</option>
+        <option value="src">Scleroderma renal crisis</option><option value="mht">Malignant hypertension</option><option value="sle">SLE / APS</option><option value="preg">Pregnancy / postpartum</option></select></div>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools"></div>
+      <div class="tools" id="tx"></div>
+      <div class="svgwrap" style="margin-top:10px"><div id="chart"></div></div>
+      <div class="sub">ตอนวินิจฉัย (day 0)</div>
+      <div class="readout">
+        <div class="ro" id="roPlt"><b>-</b><span>Platelet (x10⁹/L)</span></div>
+        <div class="ro" id="roLdh"><b>-</b><span>LDH (U/L)</span></div>
+        <div class="ro" id="roCr"><b>-</b><span>Cr (mg/dL)</span></div>
+        <div class="ro" id="roPl"><b>-</b><span>PLASMIC score</span></div>
+        <div class="ro" id="roC3"><b>-</b><span>C3 (mg/dL)</span></div>
+        <div class="ro" id="roMac"><b>-</b><span>sC5b-9</span></div>
+        <div class="ro" id="roD28"><b>-</b><span>Cr day 28</span></div>
+        <div class="ro" id="roRRT"><b>-</b><span>Dialysis</span></div>
+      </div>
+      <div class="dx" id="dx"></div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/patho.js"></script>
+<script>
+(function(){
+"use strict";
+/* Teaching model (days 0-28, dt 0.1 d). Three injury drives, each 0..1:
+   TTP: ADAMTS13 < 20% -> (20 - activity)/15, x0.25 PLEX, x0.2 caplacizumab, inhibitor waning with steroid/rituximab (tau 6 d)
+   Complement (CM-TMA): defect severity x (0.55 + 0.45 trigger(t)), x0.06 C5 inhibitor, PLEX factor by defect (CFH 0.6, anti-FH 0.45, CFI 0.7, MCP 1.0, gain-of-function 0.85)
+   Direct trigger: weight x trigger(t) (STEC 1.0, SRC 0.8, drug 0.7, malignant HT 0.6, SLE 0.6, pregnancy 0.3, infection 0.2)
+   trigger(t): infection e^-t/5, STEC e^-t/3, pregnancy e^-t/7, drug/SRC/mHT/SLE persist until the specific treatment (then decay tau 3-7 d)
+   Platelet: dP/dt = (250 - P)/4 - consumption x P, consumption = 2.5 TTP + 0.9 (complement + trigger)
+   Kidney: injury R = 0.3 TTP + complement + trigger, GFR fraction = (1 - 0.85 min(1,R)) x (1 - scar), scar grows 0.045 x R per day when R > 0.3
+   Cr relaxes to 0.9/GFR fraction with tau 1.5 d. Treatment starts at the chosen day. */
+var DEF = {none:0, cfh:0.9, cfi:0.7, mcp:0.6, c3:0.8, cfb:0.8, afh:0.85};
+var PLEXF = {none:1, cfh:0.6, cfi:0.7, mcp:1.0, c3:0.85, cfb:0.85, afh:0.45};
+var TW = {none:0, inf:0.2, stec:1.0, drug:0.7, src:0.8, mht:0.6, sle:0.6, preg:0.3};
+var TXS = [["plex","PLEX"],["capla","Caplacizumab"],["is","Steroid + rituximab"],["c5i","C5 inhibitor"],["acei","ACEi"],["stop","หยุดยาที่เป็นเหตุ"],["bp","คุมความดัน"]];
+function trig(k, t, tx, ts){
+  var on = t >= ts;
+  switch(k){
+    case "inf": return Math.exp(-t / 5);
+    case "stec": return Math.exp(-t / 3);
+    case "preg": return Math.exp(-t / 7);
+    case "drug": return tx.stop && on ? Math.exp(-(t - ts) / 4) : 1;
+    case "src": return tx.acei && on ? 0.15 + 0.85 * Math.exp(-(t - ts) / 3) : 1;
+    case "mht": return tx.bp && on ? 0.1 + 0.9 * Math.exp(-(t - ts) / 3) : 1;
+    case "sle": return tx.is && on ? 0.2 + 0.8 * Math.exp(-(t - ts) / 7) : 1;
+    default: return 0;
+  }
+}
+function drives(p, t, tx){
+  var on = t >= p.ts, T = p.trig;
+  var ttp = p.adamts < 20 ? Math.min(1, (20 - p.adamts) / 15) : 0;
+  if(on && ttp > 0){
+    if(tx.plex) ttp *= 0.25;
+    if(tx.capla) ttp *= 0.2;
+    if(p.inhib){ if(tx.is) ttp *= 0.3 + 0.7 * Math.exp(-(t - p.ts) / 6); }
+    else if(tx.plex) ttp *= 0.6; // congenital: plasma replaces enzyme, no inhibitor
+  }
+  var tr = trig(T, t, tx, p.ts);
+  var cd = DEF[p.def] * (0.55 + 0.45 * tr) * (p.def === "none" ? 0 : 1);
+  if(T === "sle") cd = Math.max(cd, 0.35 * tr); // classical pathway from immune complexes
+  if(on && cd > 0){
+    if(tx.c5i) cd *= 0.06;
+    if(tx.plex) cd *= PLEXF[p.def];
+    if(p.def === "afh" && tx.is) cd *= 0.35 + 0.65 * Math.exp(-(t - p.ts) / 8);
+  }
+  var direct = TW[T] * tr;
+  return {ttp:ttp, comp:cd, direct:direct, tr:tr};
+}
+function simulate(p, tx){
+  var P = 250, Cr = p.cr0, scar = 0, dt = 0.1, out = {plt:[], cr:[], d0:null, maxCr:0, rrt:false};
+  // pre-diagnosis phase: run 10 days of untreated disease to reach the presentation state (t from -10 to 0, trigger frozen at onset)
+  for(var s = -6; s < 0; s += dt){
+    var d0 = drives(p, 0, {});
+    var cons0 = 2.5 * d0.ttp + 0.9 * (d0.comp + d0.direct);
+    P += ((250 - P) / 4 - cons0 * P) * dt;
+    var R0 = 0.3 * d0.ttp + d0.comp + d0.direct;
+    if(R0 > 0.3) scar = Math.min(0.9, scar + 0.045 * R0 * dt * 0.3);
+    var g0 = Math.max(0.08, (1 - 0.85 * Math.min(1, R0)) * (1 - scar));
+    Cr += ((p.cr0 / g0) - Cr) / 1.5 * dt;
+  }
+  for(var i = 0; i <= 280; i++){
+    var t = i * dt, d = drives(p, t, tx);
+    var cons = 2.5 * d.ttp + 0.9 * (d.comp + d.direct);
+    if(i % 5 === 0){ out.plt.push([+t.toFixed(1), Math.round(P)]); out.cr.push([+t.toFixed(1), +Cr.toFixed(2)]); }
+    if(!out.d0) out.d0 = {plt:P, cr:Cr, ldh:200 + 500 * cons, d:d, cons:cons};
+    P += ((250 - P) / 4 - cons * P) * dt;
+    var R = 0.3 * d.ttp + d.comp + d.direct;
+    if(R > 0.3) scar = Math.min(0.9, scar + 0.045 * R * dt);
+    var g = Math.max(0.08, (1 - 0.85 * Math.min(1, R)) * (1 - scar));
+    Cr += ((p.cr0 / g) - Cr) / 1.5 * dt;
+    out.maxCr = Math.max(out.maxCr, Cr);
+    if(Cr > 6 || g < 0.12) out.rrt = true;
+  }
+  out.end = {plt:P, cr:Cr, scar:scar};
+  return out;
+}
+function classify(p){
+  if(p.adamts < 10) return {k:p.inhib ? "ittp" : "cttp", t:p.inhib ? "Immune TTP" : "Congenital TTP (Upshaw-Schulman)", s:"ADAMTS13 < 10% ULvWF ไม่ถูกตัด platelet-rich microthrombi ไตได้รับผลน้อยกว่าสมองและหัวใจ"};
+  if(p.trig === "stec") return {k:"stec", t:"STEC-HUS", s:"Shiga toxin จับ Gb3 บน glomerular endothelium ส่วนใหญ่หายเองด้วย supportive care"};
+  if(p.def !== "none") return {k:"aHUS", t:"Complement-mediated TMA (aHUS)", s:"Alternative pathway ควบคุมไม่ได้" + (p.trig !== "none" && p.trig !== "inf" ? " ถูก unmask โดย " + document.querySelector('#sTrig option[value="' + p.trig + '"]').textContent : p.trig === "inf" ? " กระตุ้นโดย infection" : "") + " MAC ทำลาย endothelium ต่อเนื่องจนกว่าจะ block C5"};
+  if(p.trig !== "none") return {k:"sec", t:"Secondary TMA", s:"Endothelial injury จาก " + document.querySelector('#sTrig option[value="' + p.trig + '"]').textContent + " รักษาที่สาเหตุ"};
+  if(p.adamts < 20) return {k:"border", t:"ADAMTS13 10–20%", s:"ไม่ถึงเกณฑ์ TTP ทั่วไป ทบทวนเวลาที่เจาะ (หลัง PLEX หรือ transfusion) และ clinical"};
+  return {k:"none", t:"ไม่มี TMA drive", s:"ADAMTS13 ปกติ ไม่มี complement defect และไม่มี trigger"};
+}
+var NEXT = {
+  ittp:"เจาะ ADAMTS13 ก่อนเริ่ม PLEX แล้วเริ่ม PLEX ทุกวันร่วม steroid ทันทีเมื่อ PLASMIC สูง (6–7) เพิ่ม caplacizumab และ rituximab ติดตาม platelet จนปกติและ ADAMTS13 ระหว่าง remission",
+  cttp:"ไม่มี inhibitor ให้ทดแทน ADAMTS13 ด้วย plasma infusion หรือ recombinant ADAMTS13 ไม่ต้องใช้ immunosuppression ตรวจ ADAMTS13 gene และให้ prophylaxis ช่วงตั้งครรภ์",
+  stec:"Supportive care (สารน้ำ, dialysis ตามข้อบ่งชี้) หลีกเลี่ยง antibiotic และยาแก้ท้องเสียในเด็ก ไม่ให้ C5 inhibitor เป็น routine ยกเว้นมี neurological involvement รุนแรงหรือไม่ดีขึ้น",
+  aHUS:"เจาะ ADAMTS13, stool STEC, C3, C4, CFH, CFI, MCP expression, anti-FH antibody และ genetic testing ก่อนให้ยา แล้วเริ่ม C5 inhibitor ภายใน 24–48 ชม. เมื่อ ADAMTS13 > 10% และไม่ใช่ STEC ให้ meningococcal vaccine และ antibiotic prophylaxis anti-FH antibody ให้ immunosuppression ร่วม",
+  sec:"รักษาสาเหตุ: หยุดยาที่เป็นเหตุ, ACEi ใน scleroderma renal crisis (ให้ต่อแม้ Cr ขึ้น), คุมความดันใน malignant HT, steroid/IS หรือ anticoagulant ใน SLE/APS ถ้าไม่ดีขึ้นหลังแก้สาเหตุให้คิด complement-mediated TMA ที่ถูก unmask",
+  border:"เจาะ ADAMTS13 ซ้ำก่อน plasma ตรวจ inhibitor และ PLASMIC score ประเมินร่วม complement work-up",
+  none:"ไม่มีข้อบ่งชี้ของ TMA ปรับ slider หรือเลือก scenario"
+};
+var S = {
+  ittp:{name:"Immune TTP", p:{def:"none", trig:"none", adamts:3, inhib:true, cr0:0.9, ts:1, tx:{plex:1, capla:1, is:1}},
+    rows:[["Clinical","หญิง 35 ปี สับสน จ้ำเลือด ไข้ต่ำ"],["Lab","Platelet < 20, LDH สูงมาก, schistocyte, Cr < 2"],["Key test","ADAMTS13 < 10% + anti-ADAMTS13 inhibitor"],["Mechanism","ULvWF ไม่ถูกตัด platelet microthrombi ทั่วร่างกาย"],["Treatment","PLEX + steroid + caplacizumab + rituximab"]],
+    take:["TTP: platelet ต่ำมาก Cr มักไม่สูงมาก สมองและหัวใจเด่นกว่าไต","PLASMIC score สูงให้เริ่ม PLEX ก่อนผล ADAMTS13 กลับ","Caplacizumab ลด platelet consumption เร็ว ส่วน rituximab ลด inhibitor และ relapse"]},
+  ahus:{name:"aHUS (CFH)", p:{def:"cfh", trig:"inf", adamts:62, inhib:false, cr0:0.9, ts:2, tx:{c5i:1}},
+    rows:[["Clinical","ชาย 24 ปี หลังไข้หวัด AKI รุนแรง ความดันสูง"],["Lab","Platelet 50–100, LDH สูง, Cr > 3, C3 ต่ำได้ C4 ปกติ"],["Key test","ADAMTS13 > 10%, STEC ลบ, CFH variant"],["Mechanism","Factor H คุม C3bBb บน endothelium ไม่ได้ MAC สะสม"],["Treatment","C5 inhibitor ภายใน 24–48 ชม."]],
+    take:["aHUS: AKI เด่น platelet ไม่ต่ำเท่า TTP","C3 ปกติไม่ตัด complement-mediated TMA เพราะ activation อยู่ที่ผิว endothelium","ยิ่งเริ่ม C5 inhibitor ช้า ไตยิ่งเสียแบบถาวร PLEX ช่วยได้บางส่วนเท่านั้น"]},
+  stec:{name:"STEC-HUS", p:{def:"none", trig:"stec", adamts:70, inhib:false, cr0:0.5, ts:1, tx:{}},
+    rows:[["Clinical","เด็ก 4 ปี ท้องเสียเป็นเลือด 5 วันก่อน AKI"],["Lab","Platelet ต่ำ, LDH สูง, AKI oliguria"],["Key test","Stool Shiga toxin หรือ PCR, E. coli O157:H7"],["Mechanism","Shiga toxin จับ Gb3 ทำลาย endothelium โดยตรง"],["Treatment","Supportive care, dialysis เมื่อจำเป็น"]],
+    take:["STEC-HUS หายเองในเด็กส่วนใหญ่เมื่อ toxin หมดฤทธิ์","Antibiotic อาจเพิ่ม toxin release ในเด็ก","C5 inhibitor ไม่ใช่การรักษาปกติของ STEC-HUS"]},
+  drug:{name:"Drug-induced TMA", p:{def:"none", trig:"drug", adamts:55, inhib:false, cr0:0.9, ts:3, tx:{stop:1}},
+    rows:[["Clinical","ผู้ป่วยมะเร็งได้ gemcitabine หรือ anti-VEGF มี HT + proteinuria"],["Lab","Thrombocytopenia ไม่รุนแรง บางรายมีแต่ renal-limited TMA"],["Key test","ADAMTS13 ปกติ ประวัติยา"],["Mechanism","Dose-dependent endothelial toxicity (VEGF, gemcitabine, CNI)"],["Treatment","หยุดยา คุมความดัน"]],
+    take:["Drug TMA แบบ toxicity ดีขึ้นเมื่อหยุดยา","Anti-VEGF ทำ glomerular TMA ที่อาจไม่มี hemolysis ในเลือด","Quinine เป็น immune-mediated TMA ที่เกิดเร็ว ต้องห้ามใช้อีก"]},
+  src:{name:"Scleroderma renal crisis", p:{def:"none", trig:"src", adamts:60, inhib:false, cr0:0.9, ts:1, tx:{acei:1}},
+    rows:[["Clinical","Diffuse cutaneous SSc ระยะแรก ความดันสูงฉับพลัน AKI"],["Risk","Anti-RNA polymerase III, steroid ขนาดสูง"],["Lab","MAHA ราวครึ่งหนึ่ง, Cr ขึ้นเร็ว, renin สูง"],["Mechanism","Intimal proliferation ของ interlobular artery + RAAS activation"],["Treatment","ACEi ขนาดสูงต่อเนื่อง แม้ Cr ขึ้นหรือต้อง dialysis"]],
+    take:["ACEi คือการรักษาหลักของ scleroderma renal crisis และให้ต่อแม้ต้อง dialysis","ไตอาจฟื้นช้าเป็นเดือน อย่ารีบสรุปว่า ESKD","หลีกเลี่ยง steroid ขนาดสูงในผู้ป่วยเสี่ยง"]},
+  postpartum:{name:"Postpartum aHUS", p:{def:"cfi", trig:"preg", adamts:48, inhib:false, cr0:0.7, ts:3, tx:{c5i:1}},
+    rows:[["Clinical","หลังคลอด 5 วัน AKI รุนแรง ความดันสูง"],["Lab","Platelet ต่ำปานกลาง, LDH สูง, ไม่ดีขึ้นหลังคลอดเหมือน HELLP"],["Key test","ADAMTS13 > 10%, complement variant พบได้ราวครึ่งหนึ่ง"],["Mechanism","การคลอด (bleeding, infection, inflammation) unmask complement defect"],["Treatment","C5 inhibitor เร็ว"]],
+    take:["TMA ที่แย่ลงหรือไม่ดีขึ้นหลังคลอดไม่ใช่ HELLP ให้คิด aHUS","TTP ตั้งครรภ์มักเป็นไตรมาส 2–3 ADAMTS13 < 10% ช่วยแยก","Postpartum aHUS ตอบสนองต่อ C5 inhibitor ดีเมื่อเริ่มเร็ว"]}
+};
+
+/* ---------- controls ---------- */
+var box = document.getElementById("ctls"), C = {};
+function add(k, o){ o.onInput = update; C[k] = Sim.slider(o); box.appendChild(C[k].el); }
+add("adamts", {id:"sAd", label:"ADAMTS13 activity", min:0, max:100, step:1, value:60, unit:"%"});
+add("ts", {id:"sTs", label:"เริ่มรักษาวันที่", min:0, max:10, step:1, value:1, unit:"d"});
+var sDef = document.getElementById("sDef"), sTrig = document.getElementById("sTrig");
+sDef.addEventListener("change", update); sTrig.addEventListener("change", update);
+var inhib = false, TX = {};
+var tInh = Sim.toggle("Anti-ADAMTS13 inhibitor", function(on){ inhib = on; update(); }, false);
+document.getElementById("tools").appendChild(tInh);
+var txBox = document.getElementById("tx"), txBtn = {};
+TXS.forEach(function(x){ txBtn[x[0]] = Sim.toggle(x[1], function(on){ TX[x[0]] = on; update(); }, false); txBox.appendChild(txBtn[x[0]]); });
+function P(){ return {def:sDef.value, trig:sTrig.value, adamts:C.adamts.get(), inhib:inhib, cr0:CR0, ts:C.ts.get()}; }
+var CR0 = 0.9;
+
+/* ---------- chart ---------- */
+var ch = Plot.chart(document.getElementById("chart"), {height:220, aria:"Platelet and creatinine over 28 days",
+  x:{min:0, max:28, step:7, label:"Day"}, y:{min:0, max:300, label:"Platelet x10^9/L"}, y2:{min:0, max:10, label:"Cr mg/dL"},
+  series:[
+    {id:"pu", name:"Plt untreated", color:"#9A9CB2", dash:[5,4], data:[], width:1.6},
+    {id:"pt", name:"Plt treated", color:Plot.colors.accent, data:[], width:2.4},
+    {id:"cu", name:"Cr untreated", color:"#E2A3A7", dash:[5,4], data:[], axis:"y2", width:1.6},
+    {id:"ct", name:"Cr treated", color:Plot.colors.red, data:[], axis:"y2", width:2.4}],
+  legend:true});
+
+/* ---------- cascade ---------- */
+var casc = document.getElementById("casc");
+function drawCascade(p, d, tx){
+  casc.innerHTML = "";
+  var FT = "IBM Plex Sans Thai, sans-serif", MO = "Geist Mono, monospace";
+  var classical = p.trig === "sle" ? 0.8 : 0.08, lectin = 0.1, alt = Math.max(0.12, DEF[p.def] * (0.55 + 0.45 * (p.trig === "none" ? 0 : 1)));
+  if(p.trig === "stec") alt = Math.max(alt, 0.35);
+  var amp = Math.min(1, classical * 0.5 + lectin * 0.3 + alt);
+  var c5 = amp * (tx.c5i ? 0.06 : 1) * (tx.plex ? PLEXF[p.def] : 1);
+  function w(f){ return 1.2 + 9 * f; }
+  function col(f){ return f > 0.5 ? "#B4232A" : f > 0.25 ? "#D9731A" : "#5E6075"; }
+  function arrow(x1, y1, x2, y2, f, dash){ var a = Math.atan2(y2 - y1, x2 - x1), L = 9 + f * 4;
+    Sim.svg("line", {x1:x1, y1:y1, x2:x2 - Math.cos(a) * L * 0.8, y2:y2 - Math.sin(a) * L * 0.8, stroke:col(f), "stroke-width":w(f), "stroke-linecap":"round", "stroke-dasharray":dash || null, opacity:0.9}, casc);
+    Sim.svg("path", {d:"M" + x2 + "," + y2 + " L" + (x2 - Math.cos(a - 0.45) * L) + "," + (y2 - Math.sin(a - 0.45) * L) + " L" + (x2 - Math.cos(a + 0.45) * L) + "," + (y2 - Math.sin(a + 0.45) * L) + "Z", fill:col(f)}, casc); }
+  function node(x, y, wd, t, sub, hot){ Sim.svg("rect", {x:x - wd / 2, y:y - 17, width:wd, height:34, rx:9, fill:hot ? "#0B0B1F" : "#FFFFFF", stroke:hot ? "#0B0B1F" : "#D3D5E2", "stroke-width":1.2}, casc);
+    Sim.svg("text", {x:x, y:sub ? y - 1 : y + 4, "text-anchor":"middle", "font-family":FT, "font-size":12.5, "font-weight":600, fill:hot ? "#FFFFFF" : "#0B0B1F", text:t}, casc);
+    if(sub) Sim.svg("text", {x:x, y:y + 11, "text-anchor":"middle", "font-family":FT, "font-size":9.5, fill:hot ? "#C9CAE6" : "#5E6075", text:sub}, casc); }
+  function drug(x, y, t, active){ Sim.svg("rect", {x:x - 4, y:y - 11, width:t.length * 6.2 + 8, height:18, rx:9, fill:active ? "#5B4BFF" : "#EFEDFF", stroke:"#5B4BFF", "stroke-width":1}, casc);
+    Sim.svg("text", {x:x, y:y + 2, "font-family":FT, "font-size":10.5, fill:active ? "#FFFFFF" : "#5B4BFF", text:t}, casc); }
+  // headers
+  [["Classical", 80], ["Lectin", 200], ["Alternative", 380]].forEach(function(h){ Sim.svg("text", {x:h[1], y:16, "text-anchor":"middle", "font-family":MO, "font-size":11, fill:"#9A9CB2", text:h[0].toUpperCase()}, casc); });
+  node(80, 42, 120, "C1q", p.trig === "sle" ? "immune complex" : "antibody", false);
+  node(200, 42, 100, "MBL/MASP", "sugars", false);
+  node(380, 42, 150, "C3 tickover", "Factor B + D", false);
+  node(140, 108, 110, "C4b2a", "C3 convertase", false);
+  node(380, 108, 120, "C3bBb", "C3 convertase", alt > 0.5);
+  arrow(80, 59, 128, 91, classical); arrow(200, 59, 152, 91, lectin); arrow(380, 59, 380, 91, alt);
+  node(260, 166, 110, "C3 → C3b", "opsonin, C3a", amp > 0.5);
+  arrow(140, 125, 230, 149, Math.max(classical, lectin) * 0.6); arrow(380, 125, 290, 149, alt);
+  // amplification loop
+  Sim.svg("path", {d:"M315,160 C430,170 470,140 440,118", fill:"none", stroke:col(alt), "stroke-width":w(alt * 0.7), "stroke-dasharray":"6 4", opacity:0.85}, casc);
+  Sim.svg("text", {x:452, y:166, "font-family":FT, "font-size":10.5, fill:"#5E6075", text:"Amplification loop"}, casc);
+  // regulators
+  var reg = [["Factor H", "cfh", 548, 76], ["Factor I", "cfi", 548, 108], ["MCP (CD46)", "mcp", 548, 140]];
+  reg.forEach(function(r){ var bad = p.def === r[1] || (r[1] === "cfh" && p.def === "afh");
+    Sim.svg("rect", {x:r[2] - 50, y:r[3] - 12, width:100, height:24, rx:12, fill:bad ? "#F9EAEA" : "#E8F2E6", stroke:bad ? "#B4232A" : "#1F7A72", "stroke-width":1}, casc);
+    Sim.svg("text", {x:r[2], y:r[3] + 4, "text-anchor":"middle", "font-family":FT, "font-size":11, fill:bad ? "#B4232A" : "#1F7A72", text:r[0]}, casc);
+    if(bad) Sim.svg("text", {x:r[2] + 54, y:r[3] + 5, "font-family":FT, "font-size":15, "font-weight":700, fill:"#B4232A", text:"✕"}, casc); });
+  Sim.svg("path", {d:"M498,108 L446,108 M446,99 L446,117", stroke:"#1F7A72", "stroke-width":2, fill:"none"}, casc);
+  Sim.svg("text", {x:498, y:186, "font-family":FT, "font-size":10, fill:"#5E6075", text:"Regulators inactivate C3b"}, casc);
+  if(p.def === "c3" || p.def === "cfb") Sim.svg("text", {x:380, y:140, "text-anchor":"middle", "font-family":FT, "font-size":10.5, "font-weight":600, fill:"#B4232A", text:(p.def === "c3" ? "C3" : "CFB") + " gain: resists regulators"}, casc);
+  // C5 and terminal
+  node(260, 226, 130, "C5 convertase", "C3bBb3b", c5 > 0.5);
+  arrow(260, 183, 260, 209, amp);
+  node(110, 284, 90, "C5a", "inflammation", false);
+  node(300, 284, 120, "C5b-9 (MAC)", "pore in cell", c5 > 0.5);
+  arrow(225, 243, 140, 267, c5); arrow(275, 243, 290, 267, c5);
+  var ei = Math.min(1, c5 + d.direct + d.ttp * 0.4);
+  Sim.svg("rect", {x:410, y:262, width:220, height:44, rx:10, fill:ei > 0.5 ? "#F9EAEA" : ei > 0.2 ? "#FFF1E3" : "#E8F2E6", stroke:ei > 0.5 ? "#B4232A" : ei > 0.2 ? "#D9731A" : "#1F7A72"}, casc);
+  Sim.svg("text", {x:520, y:280, "text-anchor":"middle", "font-family":FT, "font-size":12, "font-weight":600, fill:"#0B0B1F", text:"Endothelial injury"}, casc);
+  Sim.svg("text", {x:520, y:297, "text-anchor":"middle", "font-family":MO, "font-size":11, fill:"#5E6075", text:(ei * 100).toFixed(0) + "% of maximum"}, casc);
+  arrow(360, 284, 408, 284, c5);
+  // drug targets
+  drug(286, 78, "Iptacopan (FB)", false);
+  drug(84, 166, "Pegcetacoplan (C3)", false);
+  drug(338, 220, "Eculizumab, ravulizumab", !!tx.c5i);
+  drug(22, 256, "Avacopan (C5aR)", false);
+  if(tx.c5i) Sim.svg("path", {d:"M246,243 l28,0", stroke:"#5B4BFF", "stroke-width":4}, casc);
+}
+
+/* ---------- vWF ---------- */
+var vwf = document.getElementById("vwf");
+function drawVWF(p, tx){
+  vwf.innerHTML = "";
+  var FT = "IBM Plex Sans Thai, sans-serif", r = Patho.rng(11), a = p.adamts / 100;
+  Sim.svg("rect", {x:0, y:0, width:300, height:190, fill:"#FFF5F6"}, vwf);
+  Sim.svg("rect", {x:0, y:150, width:300, height:40, fill:"#F3D6DD"}, vwf);
+  Sim.svg("text", {x:8, y:182, "font-family":FT, "font-size":10.5, fill:"#8A4A5E", text:"Endothelium"}, vwf);
+  // ULvWF strings anchored at endothelium, cleaved when ADAMTS13 adequate
+  var strands = 4;
+  for(var s = 0; s < strands; s++){
+    var x0 = 18 + s * 62, len = 30 + (1 - a) * 105, segs = Math.round(len / 10);
+    var d = "M" + x0 + ",150";
+    for(var i = 1; i <= segs; i++) d += " L" + (x0 + i * 10 * 0.4 + Math.sin(i) * 3) + "," + (150 - i * 9);
+    Sim.svg("path", {d:d, fill:"none", stroke:"#6B3FA0", "stroke-width":2.4, "stroke-linecap":"round"}, vwf);
+    var nPl = tx.capla && p.adamts < 20 ? 0 : Math.round((1 - a) * segs * 0.8);
+    for(var k = 0; k < nPl; k++){ var j = 1 + Math.floor(r() * segs); Sim.svg("ellipse", {cx:x0 + j * 4 + 5, cy:150 - j * 9, rx:6, ry:3.5, fill:"#E9B44C", stroke:"#B07D1B", "stroke-width":0.6}, vwf); }
+  }
+  // ADAMTS13 molecules (scissors)
+  var nA = Math.round(a * 8);
+  for(var q = 0; q < nA; q++){ var sx = 20 + r() * 260, sy = 30 + r() * 80; Sim.svg("text", {x:sx, y:sy, "font-size":14, fill:"#1F7A72", text:"✂"}, vwf); }
+  Sim.svg("text", {x:292, y:18, "text-anchor":"end", "font-family":FT, "font-size":11, fill:"#0B0B1F", text:"ADAMTS13 " + p.adamts + "%"}, vwf);
+  if(tx.capla && p.adamts < 20) Sim.svg("text", {x:292, y:34, "text-anchor":"end", "font-family":FT, "font-size":10.5, fill:"#5B4BFF", text:"Caplacizumab blocks GPIb binding"}, vwf);
+  Sim.svg("text", {x:8, y:18, "font-family":FT, "font-size":10.5, fill:"#5E6075", text:"ULvWF + platelets"}, vwf);
+}
+
+/* ---------- loop ---------- */
+var L = Patho.loop("loop", {labels:false});
+
+/* ---------- update ---------- */
+function plasmic(d0){ var s = 0; if(d0.plt < 30) s++; if(d0.ldh > 400) s++; s += 2; s++; s++; if(d0.cr < 2) s++; return s; }
+function update(){
+  var p = P(), tx = {};
+  Object.keys(TX).forEach(function(k){ if(TX[k]) tx[k] = true; });
+  var A = simulate(p, tx), U = simulate(p, {});
+  ch.setSeries("pu", U.plt); ch.setSeries("pt", A.plt); ch.setSeries("cu", U.cr); ch.setSeries("ct", A.cr);
+  var ymax = Math.max(6, Math.ceil(Math.max(A.maxCr, U.maxCr) + 0.5));
+  ch.update({y2:{min:0, max:Math.min(14, ymax), label:"Cr mg/dL"}, vlines:Object.keys(tx).length ? [{x:p.ts, label:"Treatment start"}] : [], hlines:[{y:150, label:"Platelet 150", color:"#9A9CB2", dash:[3,4]}]});
+  var d0 = A.d0;
+  drawCascade(p, d0.d, tx); drawVWF(p, tx);
+  var sev = Math.min(1, d0.d.comp + d0.d.direct + d0.d.ttp * 0.35);
+  L.update({tma:sev < 0.08 ? 0 : sev, doubleContour:sev > 0.6, effacement:0.2 + sev * 0.4});
+  Sim.ro("roPlt", Math.round(d0.plt), d0.plt < 30 ? "flag" : d0.plt < 150 ? true : "ok");
+  Sim.ro("roLdh", Math.round(d0.ldh), d0.ldh > 400 ? "flag" : "ok");
+  Sim.ro("roCr", d0.cr.toFixed(1), d0.cr >= 2 ? "flag" : d0.cr > 1.2 ? true : "ok");
+  var pl = plasmic(d0);
+  Sim.ro("roPl", pl + "/7", pl >= 6 ? "flag" : pl <= 4 ? "ok" : true);
+  var c3 = (p.def === "cfh" || p.def === "afh" || p.def === "c3" || p.def === "cfb") ? 62 : p.trig === "sle" ? 55 : 110;
+  Sim.ro("roC3", c3, c3 < 90 ? "flag" : "ok");
+  var mac = DEF[p.def] > 0 || p.trig === "stec" || p.trig === "sle" ? "สูง" : "ปกติ";
+  Sim.ro("roMac", tx.c5i && DEF[p.def] > 0 ? "↑ blocked" : mac, mac === "สูง" ? true : null);
+  Sim.ro("roD28", A.end.cr.toFixed(1), A.end.cr >= 2 ? "flag" : A.end.cr > 1.3 ? true : "ok");
+  Sim.ro("roRRT", A.rrt ? (A.end.cr > 5 ? "ยังต้องทำ" : "ช่วงแรก") : "ไม่ต้อง", A.rrt ? "flag" : "ok");
+  var c = classify(p), dx = document.getElementById("dx");
+  dx.innerHTML = "";
+  dx.appendChild(Sim.h("div", {class:"t", text:c.t}));
+  dx.appendChild(Sim.h("div", {class:"s", text:c.s}));
+  var gain = U.end.cr - A.end.cr;
+  if(Object.keys(tx).length) dx.appendChild(Sim.h("div", {class:"s", style:"color:#FFDE59", text:"เทียบไม่รักษา: Cr day 28 " + U.end.cr.toFixed(1) + " → " + A.end.cr.toFixed(1) + " mg/dL, platelet " + Math.round(U.end.plt) + " → " + Math.round(A.end.plt) + (A.end.scar > 0.15 ? " (nephron เสียถาวรราว " + Math.round(A.end.scar * 100) + "% ลองเลื่อนวันเริ่มรักษา)" : "")}));
+  var warn = [];
+  if(tx.c5i && c.k === "ittp") warn.push("C5 inhibitor ไม่แก้ TTP ต้องใช้ PLEX และ immunosuppression");
+  if(tx.c5i && c.k === "stec") warn.push("STEC-HUS ส่วนใหญ่ไม่ต้องใช้ C5 inhibitor");
+  if(tx.plex && !tx.c5i && c.k === "aHUS") warn.push(p.def === "mcp" ? "MCP เป็นโปรตีนบนเยื่อหุ้มเซลล์ PLEX ทดแทนไม่ได้" : "PLEX ช่วย aHUS ได้บางส่วน ควรเปลี่ยนเป็น C5 inhibitor");
+  if(tx.c5i) warn.push("ก่อนให้ C5 inhibitor ต้องฉีด meningococcal vaccine และให้ antibiotic prophylaxis");
+  warn.forEach(function(w){ dx.appendChild(Sim.h("div", {class:"s", style:"color:#FFB4B4", text:"• " + w})); });
+  document.getElementById("act").innerHTML = "<b>Next step:</b> " + NEXT[c.k];
+}
+Sim.mount({code:"GN-05", title:"Complement Pathways and Thrombotic Microangiopathy",
+  lead:"เลือก complement defect, trigger และ ADAMTS13 แล้วดูว่า pathway ไหนทำงาน และการรักษาแต่ละแบบเปลี่ยน platelet กับ creatinine ใน 28 วันอย่างไรเทียบกับไม่รักษา",
+  scenarios:S, order:["ittp","ahus","stec","drug","src","postpartum"], captureMs:1200,
+  onChange:function(k, s){ var q = s.p; sDef.value = q.def; sTrig.value = q.trig; C.adamts.set(q.adamts); C.ts.set(q.ts); inhib = q.inhib; tInh.setState(inhib); CR0 = q.cr0;
+    TXS.forEach(function(x){ TX[x[0]] = !!q.tx[x[0]]; txBtn[x[0]].setState(TX[x[0]]); }); update(); },
+  refs:["George JN, Nester CM. Syndromes of thrombotic microangiopathy. N Engl J Med 2014, 371(7): 654-666",
+        "Goodship THJ, Cook HT, Fakhouri F, et al. Atypical hemolytic uremic syndrome and C3 glomerulopathy: conclusions from a KDIGO Controversies Conference. Kidney Int 2017, 91(3): 539-551",
+        "Fakhouri F, Zuber J, Frémeaux-Bacchi V, Loirat C. Haemolytic uraemic syndrome. Lancet 2017, 390(10095): 681-696",
+        "Zheng XL, Vesely SK, Cataland SR, et al. ISTH guidelines for treatment of thrombotic thrombocytopenic purpura. J Thromb Haemost 2020, 18(10): 2496-2502",
+        "Scully M, Cataland SR, Peyvandi F, et al. Caplacizumab treatment for acquired thrombotic thrombocytopenic purpura. N Engl J Med 2019, 380(4): 335-346",
+        "Legendre CM, Licht C, Muus P, et al. Terminal complement inhibitor eculizumab in atypical hemolytic-uremic syndrome. N Engl J Med 2013, 368(23): 2169-2181",
+        "Bendapudi PK, Hurwitz S, Fry A, et al. Derivation and external validation of the PLASMIC score for rapid assessment of adults with thrombotic microangiopathies. Lancet Haematol 2017, 4(4): e157-e164",
+        "Bruel A, Kavanagh D, Noris M, et al. Hemolytic uremic syndrome in pregnancy and postpartum. Clin J Am Soc Nephrol 2017, 12(8): 1237-1247",
+        "Steen VD, Medsger TA. Long-term outcomes of scleroderma renal crisis. Ann Intern Med 2000, 133(8): 600-603"],
+  note:"Trajectory เป็นโมเดลเชิงคุณภาพเพื่อเทียบทิศทางของการรักษา ไม่ใช่การพยากรณ์รายบุคคล PLASMIC score ในหน้านี้สมมติว่าไม่มี active cancer หรือ transplant, MCV < 90 และ INR < 1.5 ไอคอนกรรไกรคือ ADAMTS13"
+});
+})();
+</script>
+</body>
+</html>

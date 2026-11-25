@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[HD-02] Access Complications: Steal, High Flow, Central Stenosis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(120px,160px) 1fr 104px}
+.readout{grid-template-columns:repeat(3,1fr)}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act.bad{background:var(--pink)}
+body.present .bench{grid-template-columns:1.45fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>แขนที่มี brachiocephalic AVF</h2>
+      <div class="svgwrap"><svg id="arm" aria-label="Arm with AV fistula, distal circulation and central veins"></svg></div>
+      <div class="tools no-present"><button class="tog" type="button" id="tAVG" aria-pressed="false">AV graft</button></div>
+      <p class="hint no-present">เลือดจาก brachial artery ส่วนใหญ่ไหลเข้า fistula (ความต้านทานต่ำ) ถ้า Qa สูงหรือ artery ส่วนปลายตีบ เลือดอาจไหลย้อนจาก palmar arch เข้า fistula ทำให้มือขาดเลือด (steal)</p>
+    </div>
+    <div class="card">
+      <h2>Hemodynamics</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roQa"><b>-</b><span>Qa (ml/min)</span></div>
+        <div class="ro" id="roRatio"><b>-</b><span>Qa / CO</span></div>
+        <div class="ro" id="roCO"><b>-</b><span>Cardiac output (L/min)</span></div>
+        <div class="ro" id="roDBI"><b>-</b><span>Digital-brachial index</span></div>
+        <div class="ro" id="roSVP"><b>-</b><span>Static venous pressure ratio</span></div>
+        <div class="ro" id="roSw"><b>-</b><span>แขนบวม</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/circuit.js"></script>
+<script>
+(function(){
+"use strict";
+function P(o){ var d={Qa:1000,pad:0,co:5,cvs:0,out:0,map:95,avg:false}; for(var k in o) d[k]=o[k]; return d; }
+var S = {
+  normal:{name:"AVF ทำงานดี", p:P({}),
+    rows:[["Qa","1,000 ml/min เหมาะสม"],["มือ","อุ่น capillary refill ปกติ DBI ราว 0.8"],["Central vein","โล่ง แขนไม่บวม"]],
+    take:["Qa ที่เหมาะสมของ AVF ราว 600–1,500 ml/min","DBI ลดลงเล็กน้อยหลังทำ AVF เป็นเรื่องปกติ (physiologic steal) ส่วนใหญ่ไม่มีอาการ","AVF ส่วนใหญ่มี retrograde flow บางส่วนจาก distal artery ได้โดยไม่มีอาการ retrograde flow อย่างเดียวจึงไม่ใช่ steal syndrome"],
+    quiz:[{q:"หลังทำ brachiocephalic AVF 3 เดือน มือเย็นเล็กน้อยตอนฟอก ไม่ปวด ไม่มีแผล DBI 0.72 ข้อใดเหมาะที่สุด",opts:["ทำ DRIL ทันที","ติดตามอาการ ให้ความรู้เรื่องอาการเตือน","ligate fistula","banding"],ans:1,why:"physiologic steal ที่ไม่มีอาการรุนแรงและ DBI > 0.6 ติดตามได้ ทำหัตถการเมื่อมีอาการ ischemia ชัด"}]},
+  stealPAD:{name:"Steal + arterial disease", p:P({Qa:1100,pad:0.65}),
+    rows:[["ผู้ป่วย","DM, PAD ของ forearm artery ปวดนิ้วระหว่างฟอกและขณะพัก นิ้วซีด"],["Qa","ไม่สูง 1,100 ml/min"],["DBI","ราว 0.57 ต่ำกว่า 0.6"]],
+    take:["Steal ใน DM และ PAD เกิดได้แม้ Qa ปกติ","Qa ปกติหรือต่ำ: DRIL (distal revascularization interval ligation) หรือ PAVA ไม่ควร banding เพราะ flow จะลดจนเสี่ยง access thrombosis","ประเมิน inflow artery stenosis ด้วย ถ้ามีให้ angioplasty ก่อน"],
+    quiz:[{q:"ผู้ป่วย DM brachiocephalic AVF Qa 900 ml/min ปวดนิ้วขณะพัก นิ้วซีด DBI 0.45 ข้อใดเหมาะที่สุด",opts:["Banding ลด flow","DRIL หรือ PAVA หลังประเมิน inflow artery","ติดตามต่อ","เพิ่ม Qb"],ans:1,why:"steal ระดับ rest pain ที่ Qa ไม่สูงควรรักษาด้วย DRIL หรือ PAVA banding เหมาะกับ high-flow steal"}]},
+  stealHigh:{name:"High-flow steal", p:P({Qa:2600,pad:0.2,co:5.5}),
+    rows:[["Qa","2,600 ml/min"],["มือ","ปวด ซีด DBI ต่ำ"],["กลไก","flow เข้า fistula มากจน palmar arch ไหลย้อน"]],
+    take:["Steal ร่วมกับ Qa สูง: flow reduction (banding, MILLER, RUDI)","เลือกหัตถการตาม Qa: สูงใช้ banding, ปกติใช้ DRIL/PAVA","อาการรุนแรงหรือ neurologic deficit (ischemic monomelic neuropathy) ต้องผ่าตัดด่วน"],
+    quiz:[{q:"AVF Qa 2,500 ml/min ปวดนิ้วและชาเวลาฟอก DBI 0.48 ข้อใดเหมาะที่สุด",opts:["DRIL","Flow reduction เช่น banding หรือ MILLER","Angioplasty ของ cephalic arch","ligate ทันทีทุกราย"],ans:1,why:"high-flow steal แก้ด้วยการลด flow ทำให้ทั้งมือได้เลือดและยังใช้ access ต่อได้"}]},
+  hof:{name:"High-output heart failure", p:P({Qa:2900,pad:0,co:5}),
+    rows:[["Qa","2,900 ml/min"],["Qa/CO","ราว 0.37 cardiac output รวมสูง"],["อาการ","เหนื่อย บวม ทั้งที่ dry weight ไม่เปลี่ยน echo มี RV dilatation, pulmonary hypertension"]],
+    take:["High-flow access: Qa > 1.5–2 L/min หรือ Qa/CO > 0.3","Nicoladoni-Branham sign: กด access แล้ว HR ลด","รักษาด้วย flow reduction (banding, MILLER) หรือ ligation หลัง KT"],
+    quiz:[{q:"ผู้ป่วย KT สำเร็จ creatinine 1.2 ยังมี AVF Qa 3,000 ml/min มี RV dilatation และเหนื่อย ข้อใดเหมาะที่สุด",opts:["ไม่ต้องทำอะไรเพราะไม่ได้ใช้ fistula","พิจารณา ligation หรือ flow reduction ของ AVF","ทำ fistula ใหม่อีกข้าง","ให้ diuretic อย่างเดียว"],ans:1,why:"high-output HF จาก access ที่ไม่ได้ใช้แล้วหลัง KT ควรพิจารณา ligation หรือลด flow"}]},
+  cvs:{name:"Central vein stenosis", p:P({Qa:1300,cvs:0.75}),
+    rows:[["ประวัติ","เคยใส่ subclavian catheter ด้านเดียวกัน 2 ครั้ง"],["อาการ","แขนบวมทั้งแขน เห็นเส้นเลือดดำขยายที่หน้าอก เลือดออกนานหลังถอนเข็ม"],["Pressure","venous pressure ระหว่างฟอกและ static venous pressure สูง"]],
+    take:["Central vein stenosis มักสัมพันธ์กับ catheter หรือ CIED lead ด้านเดียวกัน","รักษาเมื่อมีอาการ: angioplasty ± stent (stent graft ในรายที่ restenosis)","หลีกเลี่ยง subclavian catheter และ PICC ในผู้ป่วย CKD ที่อาจต้องทำ access"],
+    quiz:[{q:"ผู้ป่วย AVF แขนซ้ายบวมทั้งแขนและมีเส้นเลือดดำที่หน้าอก เคยใส่ left subclavian catheter ข้อใดเหมาะที่สุด",opts:["ยกแขนสูงและติดตาม","Venography และ angioplasty ของ central vein","Ligate AVF ทันที","DRIL"],ans:1,why:"อาการบ่งชี้ central vein stenosis ที่มีอาการ ควรทำ venography และ angioplasty ± stent ก่อนพิจารณา ligation"}]},
+  avgOut:{name:"AVG venous outflow stenosis", p:P({Qa:750,out:0.7,avg:true}),
+    rows:[["Access","forearm loop AVG"],["Surveillance","static venous pressure ratio ราว 0.6 (เกิน 0.5) Qa 550 ml/min"],["ความเสี่ยง","graft thrombosis"]],
+    take:["Static venous pressure ratio = intra-access pressure / MAP เกิน 0.5 ใน AVG (0.35 ใน AVF) บ่งชี้ outflow stenosis","Stenosis ของ AVG มักอยู่ที่ venous anastomosis จาก neointimal hyperplasia","ไม่ทำ pre-emptive angioplasty จาก surveillance อย่างเดียว ต้องมี clinical sign ร่วม"],
+    quiz:[{q:"AVG static venous pressure ratio 0.62 Qa ลดจาก 1,000 เป็น 550 ml/min เลือดออกนานหลังถอนเข็ม ข้อใดเหมาะที่สุด",opts:["ติดตามต่ออีก 3 เดือน","ส่ง angiography และ angioplasty ที่ venous anastomosis","เพิ่ม heparin","เปลี่ยนเป็นใช้ catheter"],ans:1,why:"มีทั้ง surveillance ผิดปกติและ clinical sign ของ outflow stenosis ควรแก้ก่อน thrombosis"}]}
+};
+var ORDER=["normal","stealPAD","stealHigh","hof","cvs","avgOut"];
+
+var box=document.getElementById("ctls"), C={};
+function sl(k,o){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); box.appendChild(C[k].el); return C[k]; }
+var pc=function(v){ return Math.round(v*100); };
+sl("Qa",{label:"Access flow (Qa)",min:300,max:3500,step:50,value:1000,unit:"ml/min"});
+sl("pad",{label:"Distal arterial disease",min:0,max:1,step:0.05,value:0,unit:"%",fmt:pc});
+sl("co",{label:"CO พื้นฐาน",min:3,max:8,step:0.1,value:5,unit:"L/min",fmt:function(v){return v.toFixed(1);}});
+sl("cvs",{label:"Central vein stenosis",min:0,max:0.95,step:0.05,value:0,unit:"%",fmt:pc});
+sl("out",{label:"Venous outflow stenosis",min:0,max:0.95,step:0.05,value:0,unit:"%",fmt:pc});
+sl("map",{label:"MAP",min:60,max:130,step:1,value:95,unit:"mmHg"}).el.classList.add("secondary");
+var avg=false, tAVG=document.getElementById("tAVG");
+tAVG.addEventListener("click",function(){ avg=!avg; tAVG.setAttribute("aria-pressed",avg?"true":"false"); update(); });
+
+var svg=document.getElementById("arm"), c=Circuit.create(svg,{w:640,h:330});
+var armG=Sim.svg("g",{},c.layers.region), handG=Sim.svg("g",{},c.layers.region), colG=Sim.svg("g",{},c.layers.region);
+c.add("text","H",{x:70,y:228,text:"Heart",size:13,color:"#0B0B1F",weight:500});
+c.add("text","LA",{x:320,y:222,text:"Brachial artery",size:12,color:"#B4232A"});
+c.add("text","LV",{x:330,y:92,text:"Cephalic vein",size:12,color:"#3B2C8F"});
+c.add("text","LC",{x:190,y:160,text:"Central vein",size:12,color:"#3B2C8F"});
+c.add("text","LD",{x:520,y:232,text:"Radial / ulnar",size:12,color:"#B4232A"});
+c.add("text","LX",{x:430,y:150,text:"Anastomosis",size:12,color:"#5E6075"});
+c.tube("art",{pts:[[92,190],[250,200],[430,200]],fluid:"art",w:9,flow:1000,spacing:20});
+c.tube("dist",{pts:[[430,200],[590,205]],fluid:"art",w:6,flow:80,spacing:18});
+c.tube("fist",{pts:[[430,200],[440,170],[440,120]],fluid:"ven",w:11,flow:1000,spacing:20});
+c.tube("ceph",{pts:[[440,120],[250,110]],fluid:"ven",w:13,flow:1000,spacing:20});
+c.tube("cent",{pts:[[250,110],[160,120],[92,160]],fluid:"ven",w:14,flow:1000,spacing:20});
+c.add("junction","J",{x:430,y:200,r:6,color:"#5B4BFF"});
+// heart icon
+Sim.svg("path",{d:"M70 200 C40 180 40 150 62 148 C70 148 74 154 76 158 C78 154 82 148 90 148 C112 150 112 180 82 200 L76 206 Z",fill:"#F9EAEA",stroke:"#B4232A","stroke-width":2},c.layers.region);
+c.start();
+
+function model(p){
+  var Qa=p.Qa*(1-0.55*p.out*p.out), coTot=p.co+Qa/1000, ratio=Qa/1000/coTot;
+  var dbi=Math.max(0.15,Math.min(1,0.97-0.1*(Qa/1000)*(1+4*p.pad)));
+  var distFlow=dbi>=0.6?80*(dbi-0.5)/0.5:-40*(0.6-dbi)/0.45-5;
+  var iap=0.15*p.map+p.map*0.9*p.out*p.out+p.map*0.45*p.cvs*p.cvs;
+  var svpr=iap/p.map;
+  var sw=p.cvs>=0.7?3:(p.cvs>=0.5?2:(p.cvs>=0.3?1:0));
+  return {Qa:Qa,coTot:coTot,ratio:ratio,dbi:dbi,dist:distFlow,svpr:svpr,sw:sw};
+}
+function drawArm(m){
+  armG.innerHTML=""; handG.innerHTML=""; colG.innerHTML="";
+  var w=34+m.sw*9;
+  var t1=96-w*0.4, t2=112-w*0.4, t3=168-w*0.3, b1=226+w*0.4, b2=230+w*0.4, b3=240+w*0.2;
+  Sim.svg("path",{d:"M232 "+t1+" Q340 "+(t1+6)+" 445 "+t2+" L598 "+t3+" L598 "+b3+" L445 "+b2+" Q340 "+(b1+4)+" 232 "+b1+" Z",fill:m.sw?"#F6E7E2":"#F6F1E6",stroke:"#D3D5E2","stroke-width":1.5},armG);
+  var hc=m.dbi<0.6?(m.dbi<0.45?"#D8E2F2":"#E7ECF6"):"#F6E1D3";
+  Sim.svg("ellipse",{cx:612,cy:205,rx:24,ry:30,fill:hc,stroke:m.dbi<0.6?"#B4232A":"#D3D5E2","stroke-width":m.dbi<0.6?2.2:1.5},handG);
+  Sim.svg("text",{x:612,y:250,"text-anchor":"middle","font-family":"IBM Plex Sans Thai, sans-serif","font-size":12,fill:m.dbi<0.6?"#B4232A":"#5E6075",text:m.dbi<0.6?"Pale, cold":"Hand"},handG);
+  if(m.sw>=2){ for(var i=0;i<4;i++){ Sim.svg("path",{d:"M"+(112+i*22)+" 24 q8 10 0 20 q-8 10 0 20 q8 10 0 20",fill:"none",stroke:"#7a6fd6","stroke-width":1.6,opacity:0.8},colG); } Sim.svg("text",{x:145,y:16,"text-anchor":"middle","font-family":"IBM Plex Sans Thai, sans-serif","font-size":11.5,fill:"#3B2C8F",text:"chest wall collaterals"},colG); }
+}
+function params(){ return {Qa:C.Qa.get(),pad:C.pad.get(),co:C.co.get(),cvs:C.cvs.get(),out:C.out.get(),map:C.map.get(),avg:avg}; }
+function update(){
+  var p=params(), m=model(p);
+  drawArm(m);
+  c.set("art",{flow:m.Qa+Math.max(0,m.dist)}); c.set("fist",{flow:m.Qa, w:p.avg?9:11}); c.set("ceph",{flow:m.Qa}); c.set("cent",{flow:m.Qa});
+  c.set("dist",{flow:m.dist, fluid:m.dist<0?"ven":"art", label:m.dist<0?"Retrograde into access":"", labelDy:-12, labelSize:12});
+  c.set("cent",{occl:p.cvs>=0.3?p.cvs:0, occlAt:0.55, occlLabel:p.cvs>=0.3?"stenosis "+Math.round(p.cvs*100)+"%":undefined});
+  c.set("ceph",{occl:p.out>=0.3?p.out:0, occlAt:0.15, occlLabel:p.out>=0.3?"outflow":undefined});
+  c.set("dist",{occl:p.pad>=0.3?p.pad:0, occlAt:0.6, occlLabel:undefined});
+  c.set("LV",{opts:{text:p.avg?"AV graft (PTFE)":"Cephalic vein"}});
+  var thrS=p.avg?0.5:0.35;
+  var al=null;
+  if(m.dbi<0.6) al={text:"DBI "+m.dbi.toFixed(2)+" suspect steal"};
+  else if(m.ratio>0.3||m.Qa>2000) al={text:"High-flow access Qa/CO "+m.ratio.toFixed(2),level:"amber"};
+  else if(m.svpr>thrS) al={text:"Static venous pressure ratio "+m.svpr.toFixed(2),level:"amber"};
+  if(al) al.x=440;
+  c.alarm(al);
+  Sim.ro("roQa",Sim.fmt(m.Qa,0),m.Qa>2000?"flag":(m.Qa<(p.avg?600:500)?"flag":"ok"));
+  Sim.ro("roRatio",Sim.fmt(m.ratio,2),m.ratio>0.3?"flag":"ok");
+  Sim.ro("roCO",Sim.fmt(m.coTot,1));
+  Sim.ro("roDBI",Sim.fmt(m.dbi,2),m.dbi<0.6?"flag":"ok");
+  Sim.ro("roSVP",Sim.fmt(m.svpr,2),m.svpr>thrS?"flag":"ok");
+  Sim.ro("roSw",["ไม่บวม","เล็กน้อย","ปานกลาง","ทั้งแขน"][m.sw],m.sw>=2?"flag":false);
+  var act=document.getElementById("act"), msg="Access ทำงานดี ไม่มีภาวะแทรกซ้อน", bad=false;
+  if(m.dbi<0.6 && m.Qa>1500){ msg="High-flow steal: flow reduction (banding, MILLER, RUDI)"; bad=true; }
+  else if(m.dbi<0.6){ msg="Steal ที่ Qa ไม่สูง: ตรวจ inflow artery แล้วพิจารณา DRIL หรือ PAVA"; bad=true; }
+  else if(m.ratio>0.3||m.Qa>2000){ msg="High-flow access: ประเมิน echo และอาการ HF ถ้ามีอาการ ทำ flow reduction"; bad=true; }
+  else if(p.cvs>=0.5){ msg="Central vein stenosis มีอาการ: venography และ angioplasty ± stent"; bad=true; }
+  else if(m.svpr>thrS){ msg="Outflow stenosis: angiography และ angioplasty ก่อนเกิด thrombosis"; bad=true; }
+  act.className="act"+(bad?" bad":""); act.textContent="Next step: "+msg;
+}
+Sim.mount({code:"HD-02", title:"Access Complications: Steal, High Flow, Central Stenosis", lead:"ปรับ access flow, arterial disease, central และ outflow stenosis แล้วดู DBI, Qa/CO, static venous pressure และอาการ",
+  scenarios:S, order:ORDER, captureMs:2000,
+  onChange:function(k,s){ var p=s.p; ["Qa","pad","co","cvs","out","map"].forEach(function(x){ C[x].set(p[x]); }); avg=p.avg; tAVG.setAttribute("aria-pressed",avg?"true":"false"); update(); },
+  refs:["Lok CE, Huber TS, Lee T, et al. KDOQI Clinical Practice Guideline for Vascular Access: 2019 Update. Am J Kidney Dis 2020, 75(4 Suppl 2): S1-S164",
+        "Leon C, Asif A. Arteriovenous access and hand pain: the distal hypoperfusion ischemic syndrome. Clin J Am Soc Nephrol 2007, 2(1): 175-183",
+        "Malik J, Lomonte C, Rotmans J, et al. Hemodialysis vascular access affecting heart function and outcomes: tips for choosing the right access for the individual patient. J Vasc Access 2021, 22(1 Suppl): 32-41",
+        "Basile C, Lomonte C, Vernaglione L, et al. The relationship between the flow of arteriovenous fistula and cardiac output in haemodialysis patients. Nephrol Dial Transplant 2008, 23(1): 282-287",
+        "Agarwal AK, Patel BM, Haddad NJ. Central vein stenosis: a nephrologist's perspective. Semin Dial 2007, 20(1): 53-62"],
+  note:"Model เพื่อการสอน: DBI ลดตาม Qa และ distal arterial disease, outflow stenosis ลด Qa และเพิ่ม intra-access pressure, static venous pressure ratio เกณฑ์ AVG 0.5 AVF 0.35"
+});
+})();
+</script>
+</body>
+</html>

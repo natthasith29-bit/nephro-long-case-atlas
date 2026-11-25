@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[HT-02] Pressure Natriuresis and Salt Sensitivity</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.25fr 1fr}}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:12px}
+.sub{font-size:12.5px;color:var(--muted);margin:14px 0 4px}
+.readout{grid-template-columns:repeat(2,minmax(0,1fr))}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:14px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .ro{padding:6px 12px}
+body.present .ro b{font-size:19px}
+body.present .ctls{gap:2px}
+body.present .ctl{font-size:13px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .tools{margin-top:4px;gap:5px}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+body.present .sub{margin:6px 0 2px}
+body.present #live{display:none}
+body.present .stepper{margin-bottom:4px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>BP ขึ้นจนไตขับ Na ได้เท่าที่กิน</h2>
+      <div class="stepper" id="steps" role="tablist" aria-label="Build the graph step by step"></div>
+      <div id="curve"></div>
+      <div id="live"></div>
+      <p class="takeaway" id="tk"></p>
+    </div>
+    <div class="card">
+      <h2>ไตและสิ่งที่เปลี่ยน curve</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="sub">ฮอร์โมนและยา (กดเปิด/ปิด)</div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roM1"><b>-</b><span>MAP ก่อน → หลัง (mmHg)</span></div>
+        <div class="ro" id="roDM"><b>-</b><span>ΔMAP</span></div>
+        <div class="ro" id="roECF"><b>-</b><span>ECF เปลี่ยน (L)</span></div>
+        <div class="ro" id="roT"><b>-</b><span>เวลาถึง 90% สมดุล</span></div>
+      </div>
+      <div class="act" id="act"></div>
+      <details class="more"><summary>ตัวเลขเพิ่มเติม</summary><div class="more-body"><div class="readout">
+        <div class="ro" id="roSSI"><b>-</b><span>Salt sensitivity index (ΔMAP ต่อ Na 10 เท่า)</span></div>
+        <div class="ro" id="roM0"><b>-</b><span>MAP ที่ Na 100 (ไตนี้)</span></div>
+      </div></div></details>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/live.js"></script>
+<script>
+(function(){
+"use strict";
+var RX={ang:{name:"Ang II fixed high"},mr:{name:"Mineralocorticoid excess"},acei:{name:"ACEi/ARB"},thz:{name:"Thiazide"}};
+function P(o){ var d={na:250,mass:100,ss:0.05,rx:[]}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  norm:{name:"ไตปกติ กินเค็มขึ้น", p:P({}),
+    rows:[["เปลี่ยน","Na intake 100 → 250 mmol/วัน"],["ไต","RAAS ถูกกดเต็มที่ เส้นชันมาก"],["ผล","MAP ขึ้นเพียงไม่กี่ mmHg ECF เพิ่มราว 1 ลิตร"]],
+    take:["ในระยะยาว BP ถูกกำหนดโดยจุดที่ไตขับ Na ได้เท่ากับที่กิน (pressure natriuresis)","ไตปกติกด renin ได้เมื่อกินเค็ม เส้นจึงชันและ BP แทบไม่เปลี่ยน","Na balance เข้าสู่สมดุลใหม่ภายในไม่กี่วัน ยิ่งไวเกลือยิ่งใช้เวลานานและ ECF ขยายมาก"]},
+  ss:{name:"Salt-sensitive", p:P({ss:0.7}),
+    rows:[["ภาวะ","salt sensitivity สูง (อายุมาก, low renin, metabolic syndrome)"],["ไต","เส้นลาด ต้องใช้แรงดันมากขึ้นเพื่อขับ Na เท่าเดิม"],["ผล","MAP ขึ้นราว 10 mmHg เมื่อกินเค็มขึ้น"]],
+    take:["Salt sensitivity คือเส้น renal function curve ที่ลาดลง BP จึงขึ้นตาม Na intake มาก","มักพบในผู้สูงอายุ CKD เบาหวาน และกลุ่ม low renin","การลดเกลือในกลุ่มนี้ลด BP ได้ใกล้เคียงยา 1 ตัว"]},
+  ckd:{name:"CKD nephron 40%", p:P({mass:40}),
+    rows:[["ภาวะ","nephron เหลือ 40%"],["ไต","เส้นเลื่อนขวาและลาดลง"],["ผล","BP baseline สูงขึ้น และไวเกลือมาก"]],
+    take:["CKD ทำให้เส้นเลื่อนขวา (ต้องใช้ BP สูงขึ้นเพื่อขับ Na) และลาดลง (ไวเกลือ)","HT ใน CKD จึงเป็น volume-dependent เป็นส่วนใหญ่ จำกัดเกลือและ diuretic คือแกนหลัก","เป้า Na intake ใน CKD น้อยกว่า 2 g/วัน (90 mmol)"]},
+  ang:{name:"Ang II คงที่สูง", p:P({rx:["ang"]}),
+    rows:[["ภาวะ","Ang II สูงตลอดไม่ถูกกดเมื่อกินเค็ม (renovascular, renin tumor)"],["ไต","เสีย feedback ของ RAAS เส้นเลื่อนขวาและลาด"],["ผล","BP ขึ้นมากเมื่อกินเค็ม"]],
+    take:["ความชันของเส้นในคนปกติมาจากการปรับ RAAS ตาม Na intake","เมื่อ Ang II ถูกตรึงไว้สูง เส้นจะลาดและไวเกลือมาก","ACEi หรือ ARB ใน renin-dependent HT ได้ผลดี"]},
+  pa:{name:"Primary aldosteronism", p:P({rx:["mr"],na:180}),
+    rows:[["ภาวะ","aldosterone สูงอิสระจาก renin"],["ไต","ENaC ทำงานตลอด เส้นเลื่อนขวา"],["ผล","BP สูง volume เกินเล็กน้อย renin ถูกกด"]],
+    take:["Mineralocorticoid excess เลื่อนเส้นไปทางขวา BP สูงขึ้นเพื่อชดเชย (aldosterone escape ทำให้ไม่บวมมาก)","Renin ที่ถูกกดเป็นหลักฐานว่า volume เกิน","MRA หรือผ่าตัด adrenal แก้ที่ต้นเหตุ"]},
+  lowSalt:{name:"CKD ลดเกลือ", p:P({mass:40,na:60}),
+    rows:[["เปลี่ยน","Na intake 100 → 60 mmol/วัน"],["ไต","nephron 40% เส้นลาด"],["ผล","MAP ลดมากกว่าคนไตปกติที่ลดเกลือเท่ากัน"]],
+    take:["ยิ่งไวเกลือมาก การลดเกลือยิ่งลด BP มาก","ลดเกลือยังเสริมฤทธิ์ RAAS blocker ในการลด BP และ albuminuria","ใช้ urine Na 24 ชม. ติดตาม (1 g NaCl ราว 17 mmol Na)"]},
+  thz:{name:"CKD + thiazide", p:P({mass:40,rx:["thz"],na:150}),
+    rows:[["ยา","thiazide-like diuretic"],["ไต","เส้นเลื่อนกลับไปทางซ้าย"],["ผล","ขับ Na ได้ที่ BP ต่ำลง"]],
+    take:["Diuretic เลื่อน renal function curve ไปทางซ้าย ลด BP โดยลด volume ช่วงแรกแล้วตามด้วยลด vascular resistance","Chlorthalidone ยังได้ผลใน CKD G4","ระวัง Na, K ต่ำ และ urate สูง"]},
+  acei:{name:"ACEi + กินเค็ม", p:P({ss:0.35,rx:["acei"],na:250}),
+    rows:[["ยา","ACEi/ARB"],["ไต","เส้นเลื่อนซ้ายแต่ลาดลง (ปรับ RAAS ตามเกลือไม่ได้)"],["ผล","กินเค็มทำให้ฤทธิ์ยาหายไปมาก"]],
+    take:["RAAS blocker เลื่อนเส้นไปทางซ้าย แต่ทำให้ความชันลด BP จึงไวต่อเกลือมากขึ้น","ผู้ป่วยที่กินเค็มได้ประโยชน์จาก ACEi หรือ ARB น้อยลง","คู่ที่ดีคือ RAAS blocker + จำกัดเกลือ หรือ + diuretic"]}
+};
+var ORDER=["norm","ss","ckd","ang","pa","lowSalt","thz","acei"];
+var box=document.getElementById("ctls"), C={};
+function sl(k,o){ o.id="s"+k; o.onInput=function(){ update(true); }; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("na",{label:"Na intake ใหม่",min:20,max:400,step:10,value:250,unit:" mmol/d"});
+sl("mass",{label:"Nephron mass",min:20,max:100,step:5,value:100,unit:" %"});
+sl("ss",{label:"Intrinsic salt sensitivity",min:0,max:1,step:0.05,value:0.05,unit:"",fmt:function(v){ return v<0.2?"low":v<0.5?"moderate":"high"; }});
+var T={}, tb=document.getElementById("tools");
+Object.keys(RX).forEach(function(k){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:RX[k].name}); b.addEventListener("click",function(){ b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); tb.appendChild(b); T[k]=b; });
+function on(k){ return T[k].getAttribute("aria-pressed")==="true"; }
+var A=Plot.colors, NARROW=window.innerWidth<600&&!Sim.present;
+/* rule v6: one concept graph, built in 4 steps. The 14-day course is shown as a dot walking along the curve (no second time chart). */
+var curve=Plot.chart(document.getElementById("curve"),{height:Sim.present?300:330,aria:"Renal function curve: sodium excretion versus mean arterial pressure",padR:NARROW?74:104,
+  x:{min:70,max:170,step:NARROW?20:10,label:"Mean arterial pressure (mmHg)"},y:{min:0,max:420,step:100,label:"Na excreted (mmol/day)",labelPos:"top",color:A.ink},
+  series:[{id:"n",name:"Normal kidney",color:A.muted,data:[],width:1.6,dash:[5,4],endLabel:NARROW?"Normal":"Normal kidney",hover:false},
+          {id:"c",name:"This kidney",color:A.accent,data:[],width:3,endLabel:"This kidney",fmt:function(v){ return v.toFixed(0); },unit:"mmol/d"},
+          {id:"gap",name:"Retained",color:A.red,data:[],width:2.4,dash:[2,3],hover:false,endLabel:false}],
+  crosshair:false,legend:false});
+var live=Live.player(null,{mount:"live",log:false}), LAST=null, STEP=4;
+var STEPS=[["ไตปกติ"],["ไตนี้"],["กินเกลือเปลี่ยน"],["เดินสู่สมดุล"]];
+var stepBox=document.getElementById("steps"), stepBtn=[];
+STEPS.forEach(function(st,i){ var b=Sim.h("button",{type:"button",role:"tab"},[Sim.h("i",{text:String(i+1)}),document.createTextNode(st[0])]);
+  b.addEventListener("click",function(){ STEP=i+1; draw(); }); stepBox.appendChild(b); stepBtn.push(b); });
+var BETA=4; /* mmHg per litre ECF */
+function params(o){
+  var k=Math.log(10)/(5+30*o.ss), m0=93, m=o.mass/100;
+  m0+=30*Math.pow(1-m,1.3); k*=(0.35+0.65*m);
+  if(o.ang){ m0+=14; k*=0.35; }
+  if(o.mr){ m0+=16; k*=0.55; }
+  if(o.acei){ m0-=o.mr?3:8; k*=0.8; }
+  if(o.thz){ m0-=7*Math.max(0.55,m); }
+  return {k:k,m0:m0};
+}
+function exc(pr,map){ return 100*Math.exp(pr.k*(map-pr.m0)); }
+function opts(){ var o={na:C.na.get(),mass:C.mass.get(),ss:C.ss.get()}; Object.keys(RX).forEach(function(k){ o[k]=on(k); }); return o; }
+function model(o){
+  var pr=params(o), meq=pr.m0+Math.log(o.na/100)/pr.k;
+  var B=0, MAP=[], ECF=[], dt=0.01, t90=null, beq=(meq-pr.m0)*140/BETA;
+  for(var i=0;i<=1400;i++){ var t=i*dt, map=pr.m0+B/140*BETA;
+    if(i%5===0){ MAP.push([t,map]); ECF.push([t,B/140]); }
+    if(t90===null&&Math.abs(beq)>1&&Math.abs(B)>=0.9*Math.abs(beq)) t90=t;
+    B+=(o.na-exc(pr,map))*dt; }
+  return {pr:pr,meq:meq,MAP:MAP,ECF:ECF,t90:t90,ssi:Math.log(10)/pr.k,decf:beq/140};
+}
+function line(pr,ymax){ var o=[]; for(var x=70;x<=170;x+=0.5){ var y=exc(pr,x); if(y>ymax){ o.push([x,ymax]); break; } o.push([x,y]); } return o; }
+function update(deb){
+  var o=opts(), M=model(o), npr=params({na:o.na,mass:100,ss:0.05});
+  var same=Math.abs(npr.k-M.pr.k)<1e-6&&Math.abs(npr.m0-M.pr.m0)<0.05;
+  var ymax=Math.min(440,Math.max(250,Math.ceil(o.na*1.4/50)*50));
+  var dm=M.meq-M.pr.m0, m, bad=true;
+  if(o.mr&&!o.acei) m="<b>Mineralocorticoid excess</b> ตรวจ aldosterone, renin และ ARR (ดู HT-04) ให้ MRA หรือประเมินผ่าตัดถ้าเป็น unilateral";
+  else if(o.ang&&!o.acei) m="<b>Renin-dependent HT</b> หาสาเหตุที่ renin สูง (renovascular, renin tumor) ACEi หรือ ARB ได้ผลดี ระวัง bilateral RAS (ดู HT-05)";
+  else if(o.acei&&o.na>150) m="<b>Salt ลบล้างฤทธิ์ RAAS blocker</b> จำกัด Na < 90 mmol/วัน (NaCl < 5 g) หรือเพิ่ม thiazide-like diuretic";
+  else if(M.ssi>=10&&o.na>100) m="<b>Salt-sensitive</b> ΔMAP "+dm.toFixed(0)+" mmHg จำกัดเกลือเป็นอันดับแรก ตรวจ urine Na 24 ชม. ถ้า BP ยังสูงเพิ่ม diuretic";
+  else if(o.na<100){ bad=false; m="<b>ลดเกลือได้ผล</b> MAP ลด "+Math.abs(dm).toFixed(0)+" mmHg ใช้ urine Na 24 ชม. ยืนยันว่าทำได้จริง"; }
+  else { bad=false; m="<b>ไม่ไวเกลือ</b> BP แทบไม่เปลี่ยนตาม Na intake ลองลด nephron mass หรือเพิ่ม salt sensitivity เพื่อเทียบ"; }
+  LAST={M:M,o:o,dm:dm,npr:npr,same:same,ymax:ymax,act:"<b>Next step:</b> "+m,actCls:"act"+(bad?" bad":""),deb:deb===true};
+  Sim.ro("roSSI",M.ssi.toFixed(0),M.ssi>=10?"flag":"ok");
+  Sim.ro("roM0",M.pr.m0.toFixed(0),M.pr.m0>=107?"flag":null);
+  draw();
+}
+function draw(){
+  var L=LAST, M=L.M, o=L.o, N=line(L.npr,L.ymax), Cc=line(M.pr,L.ymax);
+  stepBtn.forEach(function(b,i){ b.className=(i+1===STEP?"on":(i+1<STEP?"done":"")); b.setAttribute("aria-selected",i+1===STEP?"true":"false"); });
+  var showC=STEP>=2&&!(L.same&&STEP>=2), pr=STEP===1?L.npr:M.pr;
+  curve.update({y:{min:0,max:L.ymax,step:L.ymax>300?100:50,label:"Na excreted (mmol/day)",labelPos:"top",color:A.ink}});
+  curve.setSeries("n",N,{endLabel:STEP===1||!L.same?(NARROW?"Normal":"Normal kidney"):false,hidden:STEP>=2&&L.same});
+  curve.setSeries("c",STEP>=2?Cc:[],{endLabel:L.same?(NARROW?"Normal":"This kidney (normal)"):"This kidney"});
+  curve.setSeries("gap",[]);
+  var HL=[{y:100,label:"Intake 100",color:A.muted,dash:[3,3],align:"left"}];
+  if(STEP>=3&&o.na!==100) HL=[{y:100,label:"Old intake 100",color:A.faint||A.muted,dash:[2,4],align:"left"},{y:o.na,label:"New intake "+o.na,color:A.ink,dash:[6,3],align:"left"}];
+  curve.update({hlines:HL,callouts:[]});
+  live.pause(); live.bar.style.display=STEP===4?"":"none";
+  var a=document.getElementById("act"), tk=document.getElementById("tk");
+  if(STEP===1){ curve.update({callouts:[{x:L.npr.m0,y:100,text:"Balance: MAP "+L.npr.m0.toFixed(0),color:A.muted,dx:70,dy:-30}]});
+    tk.innerHTML="เส้นนี้บอกว่าไตขับ Na ได้เท่าไรที่ MAP แต่ละระดับ (pressure natriuresis) จุดที่เส้นตัดกับ Na ที่กินคือ BP ระยะยาว ไตปกติเส้น<b>ชันมาก</b>"; ro0(); return; }
+  if(STEP===2){ curve.update({callouts:[{x:M.pr.m0,y:100,text:"Balance: MAP "+M.pr.m0.toFixed(0),color:A.accent,dx:70,dy:-30}]});
+    tk.innerHTML=L.same?"ไตนี้เหมือนไตปกติ เส้นชัน จุดสมดุลที่ MAP <b class=\"num\">"+M.pr.m0.toFixed(0)+"</b>":"ไตนี้เส้น"+(M.pr.m0>L.npr.m0+2?"<b>เลื่อนขวา</b> (ต้องใช้ BP สูงขึ้นเพื่อขับ Na เท่าเดิม) ":M.pr.m0<L.npr.m0-2?"<b>เลื่อนซ้าย</b> ":"")+(M.pr.k<L.npr.k*0.8?"และ<b>ลาดลง</b> (ไวเกลือ) ":"")+"จุดสมดุลที่ Na 100 คือ MAP <b class=\"num\">"+M.pr.m0.toFixed(0)+"</b>"; ro0(); return; }
+  if(STEP===3){ var e0=100, gap=o.na-e0;
+    if(o.na!==100){ curve.setSeries("gap",[[M.pr.m0,e0],[M.pr.m0,o.na]]);
+      curve.update({callouts:[{x:M.pr.m0,y:(e0+o.na)/2,text:gap>0?"Retained "+gap+" mmol/day":"Net loss "+(-gap)+" mmol/day",color:A.red,dx:90,dy:0}]}); }
+    tk.innerHTML=o.na===100?"Na intake ไม่เปลี่ยน ปรับ slider Na intake ใหม่":"วันแรกที่กินเกลือ "+o.na+" ไตยังขับได้แค่ 100 ที่ BP เดิม ส่วนต่าง <b>"+Math.abs(gap)+" mmol/วัน</b> จึง"+(gap>0?"ค้างในตัวและขยาย ECF":"ถูกขับออกจนเหลือน้อยลง ECF หด"); ro0(); return; }
+  /* step 4: live walk to the new balance */
+  live.load({tMax:14,unit:"วัน",ms:6000,debounce:L.deb,num:function(x){ return x.toFixed(1); },onFrame:onFrame});
+}
+function ro0(){ ["roM1","roDM","roECF","roT"].forEach(function(id){ Sim.ro(id,"…"); }); var a=document.getElementById("act"); a.innerHTML="<b>ดูขั้นที่ 4</b> เพื่อเห็นว่า BP ไปถึงจุดสมดุลใหม่อย่างไร"; a.className="act"; }
+function onFrame(t,done){
+  if(STEP!==4) return;
+  var L=LAST, M=L.M, o=L.o, map=Live.valueAt(M.MAP,t), e=exc(M.pr,map), ecf=Live.valueAt(M.ECF,t);
+  var CO=[{x:M.pr.m0,y:100,text:"Before "+M.pr.m0.toFixed(0),color:A.muted,dx:-50,dy:-28}];
+  if(done) CO.push({x:M.meq,y:o.na,text:"New balance: MAP "+M.meq.toFixed(0)+" ("+(L.dm>=0?"+":"")+L.dm.toFixed(0)+")",color:A.accent,dx:L.dm>=0?-70:80,dy:-30});
+  else CO.push({x:map,y:e,text:"Day "+t.toFixed(1),color:A.accent,dx:60,dy:22});
+  curve.setSeries("gap",done||Math.abs(o.na-e)<4?[]:[[map,e],[map,o.na]]);
+  curve.update({callouts:CO});
+  Sim.ro("roM1",M.pr.m0.toFixed(0)+" → "+(done?M.meq:map).toFixed(0),done?(M.meq>=107?"flag":"ok"):null);
+  Sim.ro("roDM",done?(L.dm>=0?"+":"")+L.dm.toFixed(1):"…",done?(Math.abs(L.dm)>=8?"flag":null):null);
+  Sim.ro("roECF",(ecf>=0?"+":"")+ecf.toFixed(1),Math.abs(M.decf)>2?"flag":null);
+  Sim.ro("roT",M.t90===null?"–":M.t90.toFixed(1)+" วัน",M.t90!==null&&M.t90>5?"flag":null);
+  var a=document.getElementById("act"), tk=document.getElementById("tk");
+  if(done){ a.innerHTML=L.act; a.className=L.actCls;
+    var up=o.na>100;
+    tk.innerHTML=o.na===100?"Na intake ไม่เปลี่ยน BP จึงคงที่":(up?"กินเกลือ "+o.na+" แทน 100 Na ค้างจน ECF ขยาย <b class=\"num\">"+M.decf.toFixed(1)+" L</b> และ MAP ขึ้นจาก "+M.pr.m0.toFixed(0)+" เป็น <b class=\"num\">"+M.meq.toFixed(0)+"</b>":"ลดเกลือเหลือ "+o.na+" ECF หด <b class=\"num\">"+Math.abs(M.decf).toFixed(1)+" L</b> และ MAP ลดจาก "+M.pr.m0.toFixed(0)+" เป็น <b class=\"num\">"+M.meq.toFixed(0)+"</b>")+
+      (o.na===100?"":" จนไตขับ Na ได้เท่าที่กิน "+(Math.abs(L.dm)>=8?"เส้นของไตนี้<b>ลาด</b> BP จึงต้องเปลี่ยนมาก (ไวเกลือ)":"เส้นของไตนี้<b>ชัน</b> BP จึงเปลี่ยนน้อย"));
+  } else { a.innerHTML="<b>กำลังจำลอง</b> วันที่ "+t.toFixed(1)+" MAP "+map.toFixed(0)+" ขับ Na "+e.toFixed(0)+" จากที่กิน "+o.na+" mmol/วัน"; a.className="act"; }
+}
+Sim.mount({code:"HT-02", title:"Pressure Natriuresis and Salt Sensitivity", lead:"เปลี่ยน Na intake, nephron mass และ salt sensitivity แล้วดู renal function curve เลื่อนหรือลาดลง จุดตัดกับ intake คือ BP ระยะยาว กดขั้นที่ 1 ถึง 4 เพื่อสร้างกราฟทีละชั้น",
+  scenarios:S, order:ORDER, captureMs:1200,
+  onChange:function(k,s){ ["na","mass","ss"].forEach(function(x){ C[x].set(s.p[x]); }); Object.keys(T).forEach(function(x){ T[x].setAttribute("aria-pressed",s.p.rx.indexOf(x)>=0?"true":"false"); }); STEP=4; update(); },
+  refs:["Guyton AC. Blood pressure control: special role of the kidneys and body fluids. Science 1991, 252(5014): 1813-1816",
+        "Hall JE. Renal dysfunction, rather than nonrenal vascular dysfunction, mediates salt-induced hypertension. Circulation 2016, 133(9): 894-906",
+        "Weinberger MH. Salt sensitivity of blood pressure in humans. Hypertension 1996, 27(3 Pt 2): 481-490",
+        "Elijovich F, Weinberger MH, Anderson CAM, et al. Salt sensitivity of blood pressure: a scientific statement from the American Heart Association. Hypertension 2016, 68(3): e7-e46",
+        "Kidney Disease: Improving Global Outcomes (KDIGO) Blood Pressure Work Group. KDIGO 2021 clinical practice guideline for the management of blood pressure in CKD. Kidney Int 2021, 99(3S): S1-S87",
+        "McMahon EJ, Bauer JD, Hawley CM, et al. A randomized trial of dietary sodium restriction in CKD. J Am Soc Nephrol 2013, 24(12): 2096-2103"],
+  note:"Model เพื่อการสอน: Na excretion = 100 x e^(k(MAP − M0)) mmol/วัน k = ln10/(5 + 30 x salt sensitivity) x (0.35 + 0.65 x nephron fraction), M0 = 93 + 30(1 − nephron fraction)^1.3 Ang II คงที่ +14 mmHg และ k x0.35, mineralocorticoid excess +16 และ k x0.55, ACEi/ARB −8 และ k x0.8, thiazide −7 Na ที่ค้าง/140 = ECF (L) และ MAP เพิ่ม 4 mmHg ต่อลิตร ECF salt sensitivity index = ΔMAP ต่อการเปลี่ยน Na intake 10 เท่า (≥ 10 mmHg = salt-sensitive)"
+});
+})();
+</script>
+</body>
+</html>

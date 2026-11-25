@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[KT-11] PTLD, EBV and Post-Transplant Malignancy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.35fr 1fr}}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.sel{display:grid;grid-template-columns:minmax(110px,150px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px;margin:6px 0}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.sub{font-size:12.5px;color:var(--muted);margin:12px 0 4px}
+.tools{margin-top:6px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present #live,body.present .act{display:none}
+body.present .card{padding:14px 18px}
+body.present .ctls{gap:2px}
+body.present .ctl{font-size:13.5px}
+body.present .sel{margin:2px 0;font-size:13.5px}
+body.present .tools{margin-top:3px;gap:5px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .sub{margin:4px 0 2px}
+body.present .ro{padding:5px 10px}
+body.present .ro b{font-size:18px}
+body.present #lad{max-height:165px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>EBV DNA 5 ปี: ลดยาเร็วตัดวงจรก่อนเกิด PTLD</h2>
+      <div id="chart"></div>
+      <div id="live"></div>
+      <div class="svgwrap" style="margin-top:10px"><svg id="lad" viewBox="0 0 680 210" role="img" aria-label="Stepwise management ladder of PTLD and skin cancer"></svg></div>
+      <p class="hint no-present">เส้นม่วงคือ EBV DNA ใน blood (log10 copies/mL) PTLD risk สะสมดูที่ readout ด้านล่างคือบันไดการรักษา PTLD ตามชนิด กล่องที่เข้มคือขั้นที่เหมาะกับชนิดที่เลือก</p>
+    </div>
+    <div class="card">
+      <h2>ความเสี่ยงและการตอบสนอง</h2>
+      <div class="sel"><label for="sEbv">EBV D/R</label><select id="sEbv"><option value="mm">D+/R− (mismatch)</option><option value="rpos">R+</option></select></div>
+      <div class="sel"><label for="sInd">Induction</label><select id="sInd"><option value="bas">Basiliximab</option><option value="atg">ATG</option></select></div>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools"></div>
+      <div class="sub">ถ้าเกิด PTLD</div>
+      <div class="sel"><label for="sType">ชนิด</label><select id="sType"><option value="early">Early lesion, polymorphic EBV+</option><option value="mono">Monomorphic CD20+ DLBCL</option><option value="cns">Primary CNS PTLD</option><option value="late">Late EBV-negative monomorphic</option></select></div>
+      <div class="sub">Skin cancer</div>
+      <div class="tools" id="tSkin"></div>
+      <div class="readout">
+        <div class="ro" id="roPk"><b>-</b><span>Peak EBV DNA</span></div>
+        <div class="ro" id="roHi"><b>-</b><span>เดือนที่ &gt; 10,000</span></div>
+        <div class="ro" id="roP5"><b>-</b><span>PTLD ใน 5 ปี</span></div>
+        <div class="ro" id="roP1"><b>-</b><span>สัดส่วนในปีแรก</span></div>
+        <div class="ro" id="roRej"><b>-</b><span>Rejection จากการลดยา</span></div>
+        <div class="ro" id="roSk"><b>-</b><span>Skin SCC risk</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/live.js"></script>
+<script>
+(function(){
+"use strict";
+function D(o){ var d = {ebv:"mm", ind:"bas", is:60, age:45, mon:true, red:true, rtx:false, bela:false, type:"early", sun:false, mtor:false, scc:false}; Object.keys(o).forEach(function(k){ d[k] = o[k]; }); return d; }
+var S = {
+  rpos:{name:"EBV R+ ความเสี่ยงต่ำ", p:D({ebv:"rpos", mon:false, red:false}),
+    rows:[["Recipient","ชาย 45 ปี EBV IgG บวกก่อนปลูกถ่าย"],["Induction","Basiliximab"],["EBV DNA","ต่ำหรือตรวจไม่พบ"],["PTLD risk","ต่ำ ส่วนใหญ่เป็น late PTLD"]],
+    take:["ผู้ใหญ่ส่วนใหญ่เป็น EBV R+ จึงเสี่ยง PTLD ต่ำ","ไม่ต้อง monitor EBV DNA เป็นประจำในกลุ่มนี้","ความเสี่ยงสะสมตาม immunosuppression รวมตลอดชีวิต"]},
+  mm:{name:"D+/R− monitor + ลดยา", p:D({ebv:"mm", age:19, mon:true, red:true}),
+    rows:[["Recipient","อายุ 19 ปี EBV seronegative donor seropositive"],["Monitoring","EBV PCR ทุกเดือนในปีแรก"],["เดือนที่ 4","EBV DNA ขึ้นต่อเนื่อง"],["Action","ลด immunosuppression ก่อนเกิด PTLD"]],
+    take:["EBV D+/R− เสี่ยง PTLD สูงสุด โดยเฉพาะปีแรกและเด็ก","Monitor EBV DNA แล้วลดยาเมื่อขึ้นต่อเนื่อง ลด PTLD ได้","ห้ามใช้ belatacept ใน EBV seronegative"]},
+  mmNo:{name:"D+/R− ไม่ monitor", p:D({ebv:"mm", age:19, mon:false, red:false, ind:"atg", is:75}),
+    rows:[["Recipient","D+/R− ได้ ATG"],["Monitoring","ไม่ได้ตรวจ EBV DNA"],["เดือนที่ 7","ไข้ ต่อมน้ำเหลืองโต graft infiltration"],["Biopsy","Polymorphic PTLD EBER บวก CD20 บวก"]],
+    take:["T-cell depletion ร่วม EBV mismatch เพิ่ม PTLD มาก","Early PTLD มักเป็น EBV+ และตอบสนองต่อการลดยา","Biopsy ย้อม EBER และ CD20 เพื่อเลือกการรักษา"]},
+  bela:{name:"Belatacept ใน EBV seronegative", p:D({ebv:"mm", age:30, mon:false, red:false, bela:true, type:"cns"}),
+    rows:[["Recipient","EBV seronegative ได้ belatacept (ข้อห้าม)"],["Clinical","ปวดหัว ชัก เดือนที่ 10"],["MRI","Ring-enhancing lesion"],["Dx","Primary CNS PTLD"]],
+    take:["Belatacept ใน EBV-seronegative เพิ่ม CNS PTLD ชัดเจน","CNS PTLD รักษาด้วย high-dose methotrexate หรือ radiotherapy","ตรวจ EBV serostatus ก่อนเลือก belatacept ทุกครั้ง"]},
+  late:{name:"Late EBV-negative DLBCL", p:D({ebv:"rpos", age:62, mon:false, red:false, is:70, type:"late"}),
+    rows:[["Recipient","ปีที่ 9 หลังปลูกถ่าย อายุ 62 ปี"],["Clinical","น้ำหนักลด ก้อนในท้อง"],["Biopsy","Monomorphic DLBCL CD20+ EBER ลบ"],["Plan","ลดยา + R-CHOP ตั้งแต่ต้น"]],
+    take:["Late PTLD มักเป็น EBV-negative และตอบสนองต่อการลดยาน้อย","EBV DNA ปกติไม่ตัด late PTLD","ใช้ rituximab ร่วม chemotherapy ตาม risk"]},
+  skin:{name:"Skin SCC หลายตำแหน่ง", p:D({ebv:"rpos", age:58, mon:false, red:false, is:65, sun:true, scc:true, mtor:true}),
+    rows:[["Recipient","ปีที่ 12 ทำงานกลางแจ้ง ผิวขาว"],["Lesion","SCC ครั้งที่ 2 ใน 1 ปี"],["Plan","เปลี่ยน CNI เป็น mTOR inhibitor"],["Prevention","กันแดด ตรวจผิวหนังทุก 6–12 เดือน"]],
+    take:["Skin SCC เป็นมะเร็งที่พบบ่อยที่สุดหลังปลูกถ่าย","หลัง SCC ครั้งแรก การเปลี่ยนเป็น sirolimus ลด SCC ใหม่","ป้องกันแดดและตรวจผิวหนังสม่ำเสมอ"]}
+};
+var ORDER = ["rpos","mm","mmNo","bela","late","skin"];
+var sEbv = document.getElementById("sEbv"), sInd = document.getElementById("sInd"), sType = document.getElementById("sType");
+[sEbv, sInd].forEach(function(s){ s.addEventListener("change", function(){ update(); }); });
+sType.addEventListener("change", function(){ drawLad(); actText(); });
+var C = {};
+function sl(k, o){ o.id = "s" + k; o.onInput = function(){ update(true); }; C[k] = Sim.slider(o); document.getElementById("ctls").appendChild(C[k].el); }
+sl("is", {label:"Immunosuppression รวม", min:20, max:100, step:5, value:60, unit:"%"});
+sl("age", {label:"Recipient age", min:2, max:75, step:1, value:45, unit:"y"});
+var F = {}, TG = {};
+[["mon","EBV PCR monitoring","tools"],["red","ลดยาเมื่อ EBV ขึ้น","tools"],["rtx","Pre-emptive rituximab","tools"],["bela","Belatacept","tools"],["sun","แดดจัด ผิวขาว","tSkin"],["scc","มี SCC แล้ว","tSkin"],["mtor","เปลี่ยนเป็น mTORi","tSkin"]].forEach(function(x){ F[x[0]] = false; TG[x[0]] = Sim.toggle(x[1], function(on){ F[x[0]] = on; if(x[2] === "tSkin"){ skin(); actText(); } else update(); }, false); document.getElementById(x[2]).appendChild(TG[x[0]]); });
+function P(){ var p = {ebv:sEbv.value, ind:sInd.value, type:sType.value}; Object.keys(C).forEach(function(k){ p[k] = C[k].get(); }); Object.keys(F).forEach(function(k){ p[k] = F[k]; }); return p; }
+
+/* ---------- model ---------- */
+var TM = 60, DT = 0.05;
+function simulate(p){
+  var mm = p.ebv === "mm", IS = p.is / 60 * (p.ind === "atg" ? 1.35 : 1) * (p.bela ? 1.25 : 1);
+  var L = mm ? 0 : 1.6, Imm = mm ? 0 : 1, cum = 0, cum1 = 0, VL = [], CU = [], ev = [], hiM = 0, reduced = false, rtxDone = false, rej = 0, isNow = IS, above = 0;
+  var kid = p.age < 18 ? 2 : 1;
+  for(var i = 0; i <= TM / DT; i++){
+    var t = i * DT;
+    if(mm){
+      var inf = t >= 1.5 ? 1 : 0;
+      L += (inf * 1.1 * isNow - 0.9 * Imm - (L > 6 ? (L - 6) * 2 : 0)) * DT;
+      Imm += ((t >= 1.5 ? 1 : 0) * (1.15 - 0.7 * Math.min(1.3, isNow)) * 0.3 - (Imm > 2 ? 0.2 : 0)) * DT;
+      if(Imm < 0) Imm = 0;
+      if(L < 0) L = 0;
+    } else { L = 1.6 + 0.6 * Math.max(0, isNow - 0.8); }
+    if(L > 4) hiM += DT;
+    // monitoring and response (monthly in year 1 for mismatch)
+    if(p.mon && mm && t <= 12 && Math.abs(t - Math.round(t)) < DT / 2 && t > 0){
+      if(L > 4) above++; else above = 0;
+      if(p.red && !reduced && (L > 4.3 || above >= 2)){ reduced = true; isNow = IS * 0.55; ev.push({t:t, kind:"rx", text:"EBV DNA " + fmt(L) + " ขึ้นต่อเนื่อง ลด immunosuppression (MPA ก่อน)"}); }
+      if(p.rtx && !rtxDone && L > 4.6){ rtxDone = true; L -= 2.2; ev.push({t:t, kind:"rx", text:"Pre-emptive rituximab"}); }
+      else if(L > 3.5 && !reduced) ev.push({t:t, kind:"phys", text:"EBV DNA " + fmt(L) + " copies/mL"});
+    }
+    if(reduced) rej += 0.004 * DT * 20;
+    var early = mm ? (1 + 1.6 * Math.max(0, L - 3)) * Math.exp(-Math.pow((t - 6) / 7, 2)) * 1.2 : 0.15 * Math.exp(-Math.pow((t - 8) / 10, 2));
+    var cnsBoost = p.bela && mm ? 1.5 : 1;
+    var late = 0.035 * Math.max(0.3, isNow) * (1 + p.age / 60);
+    var h = early * 0.0012 * cnsBoost * kid * Math.max(0.3, isNow) + late * 0.0019;
+    cum += h * DT; if(t <= 12) cum1 = cum;
+    if(i % 5 === 0){ VL.push([+t.toFixed(2), Math.max(2, L)]); CU.push([+t.toFixed(2), 100 * (1 - Math.exp(-cum))]); }
+  }
+  var pk = Math.max.apply(null, VL.map(function(x){ return x[1]; }));
+  var r5 = 1 - Math.exp(-cum), r1 = 1 - Math.exp(-cum1);
+  return {VL:VL, CU:CU, ev:ev, pk:pk, hiM:hiM, r5:r5, r1:r1, reduced:reduced, rtxDone:rtxDone, rej:rej};
+}
+function fmt(l){ var v = Math.pow(10, l); return v >= 1e6 ? (v / 1e6).toFixed(1) + "M" : Math.round(v).toLocaleString("en-US"); }
+
+/* ---------- chart ---------- */
+var A = Plot.colors;
+var chart = Plot.chart(document.getElementById("chart"), {height:Sim.present ? 260 : 250, aria:"EBV DNA load and cumulative PTLD risk over five years",
+  x:{min:0, max:TM, step:12, label:"Months after transplant"}, y:{min:2, max:7, step:1, label:"EBV DNA (log10 copies/mL)", fmt:function(v){ return v.toFixed(0); }},
+  series:[{id:"vl", name:"EBV DNA", color:A.accent, data:[], width:2.4}],
+  hlines:[{y:4, label:"10,000", color:A.gold, dash:[4,3]}], legend:true});
+var live = Live.player(chart, {mount:"live"}), LAST = null;
+
+/* ---------- ladder ---------- */
+var lad = document.getElementById("lad"), FT = "IBM Plex Sans Thai, sans-serif", MO = "Geist Mono, monospace";
+var STEPS = [
+  {t:"1  Reduce IS", s:"Cut 25 to 50 percent, stop antimetabolite", on:["early","mono","late","cns"]},
+  {t:"2  Rituximab", s:"CD20+, response in 4 weeks", on:["early","mono"]},
+  {t:"3  R-CHOP", s:"Risk-stratified, upfront if high risk", on:["mono","late"]},
+  {t:"CNS route", s:"High-dose MTX, radiotherapy", on:["cns"]}
+];
+function drawLad(){
+  var ty = sType.value; lad.innerHTML = "";
+  Sim.svg("text", {x:12, y:18, "font-family":FT, "font-size":13, "font-weight":600, fill:"#0B0B1F", text:"PTLD management ladder"}, lad);
+  STEPS.forEach(function(s, i){ var x = 12 + i * 166, y = 30, on = s.on.indexOf(ty) >= 0;
+    Sim.svg("rect", {x:x, y:y, width:156, height:62, rx:12, fill:on ? "#0B0B1F" : "#F4F5F9", stroke:on ? "#0B0B1F" : "#E6E7F0"}, lad);
+    Sim.svg("text", {x:x + 12, y:y + 24, "font-family":FT, "font-size":13, "font-weight":600, fill:on ? "#19C8E6" : "#5E6075", text:s.t}, lad);
+    var words = s.s.split(" "), l1 = "", l2 = "";
+    words.forEach(function(w){ if((l1 + " " + w).length < 24 && !l2) l1 = (l1 ? l1 + " " : "") + w; else l2 = (l2 ? l2 + " " : "") + w; });
+    Sim.svg("text", {x:x + 12, y:y + 42, "font-family":FT, "font-size":10.5, fill:on ? "#FFFFFF" : "#9A9CB2", text:l1}, lad);
+    Sim.svg("text", {x:x + 12, y:y + 55, "font-family":FT, "font-size":10.5, fill:on ? "#FFFFFF" : "#9A9CB2", text:l2}, lad);
+    if(i < 2) Sim.svg("text", {x:x + 159, y:y + 36, "font-family":MO, "font-size":12, fill:"#9A9CB2", text:"›"}, lad);
+  });
+  skin();
+}
+function skinRisk(p){ var r = 1 + (p.sun ? 1.5 : 0) + (p.scc ? 2.5 : 0) + p.is / 60 - (p.mtor ? 1.5 : 0); return r; }
+function skin(){
+  var p = P(), r = skinRisk(p);
+  var y = 112, items = [["Sun protection and skin check every 6 to 12 months", true],["Treat actinic keratosis early", p.sun],["Switch CNI to mTOR inhibitor after first SCC", p.scc],["Consider acitretin if many SCC", p.scc && !p.mtor]];
+  Array.prototype.slice.call(lad.querySelectorAll(".sk")).forEach(function(n){ n.remove(); });
+  var g = Sim.svg("g", {class:"sk"}, lad);
+  Sim.svg("text", {x:12, y:y, "font-family":FT, "font-size":13, "font-weight":600, fill:"#0B0B1F", text:"Skin cancer prevention"}, g);
+  items.forEach(function(it, i){ var col = i % 2, row = Math.floor(i / 2), x = 12 + col * 332, yy = y + 12 + row * 40;
+    Sim.svg("rect", {x:x, y:yy, width:322, height:32, rx:10, fill:it[1] ? "#E8F4F2" : "#FFFFFF", stroke:it[1] ? "#1F7A72" : "#E6E7F0"}, g);
+    Sim.svg("text", {x:x + 12, y:yy + 21, "font-family":FT, "font-size":11.5, fill:it[1] ? "#0F4F49" : "#9A9CB2", text:it[0]}, g); });
+  Sim.ro("roSk", r >= 4 ? "High" : r >= 2.3 ? "Moderate" : "Low", r >= 4 ? "flag" : r < 2.3 ? "ok" : null);
+}
+function actText(){
+  if(!LAST) return;
+  var p = P(), R = LAST.R, n = [], bad = false, mm = p.ebv === "mm";
+  if(p.bela && mm){ bad = true; n.push("Belatacept ห้ามใช้ใน EBV-seronegative เปลี่ยนกลับเป็น tacrolimus"); }
+  if(mm && !p.mon){ bad = true; n.push("D+/R− ควรตรวจ EBV DNA ทุกเดือนในปีแรก แล้วลดยาเมื่อ load ขึ้นต่อเนื่อง"); }
+  var ty = p.type;
+  if(ty === "early") n.push("ถ้าเกิด early หรือ polymorphic PTLD: ลดยาก่อน ประเมินใน 2–4 สัปดาห์ ถ้าไม่ตอบสนองให้ rituximab (ถ้า CD20 บวก)");
+  if(ty === "mono") n.push("Monomorphic CD20+: ลดยาร่วม rituximab แล้วให้ R-CHOP ถ้าไม่ complete response (risk-stratified sequential)");
+  if(ty === "cns") n.push("CNS PTLD: high-dose methotrexate-based regimen หรือ radiotherapy ร่วมลดยา rituximab เข้า CNS ได้น้อย");
+  if(ty === "late") n.push("Late EBV-negative: ลดยาตอบสนองน้อย ให้ R-CHOP ตั้งแต่ต้นร่วมกับ hematologist");
+  if(skinRisk(p) >= 4 && !p.mtor) n.push("SCC ซ้ำ: เปลี่ยน CNI เป็น sirolimus หรือ everolimus ลดยารวม ตรวจผิวหนังทุก 3–6 เดือน");
+  var a = document.getElementById("act"); a.innerHTML = "<b>Next step:</b> " + n.join(" "); a.className = "act" + (bad ? " bad" : "");
+}
+function update(deb){
+  var p = P(), R = simulate(p);
+  chart.setSeries("vl", R.VL); 
+  LAST = {p:p, R:R};
+  live.load({tMax:TM, unit:"เดือน", ms:7000, debounce:deb === true, num:function(x){ return x.toFixed(0); }, events:R.ev.sort(function(a, b){ return a.t - b.t; }), onFrame:onFrame,
+    cursorLabel:function(t){ return "Month " + t.toFixed(0); }});
+  drawLad();
+}
+function onFrame(t, done){
+  var M = LAST, R = M.R;
+  var cur = R.VL.filter(function(x){ return x[0] <= t; }), pk = cur.length ? Math.max.apply(null, cur.map(function(x){ return x[1]; })) : 2;
+  Sim.ro("roPk", pk > 2.2 ? fmt(pk) : "< 160", pk >= 4 ? "flag" : null);
+  Sim.ro("roHi", done ? R.hiM.toFixed(1) : "…", done ? (R.hiM > 3 ? "flag" : R.hiM === 0 ? "ok" : null) : null);
+  Sim.ro("roP5", done ? (R.r5 * 100).toFixed(1) + "%" : "…", done ? (R.r5 > 0.05 ? "flag" : R.r5 < 0.015 ? "ok" : null) : null);
+  Sim.ro("roP1", done ? Math.round(R.r1 / Math.max(1e-6, R.r5) * 100) + "%" : "…");
+  Sim.ro("roRej", R.reduced ? "Moderate" : "Low", R.reduced ? null : "ok");
+  if(done) actText(); else { var a = document.getElementById("act"); a.innerHTML = "<b>กำลังจำลอง</b> เดือนที่ " + t.toFixed(0); a.className = "act"; }
+}
+Sim.mount({code:"KT-11", title:"PTLD, EBV and Post-Transplant Malignancy",
+  lead:"เลือก EBV serostatus, induction, ระดับ immunosuppression และการ monitor ดู EBV DNA กับ cumulative PTLD risk 5 ปีแบบ real time แล้วเลือกชนิด PTLD และความเสี่ยงมะเร็งผิวหนังเพื่อดูขั้นการรักษา",
+  scenarios:S, order:ORDER, captureMs:1200,
+  onChange:function(k, s){ var q = s.p; sEbv.value = q.ebv; sInd.value = q.ind; sType.value = q.type; C.is.set(q.is); C.age.set(q.age); Object.keys(F).forEach(function(x){ F[x] = !!q[x]; TG[x].setState(F[x]); }); update(); },
+  refs:["Dierickx D, Habermann TM. Post-transplantation lymphoproliferative disorders in adults. N Engl J Med 2018, 378(6): 549-562",
+        "Trappe R, Oertel S, Leblond V, et al. Sequential treatment with rituximab followed by CHOP chemotherapy in adult B-cell post-transplant lymphoproliferative disorder (PTLD-1). Lancet Oncol 2012, 13(2): 196-206",
+        "Allen UD, Preiksaitis JK, AST Infectious Diseases Community of Practice. Post-transplant lymphoproliferative disorders, Epstein-Barr virus infection, and disease in solid organ transplantation. Clin Transplant 2019, 33(9): e13652",
+        "Vincenti F, Rostaing L, Grinyo J, et al. Belatacept and long-term outcomes in kidney transplantation. N Engl J Med 2016, 374(4): 333-343",
+        "Euvrard S, Morelon E, Rostaing L, et al. Sirolimus and secondary skin-cancer prevention in kidney transplantation. N Engl J Med 2012, 367(4): 329-339",
+        "Kidney Disease: Improving Global Outcomes (KDIGO) Transplant Work Group. KDIGO clinical practice guideline for the care of kidney transplant recipients. Am J Transplant 2009, 9(Suppl 3): S1-S155"],
+  note:"Model เพื่อการสอน: EBV D+/R− เกิด primary infection ราวเดือนที่ 1.5 load เพิ่มตาม immunosuppression และลดตาม EBV-specific immunity ที่มาเร็วขึ้นเมื่อลดยา PTLD hazard = early component (ขึ้นกับ load และปีแรก) + late component (ขึ้นกับ IS และอายุ) คูณ belatacept ใน EBV mismatch และเด็ก ค่า % เป็นค่าประมาณให้ใกล้ข้อมูลที่รายงาน ไม่ใช่ prediction model"
+});
+})();
+</script>
+</body>
+</html>

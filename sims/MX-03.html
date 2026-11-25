@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[MX-03] Kidney Stone Lab: 24-hour Urine and Supersaturation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.2fr 1fr}}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:8px}
+.sub{font-size:12.5px;color:var(--muted);margin:12px 0 4px}
+.gap{height:10px}
+.labt{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}
+.labt td{padding:5px 6px;border-bottom:1px solid var(--line)}
+.labt td:last-child{text-align:right;font-family:"Geist Mono",monospace}
+.labt tr.hi td{color:var(--red);font-weight:600}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .labt{display:none}
+body.present .card{padding:12px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .ro{padding:5px 12px}
+body.present .ro b{font-size:16px}
+body.present .ctls{gap:0}
+body.present .ctl{font-size:12.5px}
+body.present .tog{padding:3px 8px;font-size:11.5px}
+body.present .tools{margin-top:3px;gap:4px}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+body.present .sub{margin:4px 0 1px}
+body.present .svgwrap svg{max-height:250px}
+body.present .gap{height:2px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Supersaturation ตามชนิดนิ่ว</h2>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 640 300" role="img" aria-label="Supersaturation index bars for calcium oxalate, calcium phosphate, uric acid, cystine and struvite"></svg></div>
+      <div class="gap"></div>
+      <div id="curve"></div>
+      <p class="hint no-present">แถบบน: supersaturation index ของแต่ละชนิดนิ่ว (1 = ค่าเฉลี่ยของคนไม่เป็นนิ่ว, เกิน 2 = เสี่ยงสูง) กราฟล่าง: index ตาม urine pH ที่ volume และการขับออกเท่าเดิม เส้นตั้งคือ pH ปัจจุบัน uric acid และ cystine ละลายดีขึ้นเมื่อ pH สูง ส่วน calcium phosphate และ struvite ตกผลึกเมื่อ pH สูง</p>
+    </div>
+    <div class="card">
+      <h2>24-hour urine</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="sub">ภาวะร่วม</div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roType"><b>-</b><span>ชนิดที่เสี่ยงที่สุด</span></div>
+        <div class="ro" id="roSS"><b>-</b><span>Index สูงสุด</span></div>
+        <div class="ro" id="roAb"><b>-</b><span>ค่าผิดปกติ</span></div>
+      </div>
+      <div class="act" id="act"></div>
+      <table class="labt" id="labt"></table>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script>
+(function(){
+"use strict";
+function SV(t,a,p){ var b={}; for(var k in a) if(a[k]!==null&&a[k]!==undefined) b[k]=a[k]; return Sim.svg(t,b,p); }
+function P(o){ var d={vol:2.2,ca:200,ox:30,ua:550,cit:600,ph:6.0,na:140,cys:20,rx:[],sex:"m"}; for(var k in o) d[k]=o[k]; return d; }
+var TG={urease:"Urease-splitting UTI",cysU:"Cystinuria",ph1:"Primary hyperoxaluria",enteric:"Malabsorption/bariatric",drta:"Distal RTA",female:"เพศหญิง"};
+var S={
+  hcu:{name:"Idiopathic hypercalciuria", p:P({ca:380,vol:1.6,na:220}),
+    rows:[["24-h urine","Ca 380 mg/d, Na 220 mmol/d, volume 1.6 L"],["Stone","calcium oxalate"],["Therapy","น้ำ > 2.5 L, ลดเกลือ, thiazide-like diuretic"]],
+    take:["Hypercalciuria เป็นความผิดปกติที่พบบ่อยที่สุดในนิ่ว calcium","Na intake สูงเพิ่ม urine Ca ลดเกลือก่อนเพิ่มยา","อย่าจำกัด calcium ในอาหาร ใช้ thiazide ลด urine Ca เมื่อยังสูง"]},
+  enteric:{name:"Enteric hyperoxaluria", p:P({ox:85,vol:1.1,cit:180,ca:110,ph:5.6,rx:["enteric"]}),
+    rows:[["ประวัติ","Roux-en-Y bypass หรือ Crohn ท้องเสียเรื้อรัง"],["24-h urine","oxalate 85, citrate 180, volume 1.1 L"],["Therapy","calcium กับมื้ออาหาร, ลดไขมันและ oxalate, citrate, น้ำ"]],
+    take:["Fat malabsorption ทำให้ calcium จับไขมันแทน oxalate จึงดูดซึม oxalate มาก","Volume ต่ำ citrate ต่ำ (สูญเสีย bicarbonate) และ oxalate สูงพร้อมกัน","ให้ calcium กับมื้ออาหารเพื่อจับ oxalate ในลำไส้ ระวัง oxalate nephropathy"]},
+  ua:{name:"Uric acid stone", p:P({ph:5.0,ua:600,vol:1.8}),
+    rows:[["ผู้ป่วย","metabolic syndrome, DM type 2"],["24-h urine","pH 5.0 urate ปกติ"],["Therapy","potassium citrate ให้ pH 6.0–6.5 และน้ำ"]],
+    take:["ตัวกำหนดหลักของนิ่ว uric acid คือ urine pH ต่ำ ไม่ใช่ urate สูง","Insulin resistance ลดการสร้าง NH4+ ทำให้ urine pH ต่ำ","Alkalinize ด้วย K citrate ละลายนิ่วได้ allopurinol ใช้เมื่อ urate สูงด้วย"]},
+  struv:{name:"Struvite (infection stone)", p:P({ph:7.6,rx:["urease"],female:true,sex:"f"}),
+    rows:[["ผู้ป่วย","หญิง UTI Proteus ซ้ำ staghorn stone"],["24-h urine","pH 7.6"],["Therapy","เอานิ่วออกทั้งหมด + antibiotic, acetohydroxamic acid ในบางราย"]],
+    take:["Urease (Proteus, Klebsiella) สลาย urea เป็น NH3 ทำให้ pH สูงและเกิด magnesium ammonium phosphate","มักเป็น staghorn เติบโตเร็ว","ต้องเอานิ่วออกทั้งหมด เพราะเชื้ออยู่ในนิ่ว ยาอย่างเดียวไม่หาย"]},
+  cys:{name:"Cystinuria", p:P({cys:700,vol:2.5,ph:6.5,rx:["cysU"]}),
+    rows:[["ผู้ป่วย","อายุ 18 นิ่วซ้ำตั้งแต่เด็ก hexagonal crystals"],["24-h urine","cystine 700 mg/d"],["Therapy","น้ำ > 3–4 L ให้ cystine < 250 mg/L, pH ≥ 7.5, tiopronin"]],
+    take:["Cystinuria เป็น autosomal recessive (SLC3A1, SLC7A9) ขับ cystine, ornithine, lysine, arginine","Cystine ละลายได้ราว 250 mg/L ที่ pH 7.0 และราว 500 mg/L ที่ pH 7.5","ขั้นแรกคือน้ำและ alkalinize ใช้ thiol drug (tiopronin) เมื่อยังไม่พอ"]},
+  ph1:{name:"Primary hyperoxaluria type 1", p:P({ox:140,vol:2.0,rx:["ph1"],ca:150}),
+    rows:[["ผู้ป่วย","อายุ 14 nephrocalcinosis นิ่วหลายก้อน eGFR ลดลง"],["24-h urine","oxalate 140 mg/d glycolate สูง"],["Therapy","น้ำมาก, citrate, pyridoxine (บาง genotype), RNAi ที่ลดการสร้าง oxalate"]],
+    take:["Oxalate > 75 mg/d ในเด็กหรือผู้ใหญ่ที่ไม่มีโรคลำไส้ ให้นึกถึง primary hyperoxaluria","PH1 เกิดจาก AGXT ทำให้ตับสร้าง oxalate มาก ตรวจ genetic","RNAi ลดการสร้าง oxalate ได้ ใน ESKD เกิด systemic oxalosis การปลูกถ่ายตับ-ไตยังมีบทบาท"]},
+  drta:{name:"Distal RTA calcium phosphate", p:P({ph:6.9,cit:90,ca:280,rx:["drta"]}),
+    rows:[["ผู้ป่วย","Sjögren, K ต่ำ, normal AG acidosis"],["24-h urine","pH 6.9 citrate 90"],["Therapy","alkali (K citrate) แก้ acidosis และเพิ่ม citrate"]],
+    take:["dRTA ทำให้ urine pH สูงคงที่ citrate ต่ำมาก และ Ca สูง จึงเกิดนิ่ว CaP และ nephrocalcinosis","Hypocitraturia เป็นปัจจัยเสี่ยงของนิ่ว calcium ทุกชนิด","K citrate แก้ได้ทั้ง acidosis และ citrate ต่ำ (ดู EL-09)"]}
+};
+var ORDER=["hcu","enteric","ua","struv","cys","ph1","drta"];
+var box=document.getElementById("ctls"), C={};
+function sl(k,o){ o.id="s"+k; o.onInput=function(){ update(); }; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("vol",{label:"Volume",min:0.6,max:4,step:0.1,value:2.2,unit:" L/d",fmt:function(v){ return v.toFixed(1); }});
+sl("ca",{label:"Calcium",min:50,max:500,step:10,value:200,unit:" mg/d"});
+sl("ox",{label:"Oxalate",min:10,max:160,step:1,value:30,unit:" mg/d"});
+sl("ua",{label:"Uric acid",min:200,max:1200,step:10,value:550,unit:" mg/d"});
+sl("cit",{label:"Citrate",min:50,max:1000,step:10,value:600,unit:" mg/d"});
+sl("ph",{label:"Urine pH",min:4.6,max:8.0,step:0.1,value:6.0,unit:"",fmt:function(v){ return v.toFixed(1); }});
+sl("na",{label:"Sodium",min:40,max:300,step:5,value:140,unit:" mmol"});
+sl("cys",{label:"Cystine",min:0,max:1000,step:10,value:20,unit:" mg/d"});
+var T={}, tb=document.getElementById("tools");
+Object.keys(TG).forEach(function(k){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:TG[k]}); b.addEventListener("click",function(){ b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); tb.appendChild(b); T[k]=b; });
+function on(k){ return T[k].getAttribute("aria-pressed")==="true"; }
+/* teaching indices: 1 = average non-stone former (vol 2 L, Ca 200, Ox 30, urate 550, citrate 600, pH 6.0, P 900 mg/d) */
+function idx(o,ph){
+  var V=o.vol;
+  var cC=o.ca/V/100, oC=o.ox/V/15, citC=Math.max(25,o.cit/V)/300, naF=1+(o.na-140)/600;
+  var citInh=Math.pow(citC,-0.4);
+  var caox=cC*oC*citInh;
+  var hpo=1/(1+Math.pow(10,6.8-ph)), hpo6=1/(1+Math.pow(10,0.8));
+  var cap=cC*(900/V/450)*(hpo/hpo6)*citInh*0.75;
+  var und=1/(1+Math.pow(10,ph-5.35)), und6=1/(1+Math.pow(10,0.65));
+  var uac=(o.ua/V/275)*(und/und6);
+  var sol=250*(1+1.5*Math.pow(10,ph-7.8));
+  var cys=(o.cys/V)/sol*2;
+  var stv=o.urease?Math.pow(10,(ph-7.0)*1.6)*0.9:Math.pow(10,(ph-7.0)*1.6)*0.06;
+  return {caox:caox,cap:cap,ua:uac,cys:cys,stv:stv};
+}
+var NAMES={caox:"Calcium oxalate",cap:"Calcium phosphate",ua:"Uric acid",cys:"Cystine",stv:"Struvite"};
+var COL={caox:"#0B0B1F",cap:"#5E6075",ua:"#A8842C",cys:"#5B4BFF",stv:"#1F7A72"};
+var A=Plot.colors;
+var curve=Plot.chart(document.getElementById("curve"),{height:Sim.present?175:210,aria:"Supersaturation index versus urine pH",
+  x:{min:4.6,max:8,step:0.5,label:"Urine pH"},y:{min:0.05,max:50,log:true,label:"Index (log)"},
+  series:Object.keys(NAMES).map(function(k){ return {id:k,name:NAMES[k],color:COL[k],data:[],width:2.2,dash:k==="stv"?[6,4]:null}; }),
+  hlines:[{y:1,label:"",color:A.muted,dash:[3,3]},{y:2,label:"High risk",color:A.red,dash:[5,4]}],legend:true});
+var svg=document.getElementById("vis"), INK="#0B0B1F", MUT="#5E6075", RED="#B4232A", TEAL="#1F7A72";
+function tx(x,y,s,o){ o=o||{}; return SV("text",{x:x,y:y,"text-anchor":o.a||"middle","font-family":o.mono?"Geist Mono, monospace":"IBM Plex Sans Thai, sans-serif","font-size":o.fs||12,"font-weight":o.fw||400,fill:o.fill||INK,text:s},svg); }
+function opts(){ var o={vol:C.vol.get(),ca:C.ca.get(),ox:C.ox.get(),ua:C.ua.get(),cit:C.cit.get(),ph:C.ph.get(),na:C.na.get(),cys:C.cys.get()}; Object.keys(TG).forEach(function(k){ o[k]=on(k); }); return o; }
+function crystal(k,x,y,s){ /* small crystal glyph in English-free shapes */
+  var g=SV("g",{transform:"translate("+x+","+y+")"},svg), c=COL[k];
+  if(k==="caox"){ SV("rect",{x:-s,y:-s,width:2*s,height:2*s,transform:"rotate(45)",fill:"none",stroke:c,"stroke-width":1.6},g); SV("path",{d:"M"+(-s*1.4)+" 0 L"+(s*1.4)+" 0 M0 "+(-s*1.4)+" L0 "+(s*1.4),stroke:c,"stroke-width":1},g); }
+  else if(k==="ua"){ SV("path",{d:"M"+(-s*1.5)+" 0 L0 "+(-s*0.8)+" L"+(s*1.5)+" 0 L0 "+(s*0.8)+" Z",fill:"#F4E3B5",stroke:c,"stroke-width":1.4},g); }
+  else if(k==="cys"){ var d=""; for(var i=0;i<6;i++){ var a=Math.PI/3*i; d+=(i?"L":"M")+(Math.cos(a)*s*1.2).toFixed(1)+" "+(Math.sin(a)*s*1.2).toFixed(1)+" "; } SV("path",{d:d+"Z",fill:"none",stroke:c,"stroke-width":1.6},g); }
+  else if(k==="stv"){ SV("path",{d:"M"+(-s*1.6)+" "+(s*0.6)+" L"+(-s)+" "+(-s*0.7)+" L"+s+" "+(-s*0.7)+" L"+(s*1.6)+" "+(s*0.6)+" Z",fill:"none",stroke:c,"stroke-width":1.6},g); SV("path",{d:"M"+(-s)+" "+(-s*0.7)+" L"+(-s*0.5)+" "+(s*0.6)+" M"+s+" "+(-s*0.7)+" L"+(s*0.5)+" "+(s*0.6),stroke:c,"stroke-width":1},g); }
+  else { for(var j=0;j<5;j++) SV("circle",{cx:Math.cos(j*1.3)*s*0.9,cy:Math.sin(j*1.3)*s*0.9,r:s*0.35,fill:c,opacity:0.7},g); }
+}
+function draw(I){
+  svg.innerHTML="";
+  tx(20,20,"Supersaturation index (1 = average non-stone former)",{a:"start",fs:13,fw:600});
+  var X0=200,X1=600; function X(v){ var a=Math.log(0.1),b=Math.log(30); return X0+(Math.log(Math.max(0.1,Math.min(30,v)))-a)/(b-a)*(X1-X0); }
+  [0.1,0.3,1,2,5,10,30].forEach(function(v){ SV("line",{x1:X(v),y1:40,x2:X(v),y2:262,stroke:v===1?"#9A9CB2":v===2?RED:"#EEEFF5","stroke-dasharray":v===2?"5 4":null},svg); tx(X(v),280,String(v),{fs:10.5,mono:true,fill:MUT}); });
+  tx(X(2)+4,292,"High risk",{a:"start",fs:10.5,fill:RED});
+  Object.keys(NAMES).forEach(function(k,i){ var y=56+i*44, v=I[k], hi=v>=2;
+    crystal(k,34,y+8,7);
+    tx(54,y+13,NAMES[k],{a:"start",fs:12.5,fw:hi?600:500,fill:hi?RED:INK});
+    SV("rect",{x:X0,y:y,width:X1-X0,height:18,rx:9,fill:"#F4F5F9"},svg);
+    SV("rect",{x:X0,y:y,width:Math.max(3,X(v)-X0),height:18,rx:9,fill:hi?RED:v>=1?"#5E6075":TEAL},svg);
+    tx(X1+8,y+14,v<10?v.toFixed(1):v.toFixed(0),{a:"start",fs:12,mono:true,fill:hi?RED:INK}); });
+}
+function update(){
+  var o=opts(), I=idx(o,o.ph);
+  draw(I);
+  Object.keys(NAMES).forEach(function(k){ var d=[]; for(var ph=4.6;ph<=8.0001;ph+=0.05){ var v=idx(o,ph)[k]; d.push([ph,Math.max(0.05,Math.min(50,v))]); } curve.setSeries(k,d); });
+  curve.update({vlines:[{x:o.ph,label:"pH "+o.ph.toFixed(1)}]});
+  var top=Object.keys(I).sort(function(a,b){ return I[b]-I[a]; })[0];
+  var fem=o.female, LIM={ca:fem?250:300,ox:40,ua:fem?750:800,cit:fem?550:450,vol:2.5,na:150,cys:30};
+  var ab=[];
+  if(o.vol<2.5) ab.push("volume ต่ำ");
+  if(o.ca>LIM.ca) ab.push("hypercalciuria");
+  if(o.ox>LIM.ox) ab.push(o.ox>75?"hyperoxaluria รุนแรง":"hyperoxaluria");
+  if(o.ua>LIM.ua) ab.push("hyperuricosuria");
+  if(o.cit<LIM.cit) ab.push("hypocitraturia");
+  if(o.ph<5.5) ab.push("pH ต่ำ"); else if(o.ph>7.0) ab.push("pH สูง");
+  if(o.na>LIM.na) ab.push("Na สูง");
+  if(o.cys>LIM.cys) ab.push("cystinuria");
+  Sim.ro("roType",NAMES[top],I[top]>=2?"flag":"ok");
+  Sim.ro("roSS",I[top].toFixed(1),I[top]>=2?"flag":I[top]<1?"ok":null);
+  Sim.ro("roAb",String(ab.length),ab.length?"flag":"ok");
+  var L=[["Volume",o.vol.toFixed(1)+" L","> 2.5",o.vol<2.5],["Calcium",o.ca+" mg","< "+LIM.ca,o.ca>LIM.ca],["Oxalate",o.ox+" mg","< 40",o.ox>40],["Uric acid",o.ua+" mg","< "+LIM.ua,o.ua>LIM.ua],["Citrate",o.cit+" mg","> "+LIM.cit,o.cit<LIM.cit],["pH",o.ph.toFixed(1),"5.8–6.2",o.ph<5.5||o.ph>7.0],["Sodium",o.na+" mmol","< 150",o.na>150],["Cystine",o.cys+" mg","< 30",o.cys>30]];
+  document.getElementById("labt").innerHTML="<tr><td><b>24-h urine</b></td><td><b>เป้า</b></td><td><b>ค่า</b></td></tr>"+L.map(function(r){ return "<tr class='"+(r[3]?"hi":"")+"'><td>"+r[0]+"</td><td>"+r[2]+"</td><td>"+r[1]+"</td></tr>"; }).join("");
+  var rx=[];
+  if(o.vol<2.5) rx.push("ดื่มน้ำให้ urine ≥ 2.5 L/วัน");
+  if(top==="stv"||(o.urease&&I.stv>=1)) rx=["เอานิ่วออกทั้งหมด (PCNL) + antibiotic ตามเชื้อ พิจารณา acetohydroxamic acid ถ้าเอาออกไม่หมด"];
+  else if(top==="cys"||o.cys>250) rx.push("ให้ cystine < 250 mg/L (น้ำ ≥ "+Math.max(3,Math.ceil(o.cys/250*10)/10).toFixed(1)+" L) alkalinize ให้ pH ≥ 7.5 ลด Na และ protein ถ้ายังไม่พอให้ tiopronin");
+  else {
+    if(o.ph1||o.ox>75&&!o.enteric) rx.push("oxalate > 75: ตรวจ genetic หา primary hyperoxaluria และ glycolate ให้ citrate และพิจารณา RNAi");
+    else if(o.ox>40&&o.enteric) rx.push("calcium กับมื้ออาหาร ลดไขมันและอาหาร oxalate สูง");
+    else if(o.ox>40) rx.push("ลดอาหาร oxalate สูง ไม่จำกัด calcium");
+    if(o.ca>LIM.ca) rx.push(o.na>150?"ลด Na < 100 mmol/วัน แล้วให้ thiazide-like diuretic ถ้า Ca ยังสูง":"thiazide-like diuretic ไม่จำกัด calcium");
+    if(top==="ua"||o.ph<5.5) rx.push("potassium citrate ให้ pH 6.0–6.5");
+    else if(o.cit<LIM.cit) rx.push("potassium citrate เพิ่ม citrate");
+    if(o.ua>LIM.ua&&top==="caox") rx.push("allopurinol ใน hyperuricosuria ร่วมนิ่ว calcium oxalate");
+    if(top==="cap"&&o.ph>6.8) rx.push("ระวัง alkali มากเกินใน CaP ประเมิน dRTA และ primary hyperparathyroidism");
+  }
+  var a=document.getElementById("act"), bad=I[top]>=2;
+  a.innerHTML="<b>Next step:</b> "+(rx.length?rx.join(" และ "):"ไม่มีความผิดปกติเด่น ติดตาม 24-h urine ซ้ำและดื่มน้ำต่อ"); a.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"MX-03", title:"Kidney Stone Lab: 24-hour Urine and Supersaturation", lead:"ปรับค่า 24-hour urine และ pH แล้วดู supersaturation ของนิ่วแต่ละชนิดเปลี่ยน หาความผิดปกติที่แก้ได้ และ therapy เฉพาะชนิดนิ่ว",
+  scenarios:S, order:ORDER, captureMs:600,
+  onChange:function(k,s){ ["vol","ca","ox","ua","cit","ph","na","cys"].forEach(function(x){ C[x].set(s.p[x]); }); Object.keys(T).forEach(function(x){ T[x].setAttribute("aria-pressed",s.p.rx.indexOf(x)>=0||(x==="female"&&s.p.female)?"true":"false"); }); update(); },
+  refs:["Pearle MS, Goldfarb DS, Assimos DG, et al. Medical management of kidney stones: AUA guideline. J Urol 2014, 192(2): 316-324",
+        "Skolarikos A, Jung H, Neisius A, et al. EAU guidelines on urolithiasis. European Association of Urology 2024",
+        "Coe FL, Evan A, Worcester E. Kidney stone disease. J Clin Invest 2005, 115(10): 2598-2608",
+        "Sakhaee K, Maalouf NM, Sinnott B. Kidney stones 2012: pathogenesis, diagnosis, and management. J Clin Endocrinol Metab 2012, 97(6): 1847-1860",
+        "Eisner BH, Goldfarb DS. A nomogram for the prediction of kidney stone recurrence. J Am Soc Nephrol 2014, 25(12): 2685-2687",
+        "Servais A, Thomas K, Dello Strologo L, et al. Cystinuria: clinical practice recommendation. Kidney Int 2021, 99(1): 48-58",
+        "Groothoff JW, Metry E, Deesker L, et al. Clinical practice recommendations for primary hyperoxaluria: an expert consensus statement from ERKNet and OxalEurope. Nat Rev Nephrol 2023, 19(3): 194-211",
+        "Garrelfs SF, Frishberg Y, Hulton SA, et al. Lumasiran, an RNAi therapeutic for primary hyperoxaluria type 1. N Engl J Med 2021, 384(13): 1216-1226"],
+  note:"Index เพื่อการสอน ไม่ใช่ EQUIL2 หรือ relative supersaturation จริง: CaOx = (Ca conc/100) x (Ox conc/15) x (citrate conc/300)^−0.4  CaP ใช้ Ca, P 900 mg/d, สัดส่วน HPO4 ตาม pKa 6.8 และ citrate (x0.75)  uric acid ใช้ urate conc x สัดส่วน undissociated (pKa 5.35)  cystine = 2 x conc/ค่าละลาย (ราว 250 mg/L ที่ pH 7 และเพิ่มขึ้นชัดเมื่อ pH สูงกว่านั้น)  struvite เพิ่มตาม pH แบบ exponential และสูงมากเมื่อมี urease ค่าปกติที่ใช้: volume > 2.5 L, Ca < 250 (หญิง) หรือ 300 (ชาย) mg/d, oxalate < 40, urate < 750/800, citrate > 550 (หญิง)/450 (ชาย), Na < 150 mmol/d, cystine < 30 mg/d"
+});
+})();
+</script>
+</body>
+</html>

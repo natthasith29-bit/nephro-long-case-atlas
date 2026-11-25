@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[CKD-08] Hyperkalemia in CKD and K Binders</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(100px,130px) 1fr 104px}
+.sel{display:grid;grid-template-columns:minmax(100px,130px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:8px}
+.grp{font:500 11.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin:12px 0 2px}
+body.present .bench{grid-template-columns:1.3fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:14px 18px}
+body.present .ctls{gap:1px}
+body.present .ctl,body.present .sel{font-size:13px}
+body.present .tools{margin-top:4px}
+body.present .grp{margin:6px 0 0}
+body.present .tog{padding:3px 8px;font-size:11.5px}
+body.present .ro{padding:6px 10px}
+body.present .ro b{font-size:18px}
+body.present .readout{margin-top:8px}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+body.present .take li{font-size:14px}
+body.present .svgwrap svg{max-height:92px;width:auto;margin:0 auto}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Serum K 28 วัน (เริ่มการรักษาวันที่ 3)</h2>
+      <div id="chart"></div>
+      <div id="live"></div>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 640 120" role="img" aria-label="Potassium balance input and output"></svg></div>
+      <p class="hint no-present">K ในเลือดถูกกำหนดโดยสมดุลระหว่าง K ที่กินกับที่ขับทางไตและลำไส้ ไตขับได้น้อยลงตาม GFR และ aldosterone ที่ถูกกดด้วย RAASi/MRA ส่วน binder เพิ่มการขับทางลำไส้ เส้นประคือ K ถ้าไม่ทำอะไร</p>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วย ยาเดิม และสิ่งที่เปลี่ยน</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools0"></div>
+      <div class="grp">เริ่มวันที่ 3</div>
+      <div class="ctls" id="ctls2"></div>
+      <div class="tools" id="tools1"></div>
+      <div class="readout">
+        <div class="ro" id="roK0"><b>-</b><span>K ก่อน (mmol/L)</span></div>
+        <div class="ro" id="roK1"><b>-</b><span>K วันที่ 28</span></div>
+        <div class="ro" id="roT"><b>-</b><span>ถึง K &lt; 5.5 (วัน)</span></div>
+        <div class="ro" id="roR"><b>-</b><span>RAASi หลังปรับ</span></div>
+        <div class="ro" id="roNa"><b>-</b><span>Na จาก binder (mg/วัน)</span></div>
+        <div class="ro" id="roSE"><b>-</b><span>สิ่งที่ต้องเฝ้าระวัง</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/live.js"></script>
+<script>
+(function(){
+"use strict";
+var BIND={none:{name:"ไม่มี",rem:0,on:0,na:0,se:"-"},szc5:{name:"SZC 5 g/วัน",rem:10,on:0.15,na:400,se:"บวม (Na)"},szc10:{name:"SZC 10 g/วัน",rem:18,on:0.15,na:800,se:"บวม (Na)"},pat8:{name:"Patiromer 8.4 g/วัน",rem:11,on:0.6,na:0,se:"Mg ต่ำ, ท้องผูก"},pat17:{name:"Patiromer 16.8 g/วัน",rem:18,on:0.6,na:0,se:"Mg ต่ำ, ท้องผูก"},sps:{name:"SPS 15 g/วัน",rem:14,on:1,na:1500,se:"GI necrosis, Na"}};
+var RAAS={0:"ไม่มี",1:"ครึ่งขนาด",2:"ขนาดสูงสุด"};
+function P(o){ var d={gfr:30,kin:70,raas:2,mra:false,t4:false,acid:false,bind:"none",diet:false,loop:false,bic:false,up:false,stop:false}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  szc:{name:"K 5.6 บน RAASi + SZC", p:P({kin:72,bind:"szc10"}),
+    rows:[["ผู้ป่วย","DKD eGFR 30 ได้ losartan 100 mg K 5.6"],["ทางเลือก","คง RAASi เพิ่ม K binder แทนการหยุดยา"],["ผล","SZC ลด K ภายใน 24–48 ชม. คงที่ตลอด"]],
+    take:["HyperK ไม่ควรเป็นเหตุให้หยุดหรือลด RAASi ก่อนลองแก้ปัจจัยอื่นและใช้ binder","SZC ออกฤทธิ์เร็ว (ชั่วโมง) มี Na ราว 400 mg ต่อ 5 g ระวังบวม","การหยุด RAASi ลด K ได้ แต่เสียประโยชน์ด้านไตและหัวใจ"]},
+  pat:{name:"Patiromer เพื่อให้เพิ่ม MRA ได้", p:P({gfr:38,kin:65,raas:2,mra:true,bind:"pat17"}),
+    rows:[["ผู้ป่วย","HFrEF + CKD eGFR 38 จะเริ่ม spironolactone K 5.1"],["ปัญหา","K ขึ้นเกิน 5.5 หลังเริ่ม MRA"],["ทางออก","patiromer ช่วยให้คง spironolactone ได้"]],
+    take:["K binder ทำให้ใช้ RAASi และ MRA ได้ครบขนาด (RAASi enablement)","Patiromer ออกฤทธิ์ช้ากว่า (ราว 7 ชม.) เหมาะกับการคุมเรื้อรัง","Patiromer จับ Mg ด้วย ต้องติดตาม Mg และให้ห่างจากยาอื่น 3 ชม."]},
+  diet:{name:"แก้ด้วย diet + loop", p:P({gfr:35,kin:95,raas:2,diet:true,loop:true}),
+    rows:[["ผู้ป่วย","eGFR 35 กินผลไม้ K สูงมาก บวมเล็กน้อย"],["การรักษา","ลด K intake ที่มากเกิน + furosemide"],["ผล","K ลดโดยไม่ต้องใช้ binder"]],
+    take:["ทบทวน K intake ส่วนเกิน (salt substitute KCl, น้ำผลไม้, สมุนไพร) และยา (NSAID, TMP, heparin, β-blocker)","Loop หรือ thiazide เพิ่ม distal flow และ Na delivery ขับ K ได้มากขึ้น ใช้เมื่อมีน้ำเกินหรือ HT","ไม่ควรจำกัดผักผลไม้ทั้งหมดในทุกคน เพราะเสียประโยชน์ด้าน base และ fiber"]},
+  t4:{name:"Type 4 RTA + acidosis", p:P({gfr:45,kin:70,raas:1,t4:true,acid:true,bic:true,loop:true}),
+    rows:[["ผู้ป่วย","DKD eGFR 45 K 5.8 HCO3 18"],["กลไก","hyporeninemic hypoaldosteronism + acidosis ดึง K ออกจากเซลล์"],["การรักษา","แก้ acidosis + loop"]],
+    take:["K ที่สูงเกินกว่าระดับ GFR ชวนคิดถึง hypoaldosteronism หรือยา","แก้ metabolic acidosis ช่วยลด K ทั้งจาก shift และเพิ่มการขับ","Fludrocortisone ใช้ได้เฉพาะเมื่อไม่มีน้ำเกินหรือ HT"]},
+  stop:{name:"หยุด RAASi (สิ่งที่ไม่ควรเป็นทางแรก)", p:P({gfr:30,kin:70,raas:2,stop:true}),
+    rows:[["การรักษา","หยุด losartan เมื่อ K 5.6"],["ผล","K ลดลงคล้ายใช้ binder"],["ราคา","UACR กลับขึ้น เสียการปกป้องไตและหัวใจ"]],
+    take:["การหยุด RAASi หลังเกิด hyperK สัมพันธ์กับ outcome ที่แย่กว่าในข้อมูลสังเกต","ถ้าต้องลด ให้ลดชั่วคราวและกลับมาใช้เมื่อคุม K ได้","K 5.0–5.5 ใช้ RAASi ต่อได้ร่วมกับมาตรการลด K"]},
+  sev:{name:"K 6.6 eGFR 15", p:P({gfr:15,kin:40,raas:2,mra:true,acid:true,bind:"szc10",stop:true,bic:true}),
+    rows:[["ผู้ป่วย","eGFR 15 K 6.6 HCO3 17 ได้ ACEi + spironolactone"],["ทำทันที","ECG, ถ้ามี ECG change ให้ Ca gluconate, insulin + glucose, salbutamol"],["ต่อเนื่อง","หยุดยาที่เพิ่ม K ชั่วคราว, SZC, แก้ acidosis, เตรียม dialysis ถ้าดื้อ"]],
+    take:["K > 6.0 หรือมี ECG change เป็นภาวะเร่งด่วน ใช้ shift therapy ก่อน แล้วตามด้วยการขับ K","SZC 10 g วันละ 3 ครั้ง 48 ชม. ใช้ใน acute ได้ แล้วลดเป็นขนาด maintenance","eGFR ต่ำมากร่วมกับ hyperK ที่ดื้อต่อการรักษาเป็นข้อบ่งชี้เริ่ม dialysis"]}
+};
+var ORDER=["szc","pat","diet","t4","stop","sev"];
+var box=document.getElementById("ctls"), box2=document.getElementById("ctls2"), C={}, ST={};
+function sl(k,o,b){ o.id="s"+k; o.onInput=function(){ update(true); }; C[k]=Sim.slider(o); (b||box).appendChild(C[k].el); }
+sl("gfr",{label:"eGFR",min:8,max:90,step:1,value:30,unit:"mL/min"});
+sl("kin",{label:"K intake",min:30,max:130,step:5,value:70,unit:"mEq/วัน"});
+function sel(id,label,opts,b){ var s=Sim.h("select",{id:id},opts.map(function(o){ return Sim.h("option",{value:o[0],text:o[1]}); })); s.addEventListener("change",function(){ update(); }); b.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":id,text:label}),s])); return s; }
+var sR=sel("raas","RAASi เดิม",[["0","ไม่มี"],["1","ครึ่งขนาด"],["2","ขนาดสูงสุด"]],box);
+var sB=sel("bind","K binder",Object.keys(BIND).map(function(k){ return [k,BIND[k].name]; }),box2);
+var t0=document.getElementById("tools0"), t1=document.getElementById("tools1"), BT={};
+[["mra","MRA เดิม",t0],["t4","Type 4 RTA",t0],["acid","HCO3 < 20",t0],["diet","ลด K ส่วนเกิน",t1],["loop","Loop diuretic",t1],["bic","NaHCO3",t1],["up","เพิ่ม RAASi เต็มขนาด",t1],["stop","หยุด RAASi/MRA",t1]].forEach(function(t){ BT[t[0]]=Sim.toggle(t[1],function(on){ ST[t[0]]=on; if(t[0]==="up"&&on){ ST.stop=false; BT.stop.setState(false); } if(t[0]==="stop"&&on){ ST.up=false; BT.up.setState(false); } update(); },false); t[2].appendChild(BT[t[0]]); });
+function v(k){ return C[k].get(); }
+function kss(g,kin,raas,mra,t4,acid,loop,bic,diet,rem){
+  var aldo=(raas===2?0.7:raas===1?0.82:1)*(mra?0.75:1)*(t4?0.7:1);
+  var cap=70*Math.pow(g/100,0.6)*aldo*(loop?1.3:1)*(acid&&!bic?0.9:1);
+  var intake=kin-(diet?25:0), gut=0.1*intake*(1+0.6*(1-g/100));
+  var shift=acid&&!bic?0.3:0;
+  return 3.0+Math.max(0,intake-gut-rem)/cap+shift;
+}
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?250:270,aria:"Serum potassium over twenty-eight days",
+  x:{min:0,max:28,step:4,label:"Days"},y:{min:3.5,max:7.5,step:0.5,label:"K (mmol/L)"},
+  series:[{id:"k",name:"K with changes",color:A.accent,data:[],width:2.8},{id:"no",name:"No change",color:A.muted,data:[],width:1.5,dash:[5,4]}],
+  bands:[{y0:3.5,y1:5.0,color:"rgba(31,122,114,0.07)",label:"Normal"}],
+  hlines:[{y:5.5,label:"5.5",color:A.gold,dash:[4,3]},{y:6.0,label:"6.0",color:A.red,dash:[4,3]}],legend:true});
+var live=Live.player(chart,{mount:"live"}), LAST=null;
+var svg=document.getElementById("vis");
+function T(x,y,s,o){ o=o||{}; var a={x:x,y:y,"font-size":o.fs||12,fill:o.c||"#0B0B1F","text-anchor":o.a||"start",text:s}; if(o.w) a["font-weight"]=o.w; if(o.mono) a["font-family"]="Geist Mono, monospace"; return Sim.svg("text",a,svg); }
+function drawBal(M){
+  svg.innerHTML="";
+  var sc=4.2;
+  T(10,22,"K in",{fs:12,w:600}); Sim.svg("rect",{x:80,y:10,width:M.intake*sc,height:16,rx:4,fill:"#A8842C"},svg); T(84+M.intake*sc,23,Math.round(M.intake)+" mEq/d",{fs:11,mono:true});
+  T(10,62,"K out",{fs:12,w:600});
+  var x=80; [["Kidney",M.renal,"#5B4BFF"],["Gut",M.gut,"#1F7A72"],["Binder",M.rem,"#19C8E6"]].forEach(function(s){ if(s[1]<=0) return; Sim.svg("rect",{x:x,y:50,width:s[1]*sc,height:16,rx:4,fill:s[2]},svg); if(s[1]*sc>40) T(x+4,63,s[0],{fs:10.5,c:"#fff",w:600}); x+=s[1]*sc+2; });
+  T(x+4,63,"kidney capacity "+M.cap.toFixed(0)+" mEq/d per mmol/L above 3.0",{fs:10.5,c:"#5E6075"});
+  T(10,104,"Aldosterone effect "+Math.round(M.aldo*100)+"%   GFR effect "+Math.round(Math.pow(M.g/100,0.6)*100)+"%",{fs:11,c:"#5E6075",mono:true});
+}
+function update(deb){
+  var g=v("gfr"), kin=v("kin"), r0=+sR.value;
+  var r1=ST.stop?0:ST.up?2:r0, mra1=ST.stop?false:ST.mra, b=BIND[sB.value];
+  var k0=kss(g,kin,r0,ST.mra,ST.t4,ST.acid,false,false,false,0);
+  var k1=kss(g,kin,r1,mra1,ST.t4,ST.acid,ST.loop,ST.bic,ST.diet,b.rem);
+  var kNo=k0, data=[], no=[], K=k0;
+  for(var t=0;t<=28.0001;t+=0.1){ var tt=+t.toFixed(1);
+    if(tt>3){ var since=tt-3, ramp=b.rem>0?Math.min(1,since/Math.max(0.05,b.on)):1;
+      var tgt=kss(g,kin,r1,mra1,ST.t4,ST.acid,ST.loop,ST.bic,ST.diet,b.rem*ramp); K+=(tgt-K)*(1-Math.exp(-0.1/1.4)); }
+    data.push([tt,K]); no.push([tt,kNo]); }
+  chart.setSeries("k",data); chart.setSeries("no",no);
+  var aldo=(r1===2?0.7:r1===1?0.82:1)*(mra1?0.75:1)*(ST.t4?0.7:1), cap=70*Math.pow(g/100,0.6)*aldo*(ST.loop?1.3:1)*(ST.acid&&!ST.bic?0.9:1);
+  var intake=kin-(ST.diet?25:0), gut=0.1*intake*(1+0.6*(1-g/100)), renal=Math.max(0,intake-gut-b.rem);
+  drawBal({intake:intake,gut:gut,rem:b.rem,renal:renal,cap:cap,aldo:aldo,g:g});
+  var tLow=k0>=5.5?Live.cross(data,5.5,-1):null;
+  var M={k0:k0,k1:data[data.length-1][1],data:data,tLow:tLow,r1:r1,mra1:mra1,b:b};
+  Sim.ro("roK0",k0.toFixed(1),k0>=6?"flag":k0>5.5?"flag":k0<=5?"ok":null);
+  Sim.ro("roR",(RAAS[r1]+(mra1?" + MRA":"")),r1<r0||(ST.mra&&!mra1)?"flag":r1===2?"ok":null);
+  var na=b.na+(ST.bic?1200:0); Sim.ro("roNa",na?na.toLocaleString("en-US"):"0",na>1000?"flag":null);
+  var se=[]; if(b.se!=="-") se.push(b.se); if(ST.loop) se.push("volume, Na"); if(ST.bic) se.push("Na load");
+  Sim.ro("roSE",se.length?se.join(", "):"-");
+  var m,bad=true;
+  if(k0>=6.0&&!ST.stop) m="<b>K "+k0.toFixed(1)+" ≥ 6.0</b> ตรวจ ECG ถ้ามีการเปลี่ยนแปลงให้ Ca gluconate, insulin + glucose, salbutamol แล้วตามด้วยการขับ K (SZC, loop, dialysis ถ้าดื้อ) พักยาที่เพิ่ม K ชั่วคราว";
+  else if(r1<r0||(ST.mra&&!mra1)) m=(M.k1<5.5?"<b>K ลดลง แต่เสีย RAASi/MRA</b> ":"<b>หยุดยาแล้ว K ยังสูง</b> ")+"ทางที่ดีกว่าคือแก้ปัจจัยอื่น (อาหาร, ยาร่วม, acidosis, diuretic) และใช้ K binder เพื่อคงยาไว้ กลับมาใช้ยาเมื่อ K < 5.0";
+  else if(M.k1>5.5) m="<b>K ยัง "+M.k1.toFixed(1)+"</b> เพิ่มมาตรการ: "+[!ST.diet?"ลด K ส่วนเกิน":"",!ST.loop?"loop diuretic ถ้ามีน้ำเกิน":"",ST.acid&&!ST.bic?"แก้ acidosis":"",b.rem<18?"เพิ่มขนาด binder":""].filter(Boolean).join(", ")+" ถ้ายัง > 5.5 จึงลด RAASi ชั่วคราว";
+  else if(M.k1>5.0) { bad=false; m="<b>K "+M.k1.toFixed(1)+"</b> อยู่ในช่วงที่ใช้ RAASi ต่อได้ ติดตาม K 1–2 สัปดาห์หลังปรับยา และทุก 1–3 เดือน"; }
+  else { bad=false; m="<b>คุม K ได้ พร้อม RAASi "+RAAS[r1]+(mra1?" + MRA":"")+"</b> ติดตาม K และ "+(sB.value.indexOf("pat")===0?"Mg":sB.value.indexOf("szc")===0?"น้ำหนัก บวม":"Cr")+(r1<2&&!ST.stop?" และพิจารณาเพิ่ม RAASi ให้ถึงขนาดสูงสุด":""); }
+  M.act="<b>Next step:</b> "+m; M.actCls="act"+(bad?" bad":"");
+  LAST=M;
+  var E=[{t:0,kind:"phys",text:"K ตั้งต้น "+k0.toFixed(1)+" mmol/L (eGFR "+g+", RAASi "+RAAS[r0]+(ST.mra?" + MRA":"")+")"}];
+  var ch=[]; if(b.rem) ch.push(b.name); if(ST.diet) ch.push("ลด K 25 mEq/วัน"); if(ST.loop) ch.push("loop"); if(ST.bic) ch.push("NaHCO3"); if(ST.up) ch.push("เพิ่ม RAASi"); if(ST.stop) ch.push("หยุด RAASi/MRA");
+  E.push({t:3,kind:"rx",text:"วันที่ 3: "+(ch.length?ch.join(", "):"ไม่มีการเปลี่ยนแปลง")});
+  if(tLow!==null) E.push({t:tLow,kind:"ok",text:"K ต่ำกว่า 5.5 วันที่ "+tLow.toFixed(1)});
+  var c5=Live.cross(data,5.0,-1); if(c5!==null&&k0>5) E.push({t:c5,kind:"ok",text:"K ต่ำกว่า 5.0 วันที่ "+c5.toFixed(1)});
+  var up=Live.cross(data,5.5,1); if(up!==null&&up>3) E.push({t:up,kind:"warn",text:"K เกิน 5.5 วันที่ "+up.toFixed(1)});
+  E.push({t:28,kind:"phys",text:"วันที่ 28: K "+M.k1.toFixed(1)});
+  live.load({tMin:0,tMax:28,unit:"วัน",ms:7000,debounce:deb===true,num:function(x){ return x.toFixed(1); },events:E,onFrame:function(t,done){
+    if(done){ Sim.ro("roK1",M.k1.toFixed(1),M.k1>5.5?"flag":M.k1<=5?"ok":null); Sim.ro("roT",k0<5.5?"-":tLow!==null?(tLow-3).toFixed(1):"ไม่ถึง",tLow!==null?"ok":k0<5.5?null:"flag"); }
+    else { Sim.ro("roK1","…"); Sim.ro("roT","…"); }
+    var a=document.getElementById("act"); if(done){ a.innerHTML=M.act; a.className=M.actCls; } else { a.innerHTML="<b>กำลังจำลอง</b> วันที่ "+t.toFixed(1)+" K "+Live.valueAt(M.data,t).toFixed(2); a.className="act"; } },
+    cursorLabel:function(t){ return "K "+Live.valueAt(M.data,t).toFixed(1); }});
+}
+Sim.mount({code:"CKD-08", title:"Hyperkalemia in CKD and K Binders", lead:"ตั้ง eGFR, K intake และยาเดิม แล้วเลือกสิ่งที่จะเปลี่ยนในวันที่ 3: binder, อาหาร, diuretic, แก้ acidosis หรือหยุด RAASi ดูว่าทางไหนคุม K ได้โดยไม่เสียยาที่ปกป้องไต",
+  scenarios:S, order:ORDER, captureMs:1000,
+  onChange:function(kk,s){ var p=s.p; C.gfr.set(p.gfr); C.kin.set(p.kin); sR.value=String(p.raas); sB.value=p.bind;
+    ["mra","t4","acid","diet","loop","bic","up","stop"].forEach(function(x){ ST[x]=!!p[x]; BT[x].setState(ST[x]); }); update(); },
+  refs:["KDIGO 2024 Clinical Practice Guideline for the Evaluation and Management of CKD. Kidney Int 2024, 105(4S): S117-S314",
+        "Clase CM, Carrero JJ, Ellison DH, et al. Potassium homeostasis and management of dyskalemia in kidney diseases: conclusions from a KDIGO Controversies Conference. Kidney Int 2020, 97(1): 42-61",
+        "Kosiborod M, Rasmussen HS, Lavin P, et al (HARMONIZE). Effect of sodium zirconium cyclosilicate on potassium lowering. JAMA 2014, 312(21): 2223-2233",
+        "Bakris GL, Pitt B, Weir MR, et al (AMETHYST-DN). Effect of patiromer on serum potassium level in patients with hyperkalemia and diabetic kidney disease. JAMA 2015, 314(2): 151-161",
+        "Agarwal R, Rossignol P, Romero A, et al (AMBER). Patiromer versus placebo to enable spironolactone use in patients with resistant hypertension and CKD. Lancet 2019, 394(10208): 1540-1550",
+        "Palmer BF, Clegg DJ. Physiology and pathophysiology of potassium homeostasis. Adv Physiol Educ 2016, 40(4): 480-490",
+        "Bhandari S, Mehta S, Khwaja A, et al (STOP-ACEi). Renin-angiotensin system inhibition in advanced CKD. N Engl J Med 2022, 387(22): 2021-2032"],
+  note:"Model เพื่อการสอน: K steady state = 3.0 + (intake − gut − binder)/renal capacity, renal capacity = 70 x (eGFR/100)^0.6 x aldosterone factor (RAASi เต็มขนาด 0.7, ครึ่ง 0.82, MRA 0.75, type 4 0.7) x loop 1.3 x acidosis 0.9 gut = 10% ของ intake เพิ่มขึ้นใน CKD acidosis shift +0.3 binder เอา K ออก (mEq/วัน) SZC 5 g 10, 10 g 18, patiromer 8.4 g 11, 16.8 g 18, SPS 15 g 14 onset SZC 0.15 วัน patiromer 0.6 วัน K เข้าหา steady state ด้วย τ 1.4 วัน"
+});
+})();
+</script>
+</body>
+</html>

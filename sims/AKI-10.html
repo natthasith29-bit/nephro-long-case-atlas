@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[AKI-10] KRT Timing and Modality Chooser</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.05fr 1fr}}
+.tools{margin-top:12px}
+.sub{font-size:12.5px;color:var(--muted);margin:14px 0 4px}
+.verdict{margin-top:12px;padding:14px 16px;border-radius:14px;background:var(--ink);color:#fff}
+.verdict b{display:block;font-size:18px;font-weight:600;margin-bottom:4px}
+.verdict span{font-size:13.5px;color:#d6d6e6}
+.verdict.wait{background:var(--teal)}
+.verdict.now{background:var(--red)}
+.mods{display:grid;gap:8px;margin-top:12px}
+.mod{display:grid;grid-template-columns:72px 1fr 44px;gap:10px;align-items:center;font-size:13.5px}
+.mod .bar{height:10px;border-radius:5px;background:var(--line);overflow:hidden}
+.mod .bar i{display:block;height:100%;background:var(--accent)}
+.mod.best .bar i{background:var(--teal)}
+.mod.best b{color:var(--teal)}
+.mod span:last-child{font-family:var(--mono);color:var(--muted);text-align:right}
+.rx{margin-top:12px;font-size:13.5px}
+.rx li{margin:3px 0}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:14px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .ctls{gap:1px}
+body.present .ctl{font-size:12.5px}
+body.present .tog{padding:3px 8px;font-size:11.5px}
+body.present .tools{margin-top:4px;gap:4px}
+body.present .sub{margin:4px 0 2px}
+body.present .verdict{padding:8px 12px;margin-top:6px}
+body.present .verdict b{font-size:15px}
+body.present .mods{gap:4px;margin-top:6px}
+body.present .rx{font-size:12px;margin-top:6px}
+body.present .act{display:none}
+body.present .svgwrap svg{max-height:330px}
+body.present .ctl{grid-template-columns:110px 1fr 104px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>ข้อบ่งชี้และสภาวะผู้ป่วย</h2>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 560 330" role="img" aria-label="Indications for kidney replacement therapy"></svg></div>
+      <div class="verdict" id="verdict"></div>
+      <p class="hint no-present">แถบแสดงแต่ละข้อบ่งชี้เทียบเกณฑ์ เส้นแดงคือระดับที่ถือเป็นข้อบ่งชี้เร่งด่วน (urgent) เมื่อดื้อต่อการรักษา ไม่มีข้อบ่งชี้เร่งด่วนให้เฝ้าระวังและประเมินซ้ำทุกวัน การเริ่มเร็วโดยไม่มีข้อบ่งชี้ไม่ได้ลด mortality</p>
+    </div>
+    <div class="card">
+      <h2>Lab และบริบท</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="sub no-present">ภาวะร่วม (กดเปิด/ปิด)</div>
+      <div class="tools no-present" id="tools"></div>
+      <div class="sub">ความเหมาะสมของ modality</div>
+      <div class="mods" id="mods"></div>
+      <ul class="rx" id="rx"></ul>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script>
+(function(){
+"use strict";
+var FX={refr:"ดื้อต่อการรักษาทางยา",ure:"Uremic complication (pericarditis, encephalopathy, bleeding)",tox:"Dialysable toxin",icp:"Brain injury/cerebral edema",alf:"Acute liver failure",bleed:"เสี่ยงเลือดออกสูง",res:"ไม่มี CRRT/ทรัพยากรจำกัด",abd:"Abdominal surgery/peritonitis"};
+function P(o){ var d={k:5.2,ph:7.28,fo:5,bun:60,olig:12,vp:0,rx:[]}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  hk:{name:"HyperK ดื้อยา", p:P({k:7.2,ph:7.22,fo:3,bun:80,olig:20,vp:0,rx:["refr"]}),
+    rows:[["ผู้ป่วย","AKI จาก rhabdomyolysis K 7.2 ECG peaked T หลังให้ insulin, Ca, salbutamol"],["ข้อบ่งชี้","urgent: hyperK ดื้อต่อการรักษา"],["Modality","IHD ลด K เร็วที่สุด"]],
+    take:["Urgent indications: K สูงดื้อยา, metabolic acidosis รุนแรงดื้อยา, น้ำเกินที่ทำให้ปอดบวมน้ำดื้อ diuretic, uremic complication, dialysable toxin","IHD ลด K เร็วกว่า CRRT ในคนที่ hemodynamics stable","ระหว่างเตรียม access ให้ temporizing therapy ต่อ"]},
+  wait:{name:"Septic AKI ไม่มี urgent", p:P({k:5.4,ph:7.27,fo:6,bun:70,olig:18,vp:0.2}),
+    rows:[["ผู้ป่วย","septic shock AKI stage 3 oliguria 18 ชม."],["ข้อบ่งชี้","ยังไม่มีข้อบ่งชี้เร่งด่วน"],["แนวทาง","watchful waiting ประเมินซ้ำทุกวัน หลายรายฟื้นโดยไม่ต้อง KRT"]],
+    take:["การเริ่ม KRT แบบ accelerated ไม่ลด mortality และเพิ่ม KRT dependence กับผลข้างเคียงบางอย่าง","ราว 4–5 ใน 10 ของกลุ่ม delayed ไม่ต้อง KRT เลย","AKI stage 3 อย่างเดียวไม่ใช่ข้อบ่งชี้"]},
+  fo:{name:"Fluid overload + hypoxemia", p:P({k:5.0,ph:7.30,fo:14,bun:65,olig:30,vp:0.25,rx:["refr"]}),
+    rows:[["ผู้ป่วย","septic shock สมดุลน้ำบวก 14% ของน้ำหนัก PaO2/FiO2 150 ดื้อ diuretic"],["ข้อบ่งชี้","น้ำเกินดื้อ diuretic ร่วม organ dysfunction"],["Modality","CRRT ดึงน้ำช้า ๆ ต่อเนื่อง"]],
+    take:["Fluid overload > 10% สัมพันธ์กับ mortality สูง เป็นข้อบ่งชี้เมื่อดื้อ diuretic","ผู้ป่วย hemodynamics ไม่ stable ใช้ CRRT ตั้ง net UF ตามที่ทนได้","Dose CRRT ที่ส่งจริง 20–25 mL/kg/h (สั่ง 25–30 เผื่อ downtime)"]},
+  alf:{name:"Acute liver failure", p:P({k:4.6,ph:7.32,fo:5,bun:30,olig:8,vp:0.15,rx:["alf","icp"]}),
+    rows:[["ผู้ป่วย","paracetamol ALF ammonia 180 µmol/L encephalopathy grade 3"],["ข้อบ่งชี้","ลด ammonia และควบคุม Na, osmolality, อุณหภูมิ"],["Modality","CRRT ขนาดสูง ไม่ใช้ IHD เพราะ osmotic shift เพิ่ม ICP"]],
+    take:["ALF ที่ ammonia สูงและ encephalopathy: เริ่ม CRRT เร็วเพื่อลด ammonia แม้ไม่มีข้อบ่งชี้ทางไต","Brain injury/cerebral edema หลีกเลี่ยง IHD เพราะ urea shift เพิ่ม ICP","Citrate ใช้ได้อย่างระวังใน liver failure ติดตาม total/ionized Ca ratio"]},
+  tox:{name:"Lithium toxicity", p:P({k:4.8,ph:7.36,fo:2,bun:40,olig:0,vp:0,rx:["tox"]}),
+    rows:[["ผู้ป่วย","lithium 5.0 mEq/L สับสน AKI"],["ข้อบ่งชี้","dialysable toxin ที่รุนแรง"],["Modality","IHD (clearance สูงสุด) แล้วตามด้วย CRRT หรือ HD ซ้ำเมื่อ rebound"]],
+    take:["Toxin ที่ MW เล็ก Vd ต่ำ protein binding ต่ำ เอาออกด้วย IHD ได้ดีที่สุด","แต่ละสารมีเกณฑ์การฟอกเฉพาะ (lithium, methanol, salicylate, metformin, valproate)","ดู HD-15 สำหรับ kinetics ของ toxin removal"]},
+  pd:{name:"ทรัพยากรจำกัด", p:P({k:6.6,ph:7.18,fo:9,bun:110,olig:48,vp:0.2,rx:["refr","res"]}),
+    rows:[["ผู้ป่วย","โรงพยาบาลชุมชน septic AKI ไม่มี CRRT BP ต่ำ"],["ข้อบ่งชี้","K 6.6 ดื้อยา acidosis"],["Modality","acute PD เป็นทางเลือกที่ปลอดภัยใน unstable"]],
+    take:["Acute PD ใช้ได้ดีใน AKI โดยเฉพาะที่ไม่มี CRRT หรือ hemodynamics ไม่ stable","ข้อห้าม: abdominal surgery ใหม่, peritonitis, adhesion รุนแรง","ดู PD-05 สำหรับ acute PD prescription"]},
+  late:{name:"รอนานเกินไป", p:P({k:5.8,ph:7.20,fo:8,bun:125,olig:80,vp:0.1}),
+    rows:[["ผู้ป่วย","oliguria 80 ชม. BUN 125 mg/dL ยังไม่เริ่ม KRT"],["ข้อมูล","การรอจน BUN > 112 หรือ oliguria > 72 ชม. โดยไม่เริ่ม ไม่ช่วยและอาจเพิ่ม mortality"],["ต่อ","เริ่ม KRT"]],
+    take:["Watchful waiting มีขอบเขต: oliguria > 72 ชม. หรือ BUN > 112 mg/dL ควรเริ่ม","ประเมินทุกวันว่าโอกาสฟื้นยังมีหรือไม่ (UO, Cr trend, furosemide stress test)","การตัดสินใจรวม trajectory ของผู้ป่วย ไม่ใช่ค่าเดียว"]}
+};
+var ORDER=["hk","wait","fo","alf","tox","pd","late"];
+var box=document.getElementById("ctls"), C={};
+function sl(k,o){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("k",{label:"K",min:3.5,max:8,step:0.1,value:5.2,unit:" mmol/L",fmt:function(v){ return v.toFixed(1); }});
+sl("ph",{label:"pH",min:6.9,max:7.45,step:0.01,value:7.28,unit:"",fmt:function(v){ return v.toFixed(2); }});
+sl("fo",{label:"Fluid overload",min:0,max:20,step:1,value:5,unit:" %"});
+sl("bun",{label:"BUN",min:20,max:200,step:5,value:60,unit:" mg/dL"});
+sl("olig",{label:"Oliguria นาน",min:0,max:96,step:2,value:12,unit:" ชม."});
+sl("vp",{label:"Norepinephrine",min:0,max:1,step:0.05,value:0,unit:" µg/kg/min",fmt:function(v){ return v.toFixed(2); }});
+var T={}, tb=document.getElementById("tools");
+Object.keys(FX).forEach(function(k){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:FX[k]}); b.addEventListener("click",function(){ b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); tb.appendChild(b); T[k]=b; });
+function on(k){ return T[k].getAttribute("aria-pressed")==="true"; }
+var svg=document.getElementById("vis");
+function tx(x,y,s,o){ o=o||{}; return Sim.svg("text",{x:x,y:y,"text-anchor":o.a||"start","font-family":o.mono?"Geist Mono, monospace":"IBM Plex Sans Thai, sans-serif","font-size":o.fs||12.5,"font-weight":o.fw||400,fill:o.fill||"#0B0B1F",text:s},svg); }
+function gauge(y,lab,v,mn,mx,thr,inv,fmt,hit){
+  var x0=170,x1=520; function X(q){ q=Math.max(mn,Math.min(mx,q)); var u=(q-mn)/(mx-mn); return x0+(inv?1-u:u)*(x1-x0); }
+  tx(10,y+5,lab,{fs:13,fw:600});
+  Sim.svg("rect",{x:x0,y:y-6,width:x1-x0,height:12,rx:6,fill:"#E6E7F0"},svg);
+  var xv=X(v), xs=X(inv?mx:mn);
+  Sim.svg("rect",{x:Math.min(xs,xv),y:y-6,width:Math.abs(xv-xs),height:12,rx:6,fill:hit?"#B4232A":"#5B4BFF",opacity:hit?0.9:0.7},svg);
+  var xt=X(thr); Sim.svg("line",{x1:xt,y1:y-12,x2:xt,y2:y+12,stroke:"#B4232A","stroke-width":2.5},svg);
+  tx(xt,y+26,fmt(thr),{a:"middle",fs:10.5,fill:"#B4232A",mono:true});
+  tx(Math.min(x1-4,Math.max(x0+4,xv)),y-12,fmt(v),{a:"middle",fs:12,fw:600,mono:true,fill:hit?"#B4232A":"#0B0B1F"});
+}
+function update(){
+  var v={}; Object.keys(C).forEach(function(k){ v[k]=C[k].get(); });
+  var refr=on("refr"), ure=on("ure"), tox=on("tox"), icp=on("icp"), alf=on("alf"), bleed=on("bleed"), res=on("res"), abd=on("abd");
+  var hitK=v.k>=6.5&&refr, hitPH=v.ph<=7.15&&refr, hitFO=v.fo>=10&&refr, hitBUN=v.bun>112, hitOl=v.olig>72;
+  svg.innerHTML="";
+  tx(10,22,"Urgent threshold",{fs:11,fill:"#B4232A",fw:600}); tx(170,22,"Each bar turns red when the indication is met",{fs:11,fill:"#5E6075"});
+  gauge(58,"Potassium",v.k,3.5,8,6.5,false,function(x){ return x.toFixed(1); },hitK);
+  gauge(108,"pH",v.ph,6.9,7.45,7.15,true,function(x){ return x.toFixed(2); },hitPH);
+  gauge(158,"Fluid overload %",v.fo,0,20,10,false,function(x){ return x.toFixed(0)+"%"; },hitFO);
+  gauge(208,"BUN (mg/dL)",v.bun,20,200,112,false,function(x){ return x.toFixed(0); },hitBUN);
+  gauge(258,"Oliguria (h)",v.olig,0,96,72,false,function(x){ return x.toFixed(0); },hitOl);
+  var others=[]; if(ure) others.push("Uremic complication"); if(tox) others.push("Dialysable toxin"); if(alf) others.push("ALF hyperammonemia");
+  tx(10,312,"Other: "+(others.length?others.join(", "):"none"),{fs:12.5,fw:600,fill:others.length?"#B4232A":"#5E6075"});
+  if(!refr) tx(560,312,"Not yet refractory to medical therapy",{a:"end",fs:11,fill:"#A8842C"});
+  var urgent=hitK||hitPH||hitFO||ure||tox||(alf&&icp);
+  var lateStart=hitBUN||hitOl;
+  var vd=document.getElementById("verdict"), cls, head, sub;
+  if(urgent){ cls="now"; head="เริ่ม KRT ทันที"; sub=[hitK?"HyperK ดื้อยา":null,hitPH?"Acidosis ดื้อยา":null,hitFO?"น้ำเกินดื้อ diuretic":null,ure?"Uremic complication":null,tox?"Toxin":null,alf&&icp?"ALF + cerebral edema":null].filter(Boolean).join(", "); }
+  else if(lateStart){ cls="now"; head="เริ่ม KRT (รอนานพอแล้ว)"; sub=(hitBUN?"BUN > 112 mg/dL ":"")+(hitOl?"oliguria > 72 ชม.":""); }
+  else if((v.k>=6.5||v.ph<=7.15||v.fo>=10)&&!refr){ cls=""; head="ให้การรักษาทางยาก่อน"; sub="ค่าถึงเกณฑ์แต่ยังไม่ได้ลองรักษาทางยา (insulin, bicarbonate, diuretic) ประเมินซ้ำใน 2–6 ชม."; }
+  else { cls="wait"; head="Watchful waiting"; sub="ไม่มีข้อบ่งชี้เร่งด่วน ประเมินซ้ำทุกวัน (หรือเร็วกว่าถ้าแย่ลง) และหยุดรอเมื่อ oliguria > 72 ชม. หรือ BUN > 112"; }
+  vd.className="verdict "+cls; vd.innerHTML=""; vd.appendChild(Sim.h("b",{text:head})); vd.appendChild(Sim.h("span",{text:sub}));
+  /* modality suitability 0..100 */
+  var unst=v.vp>=0.15, sc={IHD:70,CRRT:60,SLED:62,PD:50};
+  if(unst){ sc.IHD-=40; sc.CRRT+=30; sc.SLED+=8; sc.PD+=15; }
+  if(hitK||v.k>=7){ sc.IHD+=25; sc.CRRT+=5; sc.PD-=20; }
+  if(tox){ sc.IHD+=30; sc.CRRT-=5; sc.PD-=40; }
+  if(icp||alf){ sc.IHD-=50; sc.SLED-=25; sc.CRRT+=30; sc.PD-=10; }
+  if(v.fo>=10){ sc.CRRT+=15; sc.SLED+=5; sc.IHD-=10; }
+  if(res){ sc.CRRT-=60; sc.SLED-=25; sc.PD+=35; }
+  if(abd){ sc.PD-=70; }
+  if(bleed){ sc.IHD+=5; sc.SLED+=0; }
+  var md=document.getElementById("mods"); md.innerHTML="";
+  var best=Object.keys(sc).reduce(function(a,b){ return sc[a]>=sc[b]?a:b; });
+  Object.keys(sc).forEach(function(k){ var s=Math.max(0,Math.min(100,sc[k])), bar=Sim.h("span",{class:"bar"}), i=document.createElement("i"); i.style.width=s+"%"; bar.appendChild(i);
+    md.appendChild(Sim.h("div",{class:"mod"+(k===best?" best":"")},[Sim.h("b",{text:k}),bar,Sim.h("span",{text:String(Math.round(s))})])); });
+  var rx=document.getElementById("rx"); rx.innerHTML="";
+  var L=[];
+  if(best==="CRRT"){ L.push("CRRT effluent ที่ส่งจริง 20–25 mL/kg/h (สั่ง 25–30)"); L.push("Anticoagulation: "+(alf?"citrate อย่างระวัง (ติดตาม total/iCa ratio) หรือ heparin-free":"regional citrate เป็นตัวเลือกแรก")+(bleed?" หลีกเลี่ยง systemic heparin":"")); if(v.fo>=10) L.push("Net UF เริ่ม 1–1.5 mL/kg/h ตาม hemodynamics"); if(icp||alf) L.push("รักษา Na 145–150 และลด ammonia (ขนาดสูงขึ้นได้ใน ALF)"); }
+  if(best==="IHD"){ L.push("IHD Kt/V ≥ 1.2 ต่อครั้ง 3 ครั้ง/สัปดาห์ หรือวันเว้นวันตาม catabolism"); if(hitK) L.push("Dialysate K 2 ช่วงแรก ติดตาม K ทุก 1–2 ชม. ระวัง rebound"); if(tox) L.push("Dialyzer ขนาดใหญ่ Qb สูง session ยาว ตรวจ rebound"); if(v.bun>120) L.push("BUN สูงมาก ลด dose ครั้งแรก (Qb ต่ำ, เวลาสั้น) ป้องกัน disequilibrium"); }
+  if(best==="SLED") L.push("SLED 6–12 ชม./วัน ทางเลือกเมื่อ hemodynamics ปานกลางหรือไม่มี CRRT");
+  if(best==="PD") L.push("Acute PD: tidal หรือ APD 20–25 L/วัน 1.5–2.5% เป้า weekly Kt/V 2.2 (ดู PD-05)");
+  L.push("Vascular access: right IJ ก่อน แล้ว femoral หลีกเลี่ยง subclavian");
+  L.forEach(function(s){ rx.appendChild(Sim.h("li",{text:s})); });
+  var a=document.getElementById("act");
+  a.innerHTML="<b>Next step:</b> "+(cls==="now"?(best==="PD"?"ใส่ PD catheter (bedside หรือ surgical) และเริ่ม acute PD":"ใส่ dialysis catheter และเริ่ม "+best)+" ภายในชั่วโมง ระหว่างรอให้ temporizing therapy ต่อ":cls==="wait"?"ไม่ต้องเริ่ม KRT ตอนนี้ แก้สาเหตุ หลีกเลี่ยง nephrotoxin ติดตาม K, HCO3, fluid balance และ UO ทุก 6–12 ชม. พิจารณา furosemide stress test (ดู AKI-12)":"รักษาทางยาตามข้อบ่งชี้แล้วประเมินซ้ำ ถ้าดื้อยาให้เริ่ม "+best);
+  a.className="act";
+}
+Sim.mount({code:"AKI-10", title:"KRT Timing and Modality Chooser", lead:"กรอก K, pH, fluid overload, BUN, ระยะเวลา oliguria, vasopressor และบริบท ดูว่ามีข้อบ่งชี้เร่งด่วนหรือควร watchful waiting แล้วเลือก modality (IHD, CRRT, SLED, PD) พร้อม prescription เริ่มต้น",
+  scenarios:S, order:ORDER, captureMs:600,
+  onChange:function(k,s){ ["k","ph","fo","bun","olig","vp"].forEach(function(x){ C[x].set(s.p[x]); }); Object.keys(T).forEach(function(x){ T[x].setAttribute("aria-pressed",s.p.rx.indexOf(x)>=0?"true":"false"); }); update(); },
+  refs:["KDIGO Clinical Practice Guideline for Acute Kidney Injury. Kidney Int Suppl 2012, 2(1): 1-138",
+        "STARRT-AKI Investigators. Timing of initiation of renal-replacement therapy in acute kidney injury. N Engl J Med 2020, 383(3): 240-251",
+        "Gaudry S, Hajage D, Schortgen F, et al (AKIKI). Initiation strategies for renal-replacement therapy in the intensive care unit. N Engl J Med 2016, 375(2): 122-133",
+        "Gaudry S, Hajage D, Martin-Lefevre L, et al (AKIKI 2). Comparison of two delayed strategies for renal replacement therapy initiation for severe acute kidney injury. Lancet 2021, 397(10281): 1293-1300",
+        "Barbar SD, Clere-Jehl R, Bourredjem A, et al (IDEAL-ICU). Timing of renal-replacement therapy in patients with acute kidney injury and sepsis. N Engl J Med 2018, 379(15): 1431-1442",
+        "Zarbock A, Kellum JA, Schmidt C, et al (ELAIN). Effect of early vs delayed initiation of renal replacement therapy on mortality in critically ill patients with acute kidney injury. JAMA 2016, 315(20): 2190-2199",
+        "Ostermann M, Bellomo R, Burdmann EA, et al (KDIGO controversies). Controversies in acute kidney injury: conclusions from a KDIGO conference. Kidney Int 2020, 98(2): 294-309",
+        "KDIGO 2026 Clinical Practice Guideline for AKI and AKD, public review draft (2026)"],
+  note:"เกณฑ์ urgent ใช้ K ≥ 6.5, pH ≤ 7.15, fluid overload ≥ 10% เมื่อดื้อต่อการรักษาทางยา ร่วมกับ uremic complication และ toxin เกณฑ์หยุดรอใช้ BUN > 112 mg/dL หรือ oliguria > 72 ชม. คะแนน modality เป็น heuristic เพื่อการสอนจาก hemodynamics, เป้าหมายการรักษา, brain injury และทรัพยากร"
+});
+})();
+</script>
+</body>
+</html>

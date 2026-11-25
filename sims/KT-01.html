@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[KT-01] HLA Matching and Immunologic Risk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.3fr 1fr}}
+.typ{display:grid;grid-template-columns:52px repeat(4,minmax(0,1fr));gap:6px;align-items:center;font-size:13.5px}
+.typ .hd{font:500 11.5px var(--mono);color:var(--muted);text-align:center;letter-spacing:.04em}
+.typ .lc{font:600 13px var(--mono)}
+.typ select{width:100%;min-width:0;font:500 13px var(--mono);padding:5px 4px;border:1px solid var(--line-strong);border-radius:8px;background:var(--card)}
+.prev{display:grid;grid-template-columns:minmax(110px,150px) minmax(0,1fr);gap:10px;align-items:center;font-size:14px;margin-top:12px}
+.prev input{width:100%;min-width:0;font:500 13px var(--mono);padding:6px 8px;border:1px solid var(--line-strong);border-radius:8px}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.sub{font-size:12.5px;color:var(--muted);margin:14px 0 6px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .act{display:none}
+body.present .card{padding:14px 18px}
+body.present .typ{gap:3px;font-size:12px}
+body.present .typ select{padding:2px 3px;font-size:12px}
+body.present .sub{margin:6px 0 3px}
+body.present .tools{margin-top:6px;gap:5px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .ctl{font-size:14px}
+body.present .ro{padding:6px 12px}
+body.present .ro b{font-size:20px}
+body.present .prev{margin-top:6px}
+body.present .svgwrap svg{max-height:420px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>HLA typing: recipient vs donor</h2>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 680 400" role="img" aria-label="HLA typing grid with mismatched donor antigens highlighted"></svg></div>
+      <p class="hint no-present">Mismatch นับเฉพาะ antigen ของ donor ที่ recipient ไม่มี (host-versus-graft direction) ถ้า recipient เป็น homozygous ที่ locus นั้น donor antigen ที่ต่างกันนับเป็น mismatch ได้ไม่เกิน 2 ต่อ locus ส่วน eplet load ในภาพเป็นค่าสาธิตแนวคิด ไม่ได้คำนวณจาก HLAMatchmaker จริง</p>
+    </div>
+    <div class="card">
+      <h2>Typing และประวัติ sensitization</h2>
+      <div class="typ" id="typ"></div>
+      <div class="sub">Sensitizing events</div>
+      <div class="tools" id="tools"></div>
+      <div class="prev"><label for="prevIn">Antigen ที่ mismatch ใน graft เดิม</label><input id="prevIn" type="text" placeholder="เช่น A2, DR4"></div>
+      <div class="ctls" id="ctls" style="margin-top:12px"></div>
+      <div class="readout">
+        <div class="ro" id="roABDR"><b>-</b><span>ABDR mismatch</span></div>
+        <div class="ro" id="roDR"><b>-</b><span>DR mismatch</span></div>
+        <div class="ro" id="roDQ"><b>-</b><span>DQ mismatch</span></div>
+        <div class="ro" id="roEpDR"><b>-</b><span>DR eplet (สาธิต)</span></div>
+        <div class="ro" id="roEpDQ"><b>-</b><span>DQ eplet (สาธิต)</span></div>
+        <div class="ro" id="roRisk"><b>-</b><span>Immunologic risk</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script>
+(function(){
+"use strict";
+var AG = {
+  A:["A1","A2","A3","A11","A24","A26","A30","A31","A33"],
+  B:["B7","B13","B27","B35","B38","B44","B46","B51","B52","B54","B57","B58","B60","B62","B75"],
+  C:["Cw1","Cw3","Cw4","Cw6","Cw7","Cw8","Cw14","Cw15"],
+  DR:["DR1","DR3","DR4","DR7","DR8","DR9","DR10","DR11","DR12","DR13","DR14","DR15","DR16"],
+  DQ:["DQ2","DQ4","DQ5","DQ6","DQ7","DQ8","DQ9"]
+};
+var LOCI = ["A","B","C","DR","DQ"];
+function T(r, d){ return {r:r, d:d}; }
+var S = {
+  sib0:{name:"Sibling HLA-identical", p:{typ:{A:T(["A2","A11"],["A2","A11"]),B:T(["B46","B58"],["B46","B58"]),C:T(["Cw1","Cw3"],["Cw1","Cw3"]),DR:T(["DR9","DR15"],["DR9","DR15"]),DQ:T(["DQ5","DQ9"],["DQ5","DQ9"])}, preg:false, trans:false, prior:false, prev:"", age:34, cpra:0},
+    rows:[["Donor","พี่ชายร่วมบิดามารดา ได้ haplotype เดียวกันทั้งสองข้าง"],["Mismatch","0 ABDR และ 0 DQ"],["Sensitization","ไม่มี cPRA 0%"],["ความหมาย","Immunologic risk ต่ำที่สุด แต่ยังมี minor histocompatibility antigen"]],
+    take:["Sibling มีโอกาส HLA-identical 25% haploidentical 50% ไม่ตรงเลย 25%","0 mismatch ลด rejection แต่ยังต้องใช้ immunosuppression","HLA-identical sibling มี graft survival ดีที่สุดในกลุ่ม living donor"]},
+  parent:{name:"Parent haploidentical", p:{typ:{A:T(["A2","A11"],["A11","A24"]),B:T(["B46","B58"],["B46","B13"]),C:T(["Cw1","Cw3"],["Cw1","Cw4"]),DR:T(["DR9","DR15"],["DR9","DR12"]),DQ:T(["DQ5","DQ9"],["DQ9","DQ7"])}, preg:false, trans:false, prior:false, prev:"", age:28, cpra:0},
+    rows:[["Donor","มารดา อายุ 54 ปี"],["Mismatch","1-1-1 (A24, B13, DR12) และ DQ7"],["หลักการ","Parent กับลูกแชร์ haplotype เดียวเสมอ mismatch สูงสุด 3 ใน 6"],["Sensitization","ไม่มี"]],
+    take:["Parent กับลูกเป็น haploidentical เสมอ","Mismatch ไม่มากพอจะห้ามปลูกถ่าย ถ้า crossmatch และ DSA ลบ","Living donor ที่ mismatch มากยังดีกว่ารอ deceased donor นาน"]},
+  drmm:{name:"Unrelated, DR mismatch 2", p:{typ:{A:T(["A2","A33"],["A2","A11"]),B:T(["B46","B58"],["B46","B75"]),C:T(["Cw1","Cw3"],["Cw1","Cw8"]),DR:T(["DR15","DR9"],["DR12","DR4"]),DQ:T(["DQ5","DQ9"],["DQ7","DQ8"])}, preg:false, trans:true, prior:false, prev:"", age:45, cpra:10},
+    rows:[["Donor","คู่สมรส ไม่ใช่ญาติ"],["Mismatch","1-1-2 และ DQ 2"],["Sensitization","เคยได้เลือด cPRA 10% ไม่มี DSA"],["ความหมาย","DR และ DQ mismatch สัมพันธ์กับ de novo DSA มากกว่า class I"]],
+    take:["DR mismatch มีผลต่อ rejection และ graft survival มากกว่า A และ B","DQ mismatch เป็นต้นเหตุ de novo DSA ที่พบบ่อยที่สุด","การนับ eplet ละเอียดกว่าการนับ antigen แต่ยังใช้เสริม ไม่ใช่เกณฑ์ห้าม"]},
+  repeat:{name:"Second KT, repeat mismatch", p:{typ:{A:T(["A11","A24"],["A2","A24"]),B:T(["B46","B13"],["B46","B62"]),C:T(["Cw1","Cw4"],["Cw1","Cw4"]),DR:T(["DR12","DR15"],["DR4","DR12"]),DQ:T(["DQ7","DQ5"],["DQ8","DQ7"])}, preg:true, trans:true, prior:true, prev:"A2, B62, DR4", age:41, cpra:62},
+    rows:[["Recipient","หญิง graft แรกล้มเหลวจาก chronic ABMR มีบุตร 2 คน"],["Donor ใหม่","มี A2, B62, DR4 ซ้ำกับ graft เดิม"],["cPRA","62%"],["ความหมาย","Repeat mismatch เสี่ยง memory B cell response แม้ DSA ปัจจุบันลบ"]],
+    take:["หลีกเลี่ยง repeat mismatch ใน retransplant ถ้าเลือกได้","Memory response ทำให้ DSA กลับมาเร็วหลังปลูกถ่าย","Sensitization หลายทางสะสมกันทำให้ cPRA สูง"]},
+  dq:{name:"Class I match, DQ mismatch", p:{typ:{A:T(["A2","A11"],["A2","A11"]),B:T(["B46","B58"],["B46","B58"]),C:T(["Cw1","Cw3"],["Cw1","Cw3"]),DR:T(["DR9","DR15"],["DR9","DR14"]),DQ:T(["DQ5","DQ9"],["DQ9","DQ6"])}, preg:false, trans:false, prior:false, prev:"", age:22, cpra:0},
+    rows:[["Donor","Deceased donor"],["Mismatch","0-0-1 และ DQ 1"],["Recipient","อายุ 22 ปี เสี่ยง non-adherence"],["ความหมาย","ABDR mismatch น้อยแต่ DQ mismatch ยังทำให้เกิด de novo DSA ได้"]],
+    take:["ABDR อย่างเดียวไม่ครอบคลุม DQ ต้องดู DQ แยก","ผู้ป่วยอายุน้อยมี alloimmune response แรงและ adherence เป็นปัญหา","ติดตาม DSA หลังปลูกถ่ายในรายที่ class II mismatch"]}
+};
+var ORDER = ["sib0","parent","drmm","repeat","dq"];
+
+/* ---------- controls ---------- */
+var typ = document.getElementById("typ"), SEL = {};
+["", "Recip 1", "Recip 2", "Donor 1", "Donor 2"].forEach(function(h){ typ.appendChild(Sim.h("div", {class:"hd", text:h})); });
+LOCI.forEach(function(L){
+  typ.appendChild(Sim.h("div", {class:"lc", text:L}));
+  SEL[L] = [];
+  for(var i = 0; i < 4; i++){
+    var s = Sim.h("select", {"aria-label":L + (i < 2 ? " recipient " : " donor ") + (i % 2 + 1)});
+    AG[L].forEach(function(a){ var o = document.createElement("option"); o.value = a; o.textContent = a; s.appendChild(o); });
+    s.addEventListener("change", update); typ.appendChild(s); SEL[L].push(s);
+  }
+});
+var F = {preg:false, trans:false, prior:false}, TG = {};
+[["preg","Pregnancy"],["trans","Blood transfusion"],["prior","Prior transplant"]].forEach(function(x){ TG[x[0]] = Sim.toggle(x[1], function(on){ F[x[0]] = on; update(); }, false); document.getElementById("tools").appendChild(TG[x[0]]); });
+var prevIn = document.getElementById("prevIn"); prevIn.addEventListener("input", update);
+var box = document.getElementById("ctls"), C = {};
+C.age = Sim.slider({id:"sAge", label:"Recipient age", min:5, max:75, step:1, value:40, unit:"y", onInput:update}); box.appendChild(C.age.el);
+C.cpra = Sim.slider({id:"sCpra", label:"cPRA", min:0, max:100, step:1, value:0, unit:"%", onInput:update}); box.appendChild(C.cpra.el);
+
+/* ---------- logic ---------- */
+function hash(s){ var h = 2166136261; for(var i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return Math.abs(h); }
+var EPB = {A:[4,8], B:[5,10], C:[2,6], DR:[6,12], DQ:[8,15]};
+function eplets(L, dAg, rAgs){ var b = EPB[L]; return b[0] + hash(dAg + "|" + rAgs.slice().sort().join(",")) % (b[1] + 1); }
+function analyse(){
+  var res = {}, prev = prevIn.value.toUpperCase().split(/[\s,]+/).filter(Boolean).map(function(x){ return x.replace(/^CW/, "Cw"); });
+  LOCI.forEach(function(L){
+    var r = [SEL[L][0].value, SEL[L][1].value], d = [SEL[L][2].value, SEL[L][3].value];
+    var seen = {}, mm = [], ep = 0;
+    d.forEach(function(a, i){
+      var isMM = r.indexOf(a) < 0 && !seen[a];
+      var rep = isMM && F.prior && prev.indexOf(a.toUpperCase().replace(/^CW/, "Cw")) >= 0;
+      if(isMM){ seen[a] = 1; var e = eplets(L, a, r); ep += e; mm.push({ag:a, i:i, rep:rep, ep:e}); }
+    });
+    res[L] = {r:r, d:d, mm:mm, n:mm.length, ep:ep};
+  });
+  return res;
+}
+function risk(A, p){
+  var abdr = A.A.n + A.B.n + A.DR.n, rep = LOCI.some(function(L){ return A[L].mm.some(function(m){ return m.rep; }); });
+  var ev = (p.preg ? 1 : 0) + (p.trans ? 1 : 0) + (p.prior ? 1 : 0);
+  var sc = abdr * 0.6 + A.DR.n * 0.8 + A.DQ.n * 0.8 + ev * 1.2 + p.cpra / 20 + (rep ? 4 : 0) + (p.age < 25 ? 1 : 0) + (A.DR.ep > 10 ? 0.8 : 0) + (A.DQ.ep > 17 ? 1 : 0);
+  var cat = (rep || p.cpra >= 80) ? "High" : (sc < 2.5 && p.cpra === 0 && !ev) ? "Low" : sc < 6.5 ? "Intermediate" : "High";
+  return {abdr:abdr, rep:rep, ev:ev, sc:sc, cat:cat};
+}
+
+/* ---------- drawing ---------- */
+var svg = document.getElementById("vis"), FT = "IBM Plex Sans Thai, sans-serif", MO = "Geist Mono, monospace";
+function SV(t, a, p){ var o = {}; Object.keys(a).forEach(function(k){ if(a[k] !== null && a[k] !== undefined) o[k] = a[k]; }); return Sim.svg(t, o, p); }
+function chip(x, y, txt, kind){
+  var col = {same:["#E8F4F2","#1F7A72","#0F4F49"], mm:["#F9EAEA","#B4232A","#7A1419"], rec:["#F4F5F9","#D3D5E2","#0B0B1F"], rep:["#FFF6DD","#A8842C","#6B5317"]}[kind];
+  SV("rect", {x:x, y:y, width:96, height:34, rx:10, fill:col[0], stroke:col[1], "stroke-width":kind === "rep" ? 2.4 : 1.2}, svg);
+  SV("text", {x:x + 48, y:y + 22, "text-anchor":"middle", "font-family":MO, "font-size":14.5, "font-weight":600, fill:col[2], text:txt}, svg);
+}
+function draw(A, R){
+  svg.innerHTML = "";
+  var x0 = 112, colW = 112;
+  SV("text", {x:16, y:28, "font-family":FT, "font-size":13, fill:"#5E6075", text:"Recipient"}, svg);
+  SV("text", {x:16, y:150, "font-family":FT, "font-size":13, fill:"#5E6075", text:"Donor"}, svg);
+  LOCI.forEach(function(L, j){
+    var cx = x0 + j * colW;
+    SV("text", {x:cx + 48, y:16, "text-anchor":"middle", "font-family":MO, "font-size":12, fill:"#9A9CB2", text:"HLA-" + L}, svg);
+    A[L].r.forEach(function(a, i){ chip(cx, 24 + i * 42, a, "rec"); });
+    A[L].d.forEach(function(a, i){
+      var m = A[L].mm.filter(function(z){ return z.i === i; })[0];
+      var kind = m ? (m.rep ? "rep" : "mm") : "same";
+      chip(cx, 128 + i * 42, a, kind);
+      if(m) SV("text", {x:cx + 90, y:128 + i * 42 - 3, "text-anchor":"end", "font-family":MO, "font-size":10.5, fill:m.rep ? "#A8842C" : "#B4232A", text:m.rep ? "REPEAT" : "MM"}, svg);
+    });
+    var n = A[L].n;
+    SV("text", {x:cx + 48, y:234, "text-anchor":"middle", "font-family":MO, "font-size":20, "font-weight":600, fill:n ? "#B4232A" : "#1F7A72", text:n}, svg);
+  });
+  SV("text", {x:16, y:234, "font-family":FT, "font-size":13, fill:"#5E6075", text:"Mismatch"}, svg);
+  SV("line", {x1:16, y1:250, x2:664, y2:250, stroke:"#E6E7F0"}, svg);
+  // eplet bars
+  SV("text", {x:16, y:274, "font-family":FT, "font-size":13, "font-weight":600, fill:"#0B0B1F", text:"Illustrative eplet load per locus (concept only)"}, svg);
+  var maxE = 40, bx = 112, bw = 440;
+  LOCI.forEach(function(L, j){
+    var y = 286 + j * 20, e = A[L].ep, thr = L === "DR" ? 10 : L === "DQ" ? 17 : null;
+    SV("text", {x:bx - 10, y:y + 11, "text-anchor":"end", "font-family":MO, "font-size":11.5, fill:"#5E6075", text:L}, svg);
+    SV("rect", {x:bx, y:y + 2, width:bw, height:12, rx:5, fill:"#F4F5F9"}, svg);
+    var over = thr !== null && e > thr;
+    SV("rect", {x:bx, y:y + 2, width:Math.max(e ? 3 : 0, bw * Math.min(e, maxE) / maxE), height:12, rx:5, fill:over ? "#B4232A" : "#5B4BFF"}, svg);
+    if(thr !== null){ var tx = bx + bw * thr / maxE; SV("line", {x1:tx, y1:y, x2:tx, y2:y + 16, stroke:"#0B0B1F", "stroke-dasharray":"2 2"}, svg); }
+    SV("text", {x:bx + bw + 10, y:y + 12, "font-family":MO, "font-size":11.5, fill:"#5E6075", text:e + (thr !== null ? " (cut " + thr + ")" : "")}, svg);
+  });
+  SV("text", {x:16, y:396, "font-family":FT, "font-size":11, fill:"#9A9CB2", text:"Dashed line: single-molecule DR and DQ thresholds reported for de novo DSA"}, svg);
+}
+
+function P(){ return {preg:F.preg, trans:F.trans, prior:F.prior, age:C.age.get(), cpra:C.cpra.get()}; }
+function update(){
+  var p = P(), A = analyse(), R = risk(A, p);
+  draw(A, R);
+  Sim.ro("roABDR", R.abdr + "/6", R.abdr === 0 ? "ok" : R.abdr >= 5 ? "flag" : null);
+  Sim.ro("roDR", A.DR.n, A.DR.n === 0 ? "ok" : A.DR.n === 2 ? "flag" : null);
+  Sim.ro("roDQ", A.DQ.n, A.DQ.n === 0 ? "ok" : A.DQ.n === 2 ? "flag" : null);
+  Sim.ro("roEpDR", A.DR.ep, A.DR.ep > 10 ? "flag" : "ok");
+  Sim.ro("roEpDQ", A.DQ.ep, A.DQ.ep > 17 ? "flag" : "ok");
+  Sim.ro("roRisk", R.cat, R.cat === "High" ? "flag" : R.cat === "Low" ? "ok" : null);
+  var n = [];
+  n.push("ส่ง CDC และ flow crossmatch กับ single antigen bead เพื่อหา DSA ก่อนตัดสินใจ (ดู KT-02) HLA match อย่างเดียวไม่บอกว่าปลูกถ่ายได้หรือไม่");
+  if(R.rep) n.push("มี repeat mismatch กับ graft เดิม ถ้ามี donor อื่นให้เลือก donor ที่ไม่ซ้ำ ถ้าจำเป็นต้องใช้ให้ตรวจ DSA ย้อนหลังทุก serum ที่เก็บไว้และวางแผน induction แบบ T-cell depletion");
+  else if(R.cat === "High") n.push("ความเสี่ยงสูงจาก sensitization และ mismatch พิจารณา T-cell depleting induction (ATG) และติดตาม DSA ใกล้ชิดหลังปลูกถ่าย");
+  else if(R.cat === "Intermediate") n.push("ความเสี่ยงปานกลาง เลือก induction ตาม DSA และนโยบายศูนย์ ติดตาม de novo DSA เป็นระยะโดยเฉพาะเมื่อมี DR หรือ DQ mismatch");
+  else n.push("ความเสี่ยงต่ำ ใช้ basiliximab induction ร่วม tacrolimus, MPA และ steroid ได้ เน้น adherence");
+  if(p.age < 25 && R.cat !== "High") n.push("ผู้ป่วยอายุน้อยต้องเน้น adherence เพราะ non-adherence เป็นสาเหตุหลักของ de novo DSA");
+  document.getElementById("act").innerHTML = "<b>Next step:</b> " + n.join(" ");
+}
+Sim.mount({code:"KT-01", title:"HLA Matching and Immunologic Risk",
+  lead:"เลือก HLA typing ของ recipient และ donor ดู mismatch, repeat mismatch และ class II mismatch แล้วรวมกับ sensitization เพื่อประเมิน immunologic risk",
+  scenarios:S, order:ORDER, captureMs:800,
+  onChange:function(k, s){ var q = s.p; LOCI.forEach(function(L){ SEL[L][0].value = q.typ[L].r[0]; SEL[L][1].value = q.typ[L].r[1]; SEL[L][2].value = q.typ[L].d[0]; SEL[L][3].value = q.typ[L].d[1]; });
+    ["preg","trans","prior"].forEach(function(x){ F[x] = !!q[x]; TG[x].setState(F[x]); }); prevIn.value = q.prev; C.age.set(q.age); C.cpra.set(q.cpra); update(); },
+  refs:["Kidney Disease: Improving Global Outcomes (KDIGO) Kidney Transplant Candidate Work Group. KDIGO clinical practice guideline on the evaluation and management of candidates for kidney transplantation. Transplantation 2020, 104(4S1): S11-S103",
+        "Tambur AR, Campbell P, Claas FH, et al. Sensitization in transplantation: assessment of risk (STAR) 2017 working group meeting report. Am J Transplant 2018, 18(7): 1604-1614",
+        "Wiebe C, Kosmoliaptsis V, Pochinco D, et al. HLA-DR/DQ molecular mismatch: a prognostic biomarker for primary alloimmunity. Am J Transplant 2019, 19(6): 1708-1719",
+        "Opelz G, Döhler B. Effect of human leukocyte antigen compatibility on kidney graft survival: comparative analysis of two decades. Transplantation 2007, 84(2): 137-143",
+        "Lim WH, Chapman JR, Coates PT, et al. HLA-DQ mismatches and rejection in kidney transplant recipients. Clin J Am Soc Nephrol 2016, 11(5): 875-883",
+        "Yanyiam P, Kantachuvesiri S, Thammanichanond D. Impact of HLA eplet mismatch on de novo donor specific antibody formation after kidney transplantation. Transplant Proc 2024, 56(3): 515-520"],
+  note:"Eplet load ในภาพเป็นค่าสาธิตที่สร้างจาก antigen ที่เลือก ไม่ใช่ผล HLAMatchmaker จริง เส้นประ DR 10 และ DQ 17 คือ threshold ราย molecule ที่มีรายงานว่าสัมพันธ์กับ de novo DSA ภายใต้ tacrolimus ส่วนการแบ่ง immunologic risk เป็น heuristic เพื่อการสอน การตัดสินใจจริงใช้ crossmatch, DSA และนโยบายของศูนย์"
+});
+})();
+</script>
+</body>
+</html>

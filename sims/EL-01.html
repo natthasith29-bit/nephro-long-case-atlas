@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[EL-01] Tubular Physiology Live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.bench.main{grid-template-columns:1.45fr 1fr}
+@media (max-width:860px){.bench.main{grid-template-columns:1fr}}
+.ctl{grid-template-columns:minmax(110px,140px) 1fr 70px}
+.sel{display:grid;grid-template-columns:minmax(90px,120px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.segs{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
+.segs .gap{width:1px;align-self:stretch;background:var(--line-strong);margin:0 4px}
+.segs .tog.hco3{border-color:#2D7FF9;color:#1B5FC4}
+.segs .tog.hco3[aria-pressed=true]{background:#2D7FF9;color:#fff;border-color:#2D7FF9}
+.lv{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.stepnav{display:flex;align-items:center;gap:8px;margin:4px 0 8px}
+.stepnav b{font-family:var(--mono);font-weight:500;color:var(--muted);font-size:13px;min-width:64px;text-align:center}
+.dots{display:flex;gap:4px;flex:1}
+.dots i{flex:1;height:5px;border-radius:3px;background:var(--line);cursor:pointer}
+.dots i.on{background:var(--accent)}
+.steptxt{font-size:15px;line-height:1.7;min-height:110px}
+.deep{font-size:14px;line-height:1.65;color:var(--ink-2,#3E4057);margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.deep p{margin:0 0 8px}
+.deep p b{color:var(--ink)}
+.pert{padding:10px 12px;border-radius:12px;background:var(--pink);margin-top:10px;font-size:14px;line-height:1.6}
+.uchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.uchips span{font-family:var(--mono);font-size:12.5px;padding:4px 9px;border-radius:999px;border:1px solid var(--line-strong)}
+.uchips span.up{border-color:var(--red);color:var(--red)}
+.uchips span.dn{border-color:var(--teal);color:var(--teal)}
+h2 .seg{color:var(--accent)}
+#mapwrap svg{max-height:420px;width:auto!important;margin:0 auto}
+.mapcap{font-family:var(--mono);font-size:12px;line-height:1.55;color:var(--muted);text-align:center;margin-top:6px}
+#ro{grid-template-columns:1fr 1fr}
+.hm{font-size:13.5px;line-height:1.7}
+.hm td{padding:2px 10px 2px 0}
+.hm td:last-child{font-family:var(--mono);text-align:right}
+body.present .find{display:none!important}
+body.present .hint{display:none}
+body.present #hmore{display:none!important}
+body.present .deep{display:none}
+body.present .bench.one{display:none}
+body.present .stepnav{margin:0 0 4px}
+body.present .lv{margin-bottom:4px}
+body.present .uchips{margin-top:4px}
+body.present .ctls{margin-top:4px!important}
+body.present .card{padding:12px 16px}
+body.present .steptxt{font-size:13.5px;line-height:1.5;min-height:0}
+body.present #cell svg{max-height:300px;width:auto!important;margin:0 auto}
+body.present #mapwrap svg{max-height:300px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .pert{font-size:12.5px;padding:6px 10px;margin-top:6px}
+body.present .takeaway{font-size:12.5px;padding:6px 10px;margin-top:6px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench main">
+    <div class="card">
+      <h2 id="q"></h2>
+      <div class="segs tools" id="segs"></div>
+      <div id="cell"></div>
+      <div id="mapwrap" class="svgwrap" style="display:none"><svg id="map"></svg><div class="mapcap" id="mapcap"></div></div>
+      <p class="takeaway" id="take"></p>
+      <p class="hint no-present">ตัวที่กำลังอธิบายเป็นสีเหลืองและมี ion วิ่ง ตัวอื่นจาง วงรีบน membrane คือ channel หรือ transporter ส่วน hexagon สีเขียวคือ enzyme (ไม่ได้ฝังทะลุ membrane) และ pill สีฟ้าคือ buffer ในลูเมน ตัวที่ถูกบล็อกมี ✕ และ ion ค้างกลางทาง แตะแต่ละตัวเพื่อดู gene ยา และโรค</p>
+    </div>
+    <div class="card">
+      <h2 id="segTitle"></h2>
+      <div class="lv tools" id="lv"></div>
+      <div class="stepnav" id="nav"></div>
+      <div class="steptxt" id="steptxt"></div>
+      <div class="deep" id="deep"></div>
+      <div id="pert"></div>
+      <div class="uchips" id="uchips" aria-label="Urine changes"></div>
+      <div class="ctls" id="ctls" style="margin-top:12px"></div>
+      <div class="readout" id="ro" style="display:none">
+        <div class="ro" id="r1"><b>-</b><span>Urine HCO3 (mmol/วัน)</span></div>
+        <div class="ro" id="r2"><b>-</b><span>Urine pH</span></div>
+        <div class="ro" id="r3"><b>-</b><span>HCO3 ใหม่ (NH4+ + TA)</span></div>
+        <div class="ro" id="r4"><b>-</b><span>Net acid excretion</span></div>
+      </div>
+      <details class="more" id="hmore" style="display:none"><summary>ตัวเลขเพิ่มเติม</summary><div class="more-body" id="hmoreBody"></div></details>
+    </div>
+  </section>
+  <section class="bench one">
+    <details class="more" id="trackMore">
+      <summary>ของเหลวในท่อเปลี่ยนไปอย่างไรตลอด nephron (กราฟ)</summary>
+      <div class="more-body">
+        <div class="sel" style="margin:4px 0 8px"><label for="tv">แสดง</label><select id="tv"><option value="na">Na และน้ำ</option><option value="k">K</option><option value="osm">Osmolality</option><option value="hco3">HCO3</option></select></div>
+        <div id="track"></div>
+        <p class="takeaway" id="ttake"></p>
+      </div>
+    </details>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/nephron.js"></script>
+<script>
+(function(){
+"use strict";
+var SEGS=[["PT","Proximal tubule","PT"],["tDL","Thin descending limb","tDL"],["tAL","Thin ascending limb","tAL"],["TAL","Thick ascending limb","TAL"],["DCT","Distal convoluted tubule","DCT"],["CCD","Connecting tubule and collecting duct","CCD"],["OMCD","α-intercalated cell","α-IC"],["IMCD","Inner medullary collecting duct","IMCD"],["HCO3","HCO3 ตลอด nephron","HCO3"]];
+var TIDX={PT:1,tDL:2,tAL:3,TAL:4,DCT:5,CCD:6,OMCD:7,IMCD:8};
+var Q={PT:"PT ดูดกลับ 2 ใน 3 ของที่กรองได้อย่างไรโดยไม่ต้องใช้ฮอร์โมน",
+ tDL:"ท่อขาลงทำให้ของเหลวเข้มข้นขึ้นได้อย่างไร",
+ tAL:"ท่อขาขึ้นบางเริ่มทำให้ของเหลวเจือจางโดยไม่ใช้พลังงาน",
+ TAL:"TAL ดูด NaCl 25% และทำไม loop diuretic ทำให้เสีย Ca และ Mg ด้วย",
+ DCT:"DCT ดูด Na เพียง 5–7% แต่คุม K Ca Mg และเป็นเป้าของ thiazide",
+ CCD:"Collecting duct กำหนด Na K และน้ำขั้นสุดท้ายตามฮอร์โมน",
+ OMCD:"α-intercalated cell ขับกรดและสร้าง HCO3 ใหม่อย่างไร",
+ IMCD:"IMCD ทำให้ปัสสาวะเข้มข้นที่สุดด้วยน้ำและ urea",
+ HCO3:"ไตเก็บ HCO3 ที่กรองกลับเกือบหมด แล้วสร้าง HCO3 ใหม่อย่างไร"};
+var TAKE={PT:"PT ทำงานด้วยแรง Na gradient จาก Na/K-ATPase ตัวเดียว แล้วใช้แรงนี้ดึงทุกอย่างกลับ (secondary active transport) น้ำตามไปเอง ของเหลวจึงยัง 300 mOsm",
+ tDL:"ขาลงเสียน้ำแต่เก็บ NaCl ไว้ ของเหลวจึงเข้มข้นสูงสุดที่ปลายห่วง",
+ tAL:"ขาขึ้นบางเสีย NaCl แต่ไม่เสียน้ำ ของเหลวจึงเริ่มเจือจาง",
+ TAL:"K ที่รั่วกลับทาง ROMK ทำให้ลูเมนเป็นบวก แรงนี้ดัน Ca และ Mg ผ่านระหว่างเซลล์ บล็อก NKCC2 จึงเสีย Na K Cl Ca Mg พร้อมกัน",
+ DCT:"DCT ยังไม่ให้น้ำผ่าน ของเหลวเจือจางลงอีก และเป็นจุดที่ K ในเลือดสั่งเปิดปิด NCC",
+ CCD:"ENaC ทำให้ลูเมนเป็นลบ แรงนี้ดึง K ออก การขับ K จึงต้องมีทั้ง aldosterone และ Na ที่ไหลมาถึง",
+ OMCD:"H ทุกตัวที่ขับออกพร้อม buffer (NH4+ หรือ titratable acid) ได้ HCO3 ใหม่ 1 ตัวกลับเข้าเลือด",
+ IMCD:"การ concentrate ต้องมีทั้ง AQP2 ที่ทำงานและ medulla ที่เข้มข้น"};
+var BASE={
+ PT:{f:"NBCe1 (SLC4A4) mutation ทำให้ pRTA ร่วมกับ band keratopathy และ glaucoma CA II deficiency ทำให้ RTA แบบผสมร่วมกับ osteopetrosis Fanconi: tenofovir DF, ifosfamide, light chain, cystinosis, Dent, Lowe, Wilson NaPi-IIc (SLC34A3) เสียทำให้ HHRH ammoniagenesis จาก glutamine เพิ่มใน hypoK และ acidosis ลดใน hyperK"},
+ tDL:{f:"ความเข้มข้นที่ปลายห่วงขึ้นกับ vasopressin, urea recycling และ medullary blood flow ห่วงยาวของ juxtamedullary nephron สร้าง gradient ได้มากกว่า loop diuretic และ osmotic diuresis ล้าง gradient ออก"},
+ tAL:{f:"ClC-Ka + barttin ด้าน basolateral การเสีย ClC-Ka ร่วมกับ ClC-Kb (Bartter 4b) หรือ barttin (BSND, Bartter 4a) ทำให้ concentrate ไม่ได้รุนแรงร่วมกับ sensorineural deafness"},
+ TAL:{f:"Bartter 1 (NKCC2), 2 (ROMK มี hyperK ช่วงแรกเกิด), 3 (ClC-Kb ภาพคล้าย Gitelman ได้), 4a (barttin มีหูหนวก) และ 5 (MAGED2 transient antenatal) ADH1 (CaSR gain) มี hypocalcemia ร่วม hypercalciuria FHHNC (CLDN16/19) มี hypoMg hypercalciuria nephrocalcinosis และ CKD ADTKD-UMOD ทำให้ hyperuricemia และ CKD"},
+ DCT:{f:"Gitelman (SLC12A3) = hypoK alkalosis, hypoMg, hypocalciuria Gordon (WNK1, WNK4, KLHL3, CUL3) = NCC ทำงานเกิน: HT, hyperK, hyperchloremic acidosis, renin ต่ำ ตอบสนองดีมากต่อ thiazide ขนาดต่ำ EAST/SeSAME (KCNJ10) = Gitelman-like ร่วมกับ epilepsy, ataxia, deafness"},
+ CCD:{f:"Liddle (SCNN1B/G PY motif) ENaC ไม่ถูก Nedd4-2 ดึงออก renin และ aldosterone ต่ำ ตอบสนองต่อ amiloride ไม่ตอบสนองต่อ spironolactone AME (HSD11B2) และ liquorice ทำให้ cortisol กระตุ้น MR PHA1 (SCNN1 หรือ NR3C2 loss) = salt wasting hyperK แม้ aldosterone สูง"},
+ OMCD:{f:"dRTA จาก ATP6V1B1/ATP6V0A4 มักมี sensorineural deafness AE1 (SLC4A1) แบบ AD พบในยุโรป แบบ AR ร่วมกับ Southeast Asian ovalocytosis พบในไทย ลักษณะร่วม: urine pH > 5.5 แม้ acidosis, UAG บวก, hypocitraturia, nephrocalcinosis Sjögren และ amphotericin B เป็นสาเหตุ acquired"},
+ IMCD:{f:"AVPR2 (X-linked) และ AQP2 (AR หรือ AD) ทำให้ NDI lithium ลด AQP2 hypercalcemia และ hypoK ลด concentrating ability tolvaptan บล็อก V2R ใช้ใน SIAD และ ADPKD"},
+ HCO3:{f:"pRTA: FEHCO3 > 15% เมื่อให้ alkali จน HCO3 ในเลือดปกติ ต้องใช้ alkali ขนาดสูง (10–15 mmol/kg/วัน) และเสีย K เพิ่มเมื่อให้ alkali dRTA: urine pH > 5.5 ขณะ acidosis, UAG บวก, hypocitraturia ผู้ใหญ่ใช้ alkali ราว 1–3 mmol/kg/วัน (เด็กมากกว่า) Type 4: hyperK, urine pH < 5.5 ได้ แก้ hyperK แล้ว NH4+ กลับขึ้น Urine anion gap = Na + K − Cl ค่าลบแปลว่ามี NH4+ มาก"}
+};
+/* f = transporter ที่เน้น, c = caption ในภาพ (อังกฤษ), t = คำอธิบายหลัก, m = กลไกเพิ่ม (ระดับกลไกขึ้นไป) */
+var STEPS={
+ PT:[
+  {f:["NKA_PT"],c:"Step 1. Na/K-ATPase pumps 3 Na out and 2 K in. Cell Na stays low and the cell is negative (−70 mV).",
+   t:"ทุกอย่างเริ่มที่ <b>Na/K-ATPase</b> ด้าน blood ใช้ ATP ดัน Na ออก 3 ตัวแลก K เข้า 2 ตัว Na ในเซลล์จึงต่ำ (ราว 15 เทียบกับ 140 ในลูเมน) และในเซลล์เป็นลบราว −70 mV Na ในลูเมนจึงมีแรงไหลเข้าเซลล์ทั้งจากความเข้มข้นและจาก voltage แรงนี้คือพลังงานของ transporter ด้าน apical ทุกตัว เรียกว่า secondary active transport",
+   m:"K ที่ปั๊มเข้ามารั่วกลับออกทาง K channel ด้าน basolateral ทำให้เซลล์คงความเป็นลบ PT ใช้ออกซิเจนมากและพึ่ง oxidative metabolism จึงเสียหายง่ายเมื่อขาดเลือด ischemic ATN มักเกิดที่ S3 ใน outer medulla"},
+  {f:["NHE3","HATP_PT"],c:"Step 2. NHE3 swaps Na in for H out, helped by an apical H+-ATPase. The secreted H is used to reclaim filtered HCO3.",
+   t:"<b>NHE3</b> ใช้แรงที่ Na ไหลเข้าแลกกับการปล่อย H ออกลูเมน เป็นทางเข้าของ Na ที่ใหญ่ที่สุดของ PT และทำ H secretion ราว 2 ใน 3 ส่วนที่เหลือราว 1 ใน 3 มาจาก <b>H+-ATPase</b> ด้าน apical H ที่หลั่งออกไปไม่ได้ถูกขับทิ้ง แต่ใช้จับ HCO3 ที่ถูกกรอง (ขั้นถัดไป)",
+   m:"NHE3 ถูกกระตุ้นโดย angiotensin II, sympathetic, glucocorticoid, acidosis และ hypoK และถูกยับยั้งโดย PTH, dopamine และ volume expansion จึงเป็นจุดที่ volume status คุมทั้ง Na และ HCO3 ของ PT ไปพร้อมกัน"},
+  {f:["CA","NBC"],c:"Step 3. Carbonic anhydrase is an enzyme, not a channel. CA IV makes CO2 in the lumen and CA II rebuilds HCO3 inside.",
+   t:"<b>Carbonic anhydrase เป็น enzyme ไม่ใช่ channel</b> HCO3 ผ่าน apical membrane ตรง ๆ ไม่ได้ จึงต้องเปลี่ยนรูปก่อน <b>CA IV</b> ที่เกาะผิว brush border ด้านลูเมนเร่ง H + HCO3 → H2CO3 → CO2 + H2O, CO2 แพร่เข้าเซลล์ได้เอง แล้ว <b>CA II</b> ใน cytosol เร่ง CO2 + H2O → H2CO3 → H + HCO3 H กลับไปใช้ซ้ำกับ NHE3 ส่วน HCO3 ออกด้าน blood ทาง <b>NBCe1</b>",
+   m:"NBCe1 ขน 1 Na กับ 3 HCO3 (electrogenic ประจุลบสุทธิออก) จึงใช้ความเป็นลบของเซลล์ช่วยดัน HCO3 ออก ผลสุทธิคือ HCO3 ที่กรอง 1 ตัวกลับเข้าเลือด 1 ตัว โดยไม่มี H ถูกขับออกจากร่างกาย จึงเป็น <b>reclamation</b> ไม่ใช่การสร้าง HCO3 ใหม่ PT เก็บ HCO3 ราว 80% ของที่กรอง (ดูแท็บ HCO3) acetazolamide ยับยั้ง CA ทั้งสองตำแหน่ง"},
+  {f:["SGLT2","GLUT2"],c:"Step 4. SGLT2 rides the Na gradient to pull glucose in. GLUT2 releases it to blood. SGLT1 later in the tubule takes the rest.",
+   t:"<b>SGLT2</b> ช่วงต้น PT (S1–S2) ขน Na กับ glucose เข้าพร้อมกัน 1 ต่อ 1 เก็บ glucose ได้ราว 90% ส่วน SGLT1 ช่วงปลาย (S3 ใช้ 2 Na ต่อ 1 glucose) เก็บที่เหลือ glucose ออกด้าน blood ทาง <b>GLUT2</b> ปกติดูดกลับเกือบ 100% จน glucose ในเลือดเกินราว 180–200 mg/dL (renal threshold) จึงเริ่มมี glucosuria",
+   m:"Transport maximum ของ glucose ราว 375 mg/min threshold ต่ำกว่าจุดอิ่มตัวเพราะแต่ละ nephron ไม่เท่ากัน (splay) SGLT2 inhibitor ลด Tm จึงขับ glucose ได้แม้ glucose ปกติ และ Na ที่ไปถึง macula densa มากขึ้นทำให้ afferent arteriole หด ลด glomerular pressure"},
+  {f:["NaPi","AA","URAT1","MEG"],c:"Step 5. Phosphate, amino acids, urate and small filtered proteins are reclaimed here. Lose the whole cell and all leak together.",
+   t:"PT เก็บสารที่ร่างกายต้องการแทบทั้งหมด phosphate ราว 80% ผ่าน <b>NaPi-IIa/IIc</b> amino acid มากกว่า 98% (cystine และ dibasic amino acid ผ่าน b0,+AT/rBAT) urate ผ่าน <b>URAT1</b> และโปรตีนขนาดเล็กที่หลุดผ่าน glomerulus ถูก <b>megalin/cubilin</b> จับแล้วกลืนเข้าเซลล์ ถ้า PT เสียทั้งเซลล์ สารเหล่านี้หลุดพร้อมกัน เรียกว่า Fanconi syndrome",
+   m:"PTH และ FGF23 ดึง NaPi ออกจาก membrane จึงเกิด phosphaturia urate ออกด้าน blood ทาง GLUT9 (SLC2A9) megalin ต้องอาศัย endosome ที่เป็นกรดผ่าน ClC-5 จึงเสียใน Dent disease PT ยังเก็บ citrate (NaDC1) ซึ่งเพิ่มขึ้นใน acidosis และ hypoK จึงเกิด hypocitraturia และนิ่ว"},
+  {f:["CLDN2","CFEX"],c:"Step 6. Late PT: lumen Cl is high, so Cl, then Na, Ca and K, move between the cells through claudin-2. CFEX adds Cl uptake.",
+   t:"ช่วงต้น PT เก็บ HCO3 glucose และ amino acid ไปก่อน Cl ถูกทิ้งไว้จนเข้มข้นขึ้นในลูเมน (ราว 140 เทียบกับ 105–115 ในเลือด) ช่วงปลาย PT Cl จึงแพร่ผ่านช่องระหว่างเซลล์ที่รั่ว (<b>claudin-2</b>) ทำให้ลูเมนเป็นบวกเล็กน้อย แรงนี้ผลัก Na, Ca และ K ผ่านช่องระหว่างเซลล์ตามไป อีกส่วนของ Cl เข้าเซลล์ทาง <b>CFEX (SLC26A6)</b> แลกกับ oxalate หรือ formate",
+   m:"PT ดูดกลับ Ca ราว 60–70% และ K ราว 65% ส่วนใหญ่ผ่านช่องระหว่างเซลล์ไปพร้อมกับน้ำ (solvent drag) ไม่ใช่ผ่านเซลล์ ภาวะที่ PT ดูด Na และน้ำมาก เช่น volume depletion จึงดูด Ca และ urate เพิ่มด้วย เป็นเหตุหนึ่งที่ thiazide ลด urine Ca CFEX ยังหลั่ง oxalate ลงลูเมนด้วย"},
+  {f:["AQP1","CLDN2"],c:"Step 7. Water follows solute through AQP1 and between the cells. Fluid stays isosmotic at 300 while volume falls to one third.",
+   t:"เมื่อ solute ถูกดูดออก น้ำตามทันทีผ่าน <b>AQP1</b> และช่องระหว่างเซลล์ PT ให้น้ำผ่านได้ดีมาก ความต่าง osmolality เพียงเล็กน้อยก็พอ ของเหลวในท่อจึงยัง 300 mOsm เท่าเลือดตลอด PT (isosmotic reabsorption) แต่ปริมาตรเหลือราว 1 ใน 3",
+   m:"Na และน้ำที่ออกมาที่ interstitium ถูกดึงเข้า peritubular capillary ด้วย Starling forces เมื่อ filtration fraction สูง เช่น efferent หดจาก angiotensin II, oncotic pressure ใน peritubular capillary สูงขึ้น PT จึงดูดกลับได้มากขึ้น"},
+  {f:["OCT2","OAT"],c:"Step 8. PT also secretes. OAT1/3 and OCT2 take drugs, toxins and creatinine from blood and hand them to the urine.",
+   t:"นอกจากดูดกลับ PT ยัง<b>หลั่ง</b>สารด้วย <b>OAT1/OAT3</b> ด้าน blood ดึง organic anion (furosemide, thiazide, penicillin, uremic toxin) และ <b>OCT2</b> ดึง organic cation รวมถึง creatinine เข้าเซลล์ แล้วส่งออกลูเมนทาง transporter ด้าน apical (MRP, MATE) diuretic ที่จับ albumin แน่นจึงไปถึงลูเมนด้วยทางนี้ ไม่ใช่การกรอง",
+   m:"Trimethoprim, cimetidine, dolutegravir และ cobicistat บล็อก OCT2/MATE ทำให้ creatinine ขึ้นราว 10–30% โดย GFR จริงไม่เปลี่ยน ใน CKD uremic organic anion แย่ง OAT furosemide จึงไปถึงลูเมนน้อยลง ต้องใช้ขนาดสูงขึ้น"},
+  {f:["GLN"],c:"Step 9. PT makes ammonia: each glutamine gives 2 NH4+ for the urine and 2 new HCO3 for the blood.",
+   t:"PT เป็นที่สร้าง ammonia ของไต glutamine ถูกเปลี่ยนเป็น NH4+ 2 ตัวกับ α-ketoglutarate ซึ่งถูก metabolize ต่อเป็น <b>HCO3 ใหม่ 2 ตัว</b> NH4+ ถูกหลั่งลงลูเมน (ผ่าน NHE3 แทนที่ H) ส่วน HCO3 ใหม่ออกด้าน blood ทาง NBCe1 กระบวนการนี้เพิ่มได้หลายเท่าใน acidosis และ hypoK และลดลงใน hyperK (ดูแท็บ HCO3)"},
+  {f:[],c:"Summary. PT reclaims about 65% of Na and water, 80% of HCO3, almost all glucose and amino acids, and most phosphate.",
+   t:"<b>สรุป</b> PT ดูดกลับปริมาณมากเป็นสัดส่วนคงที่ของที่ถูกกรอง เมื่อ GFR เพิ่ม PT ดูดกลับเพิ่มตาม (<b>glomerulotubular balance</b>) จึงกันไม่ให้ Na หลุดไปปลายท่อมากเกิน ส่วนปลายท่อเป็นที่ปรับละเอียดตามฮอร์โมน",
+   m:"Glomerulotubular balance เกิดจาก filtered load ของ glucose และ amino acid ที่เพิ่มตาม GFR (ดึง Na เข้าเพิ่ม) ร่วมกับ peritubular oncotic pressure ที่สูงขึ้นเมื่อ filtration fraction เพิ่ม"}],
+ tDL:[
+  {f:["AQP1d"],c:"Water leaves through AQP1 into the concentrated medulla. NaCl stays in, so the fluid concentrates toward the bend.",
+   t:"ท่อขาลงบางให้<b>น้ำ</b>ผ่านได้ดี (AQP1) แต่ NaCl ผ่านได้น้อย medulla รอบ ๆ เข้มข้นกว่า น้ำจึงถูกดึงออกจากท่อ ของเหลวในท่อเข้มข้นขึ้นเรื่อย ๆ จนสูงสุดที่ปลายห่วงราว 1,200 mOsm เมื่อมี vasopressin เต็มที่",
+   m:"ความเข้มข้นของ medulla มาจาก 2 แหล่ง คือ NaCl ที่ TAL และ tAL ปล่อยออก กับ urea ที่ IMCD ปล่อยออก urea บางส่วนแพร่กลับเข้าท่อขาลงและ tAL (UT-A2) แล้ววนกลับไปที่ IMCD เรียกว่า urea recycling"},
+  {f:[],c:"Countercurrent: the descending limb loses water and the ascending limb loses salt, multiplying a small step into a large gradient.",
+   t:"<b>Countercurrent multiplication</b> TAL ปั๊ม NaCl ออกโดยไม่ให้น้ำตาม สร้างความต่างราว 200 mOsm ที่แต่ละระดับ ท่อขาลงที่อยู่ติดกันเสียน้ำให้ความต่างนี้ เมื่อของเหลวไหลวนเป็นห่วง ความต่างเล็ก ๆ แต่ละระดับถูกคูณซ้ำ จากเปลือกไต 300 กลายเป็นราว 1,200 ที่ยอด papilla",
+   m:"Vasa recta วิ่งเป็นห่วงคู่ขนานกับ loop of Henle (countercurrent exchange) solute ที่ออกจากเลือดขาขึ้นแพร่กลับเข้าขาลง เลือดจึงไม่ล้าง gradient ออกไป เมื่อ medullary blood flow สูงมาก เช่น osmotic diuresis ความสามารถ concentrate จึงลดลง (medullary washout)"},
+  {f:[],c:"Summary. Volume falls while osmolality peaks at the bend. Less vasopressin, less urea or a washed-out medulla lower the peak.",
+   t:"<b>สรุป</b> ดูกราฟด้านล่าง: น้ำลดแต่ Na เท่าเดิม osmolality ขึ้นสูงสุดที่ปลายห่วง ลองลด vasopressin ความเข้มข้นที่ปลายห่วงลดลง เพราะ urea recycling และการดูดน้ำที่ collecting duct ลดลงด้วย"}],
+ tAL:[
+  {f:["ClCKa"],c:"Water-tight wall. Concentrated NaCl leaks out passively, Cl through ClC-Ka and Na between cells, so the fluid starts to dilute.",
+   t:"ท่อขาขึ้นบาง<b>ไม่ให้น้ำผ่าน</b> แต่ให้ NaCl ผ่านได้ดี ของเหลวที่ออกจากปลายห่วงมี NaCl เข้มข้นกว่า interstitium NaCl จึงไหลออกเองโดยไม่ใช้ปั๊ม (Cl ผ่าน <b>ClC-Ka + barttin</b>, Na ผ่านช่องระหว่างเซลล์) ของเหลวเริ่มเจือจาง",
+   m:"NaCl ที่ออกที่นี่ช่วยคงความเข้มข้นของ inner medulla ซึ่งไม่มี TAL (passive model ที่อาศัย urea จาก IMCD ร่วมด้วย)"},
+  {f:[],c:"Summary. The thin ascending limb loses salt without water, so fluid leaving it is already less concentrated than the medulla.",
+   t:"<b>สรุป</b> ขาลงเสียน้ำ ขาขึ้นเสีย NaCl ของเหลวที่ขึ้นมาจึงเจือจางลงตลอดทาง เตรียมส่งต่อให้ TAL ดูด NaCl ต่อแบบ active"}],
+ TAL:[
+  {f:["NKA_T"],c:"Step 1. Na/K-ATPase keeps cell Na low, powering everything on the lumen side. TAL has the densest pumps in the nephron.",
+   t:"<b>Na/K-ATPase</b> ด้าน blood สร้างแรงให้ Na ไหลเข้าจากลูเมน TAL มีปั๊มหนาแน่นที่สุดใน nephron และอยู่ใน outer medulla ที่ออกซิเจนต่ำอยู่แล้ว จึงไวต่อ ischemia"},
+  {f:["NKCC2"],c:"Step 2. NKCC2 carries 1 Na, 1 K and 2 Cl in together. All four sites must fill. This is the loop diuretic target.",
+   t:"<b>NKCC2</b> ขน Na 1 K 1 และ Cl 2 เข้าพร้อมกัน ต้องได้ครบทั้ง 4 ตำแหน่งจึงทำงาน เป็นเป้าของ loop diuretic (furosemide, bumetanide, torsemide) ซึ่งเข้าถึงจากด้านลูเมน จึงต้องถูกหลั่งที่ PT ก่อน",
+   m:"ในลูเมนของ TAL K มีน้อยกว่า Na และ Cl มาก K จึงเป็นตัวจำกัด ROMK ในขั้นถัดไปจึงจำเป็น NH4+ เข้าแทนที่ K ได้ TAL จึงดูด NH4+ ไปสะสมใน medulla ซึ่งสำคัญต่อการขับกรด (ดูแท็บ HCO3)"},
+  {f:["ROMK_T"],c:"Step 3. K leaks back through ROMK. This keeps NKCC2 supplied with K and makes the lumen positive (+8 mV).",
+   t:"K ที่เข้ามามีมากกว่าที่ใช้ จึงรั่วกลับลูเมนทาง <b>ROMK</b> ได้ 2 ผล คือมี K พอให้ NKCC2 ทำงานต่อ และ K ที่ออกลูเมนพร้อมกับ Cl ที่ออกด้าน blood ทำให้ลูเมนเป็นบวกราว +8 mV"},
+  {f:["CLDN"],c:"Step 4. The positive lumen pushes Na, Ca and Mg between the cells. Claudin-16/19 forms the Ca and Mg pore.",
+   t:"แรงดันบวกในลูเมนผลัก cation ผ่านช่องระหว่างเซลล์ Ca และ Mg ผ่าน <b>claudin-16/19</b> TAL จึงดูดกลับ Mg มากที่สุด (60–70%) และ Ca ราว 20–25% Na ราวครึ่งหนึ่งที่ TAL ดูดกลับก็ผ่านช่องระหว่างเซลล์ (claudin-10b) โดยไม่ต้องใช้ ATP เพิ่ม หยุด NKCC2 หรือ ROMK แรงดันบวกหายไป จึงเสีย Ca และ Mg ไปด้วย"},
+  {f:["ClCKb","CaSR"],c:"Step 5. Cl exits to blood via ClC-Kb + barttin. CaSR senses blood Ca and Mg and brakes their reabsorption.",
+   t:"Cl ออกด้าน blood ทาง <b>ClC-Kb + barttin</b> (บางส่วนออกพร้อม K ทาง KCC4) ส่วน <b>CaSR</b> ด้าน blood รับรู้ Ca และ Mg ในเลือด ถ้าสูงจะยับยั้ง ROMK และเพิ่ม claudin-14 ซึ่งปิดช่อง claudin-16/19 ทำให้ขับ Ca และ Mg เพิ่ม เป็นกลไกกัน hypercalcemia ที่ไม่ผ่าน PTH"},
+  {f:["NHE3_T"],c:"Step 6. TAL also reclaims 10–15% of filtered HCO3 through its own NHE3.",
+   t:"TAL มี <b>NHE3</b> ของตัวเอง หลั่ง H ไปจับ HCO3 ที่เหลือจาก PT เก็บ HCO3 ได้อีกราว 10–15% ของที่กรอง ส่วนนี้เพิ่มขึ้นใน metabolic acidosis"},
+  {f:[],c:"Summary. TAL reclaims about 25% of Na with no water. Fluid leaves dilute (~100 mOsm). The macula densa reads its Cl.",
+   t:"<b>สรุป</b> TAL ไม่มี water channel ดูด NaCl อย่างเดียว จึงเป็น diluting segment ของเหลวออกจาก TAL เจือจางกว่าเลือดเสมอ (ราว 100 mOsm) ไม่ว่ามี vasopressin หรือไม่ NaCl ที่ออกไปเป็นตัวสร้าง medulla ที่เข้มข้น ปลาย TAL คือ <b>macula densa</b> ใช้ NKCC2 วัด Cl ที่ไหลผ่านเพื่อคุม GFR (TGF) และ renin",
+   m:"Cl ที่ macula densa มาก → ปล่อย adenosine ทำให้ afferent arteriole หด GFR ลด (tubuloglomerular feedback) Cl น้อย → COX-2/PGE2 และ nNOS กระตุ้น renin loop diuretic บล็อก NKCC2 ที่ macula densa ด้วย จึงกระตุ้น renin แรง TAL ยังสร้าง uromodulin ซึ่งเป็นโปรตีนที่พบมากที่สุดในปัสสาวะปกติ"}],
+ DCT:[
+  {f:["NKA_D"],c:"Step 1. Na/K-ATPase again sets up the Na gradient that drives the lumen side.",
+   t:"<b>Na/K-ATPase</b> ด้าน blood ทำให้ Na ในเซลล์ต่ำ เป็นแรงขับเหมือน segment อื่น"},
+  {f:["NCC","WNK"],c:"Step 2. NCC carries Na and Cl in together. WNK and SPAK switch it on. This is the thiazide target.",
+   t:"<b>NCC</b> ขน Na และ Cl เข้าพร้อมกันแบบ electroneutral ดูด Na ได้ราว 5–7% ของที่กรอง เป็นเป้าของ thiazide NCC ถูกเปิดด้วยการ phosphorylate จาก kinase <b>WNK–SPAK</b> และ WNK ถูกทำลายโดย KLHL3/CUL3",
+   m:"Angiotensin II และ aldosterone เพิ่ม NCC เมื่อขาด volume ส่วน K ในเลือดคุม NCC โดยตรง (K switch): K ต่ำ → Kir4.1 ทำให้เซลล์เป็นลบมากขึ้น → Cl ออกจากเซลล์มากขึ้น → Cl ในเซลล์ต่ำซึ่งปลดเบรก WNK → NCC ทำงานเพิ่ม Na ไปถึง CNT น้อยลง K จึงถูกขับน้อยลง K สูงได้ผลตรงข้าม tacrolimus กระตุ้น NCC จึงเกิด HT และ hyperK"},
+  {f:["TRPV5","NCX1"],c:"Step 3. Ca enters through TRPV5 and leaves through NCX1 and PMCA. This is the active, PTH-regulated Ca step.",
+   t:"Ca เข้าเซลล์ทาง <b>TRPV5</b> ถูกพาข้ามเซลล์ด้วย calbindin-D28k แล้วออกด้าน blood ทาง <b>NCX1</b> (แลกกับ Na) และ PMCA ช่วงปลาย DCT และ CNT ดูด Ca ได้ราว 10–15% เป็นส่วนที่ PTH และ 1,25(OH)2D ควบคุม",
+   m:"Thiazide ลด urine Ca จาก 2 กลไก คือ volume ลดทำให้ PT ดูด Na และ Ca ผ่านช่องระหว่างเซลล์มากขึ้น และ Na ในเซลล์ DCT ต่ำลงทำให้ NCX1 ดัน Ca ออกด้าน blood ได้ดีขึ้น ตรงข้ามกับ loop diuretic ที่เพิ่ม urine Ca"},
+  {f:["TRPM6","Kir41"],c:"Step 4. Mg enters through TRPM6, the final Mg fine-tuning. Kir4.1 recycles K so the pump and NCC keep running.",
+   t:"Mg เข้าทาง <b>TRPM6</b> (ราว 5–10% ของที่กรอง) เป็นที่ปรับ Mg ขั้นสุดท้าย เพราะหลัง DCT ไม่มีการดูด Mg อีก TRPM6 ถูกกระตุ้นโดย EGF ส่วน <b>Kir4.1</b> ปล่อย K ด้าน blood ให้ปั๊มทำงานต่อได้และคงความเป็นลบของเซลล์",
+   m:"Cetuximab และ panitumumab บล็อก EGF receptor จึงเสีย Mg ทางไต PPI ระยะยาวลดการดูด Mg ที่ลำไส้เป็นหลัก Gitelman มี Mg ต่ำมากกว่า thiazide เพราะ DCT ฝ่อ"},
+  {f:[],c:"Summary. DCT reclaims 5–7% of Na and fine-tunes Ca and Mg. Still water-tight, so fluid dilutes further.",
+   t:"<b>สรุป</b> DCT ยังไม่ให้น้ำผ่าน ของเหลวจึงเจือจางลงอีก (ต่ำกว่า 100 mOsm) thiazide ทำให้ hyponatremia ได้บ่อยกว่า loop เพราะบล็อกการสร้าง free water ที่นี่ แต่ไม่รบกวน medullary gradient ไตจึงยังดูดน้ำกลับได้เต็มที่เมื่อมี vasopressin"}],
+ CCD:[
+  {f:["NKA_C"],c:"Step 1. Na/K-ATPase lowers cell Na and loads the principal cell with K, ready to be secreted.",
+   t:"<b>Na/K-ATPase</b> ของ principal cell ดึง K เข้าเซลล์ด้วย K ในเซลล์จึงสูง (ราว 140) พร้อมถูกขับออก CNT และ CCD เป็นต้นทางของ K ในปัสสาวะเกือบทั้งหมด เพราะ K ที่กรองถูกดูดกลับไปเกือบหมดแล้วก่อนถึงที่นี่"},
+  {f:["ENaC"],c:"Step 2. ENaC lets Na in alone. With no anion following, the lumen becomes negative (about −40 mV).",
+   t:"<b>ENaC</b> ให้ Na เข้าเซลล์ตัวเดียวโดยไม่มี Cl ตามไปพร้อมกัน ลูเมนจึงเป็นลบ (ราว −40 mV) แรงนี้สำคัญที่สุดของการขับ K และช่วย H secretion ที่ intercalated cell amiloride, triamterene, trimethoprim และ pentamidine บล็อกตรงนี้"},
+  {f:["ROMK"],c:"Step 3. The negative lumen pulls K out through ROMK. BK channels add more when tubular flow is fast.",
+   t:"ลูเมนที่เป็นลบดึง K ออกทาง <b>ROMK</b> และ <b>BK channel</b> (เปิดเมื่อ flow เร็ว) การขับ K จึงขึ้นกับ 4 อย่าง คือ aldosterone, Na และน้ำที่ไหลมาถึง (distal delivery และ flow), K ในเลือด และ anion ที่ดูดกลับไม่ได้ในลูเมน (HCO3, ketone, penicillin) ซึ่งทำให้ลูเมนลบขึ้น ลองเลื่อน slider ด้านล่าง"},
+  {f:["MR","HSD2"],c:"Step 4. Aldosterone acts via MR to add ENaC, ROMK and pumps. 11β-HSD2 keeps cortisol off the receptor.",
+   t:"<b>Aldosterone</b> จับ <b>MR</b> สั่งเพิ่ม ENaC, ROMK และปั๊ม (ผ่าน SGK1 ซึ่งยับยั้ง Nedd4-2 ไม่ให้ดึง ENaC ออกจาก membrane) cortisol มีมากกว่า aldosterone หลายร้อยเท่าและจับ MR ได้เท่ากัน แต่ถูก <b>11β-HSD2</b> เปลี่ยนเป็น cortisone ก่อน (liquorice ยับยั้งเอนไซม์นี้)",
+   m:"Aldosterone paradox: ขาด volume มี angiotensin II ร่วมด้วย ซึ่งเพิ่ม NCC และยับยั้ง ROMK ไตจึงเก็บ Na โดยไม่เสีย K ส่วน hyperK กระตุ้น aldosterone โดยไม่มี angiotensin II และ K สูงยังปิด NCC Na จึงไปถึง ENaC มาก ขับ K ได้เต็มที่"},
+  {f:["AQP2","V2R","AQP34"],c:"Step 5. Vasopressin acts via V2R to insert AQP2. Water leaves through AQP3/4 and urine concentrates.",
+   t:"<b>Vasopressin</b> จับ <b>V2R</b> ด้าน blood (cAMP, PKA) ส่ง <b>AQP2</b> ขึ้นไปที่ด้านลูเมน น้ำเข้าเซลล์แล้วออกด้าน blood ทาง AQP3/AQP4 ไปยัง interstitium ที่เข้มข้น ไม่มี vasopressin AQP2 ถูกดึงกลับ ปัสสาวะจึงเจือจาง"},
+  {f:["PDS"],c:"Step 6. β-intercalated cells secrete HCO3 through pendrin in exchange for Cl. α-intercalated cells secrete H (see α-IC).",
+   t:"Collecting duct มี intercalated cell 2 แบบ <b>α-IC</b> หลั่ง H (ดูแท็บ α-IC) <b>β-IC</b> หลั่ง HCO3 ทาง <b>pendrin</b> แลกกับ Cl ใช้แก้ metabolic alkalosis pendrin ต้องมี Cl ในลูเมน เป็นเหตุที่ Cl depletion ทำให้ alkalosis คงอยู่จนกว่าจะให้ Cl"},
+  {f:[],c:"Summary. Only 2–3% of Na is reclaimed here, but it is the hormonally controlled part, so it sets final Na, K and water balance.",
+   t:"<b>สรุป</b> ส่วนนี้ดูด Na เพียง 2–3% แต่เป็นส่วนที่ถูกคุมด้วยฮอร์โมน aldosterone คุม Na และ K vasopressin คุมน้ำ จึงกำหนดองค์ประกอบสุดท้ายของปัสสาวะ"}],
+ OMCD:[
+  {f:["CA2_IC"],c:"Step 1. CA II inside the cell makes H and HCO3 from CO2 and water: one H for the urine, one new HCO3 for the blood.",
+   t:"ใน α-IC <b>CA II</b> (enzyme ใน cytosol) เร่ง CO2 + H2O → H + HCO3 H ส่งให้ปั๊มด้าน apical ส่วน HCO3 ที่เหลือคือ <b>HCO3 ใหม่</b> ที่จะกลับเข้าเลือด ต่างจาก PT ที่เป็นการเก็บ HCO3 ที่กรองกลับคืน"},
+  {f:["HATP"],c:"Step 2. H+-ATPase pumps H into the urine against a 1,000-fold gradient, lowering urine pH to as low as 4.5.",
+   t:"<b>H+-ATPase</b> ด้าน apical ปั๊ม H ลงปัสสาวะ ทำ urine pH ได้ต่ำถึง 4.5 (H ในลูเมนสูงกว่าในเซลล์ราว 1,000 เท่า) aldosterone กระตุ้นปั๊มนี้ และลูเมนที่เป็นลบจาก ENaC ช่วยให้ปั๊มทำงานง่ายขึ้น",
+   m:"ที่ pH 4.5 H อิสระมีเพียงราว 0.03 mmol/L ถ้าไม่มี buffer การขับ H วันละ 70 mmol ต้องใช้ปัสสาวะหลายพันลิตร H จึงต้องถูกพาไปกับ buffer เสมอ"},
+  {f:["BUF","RHCG","RHBG"],c:"Step 3. NH3 enters the urine via Rhbg and Rhcg and traps H as NH4+. Phosphate carries the rest as titratable acid.",
+   t:"H ถูกพาไปกับ <b>buffer</b> 2 ระบบ: <b>NH3</b> ที่สะสมใน medulla เข้าเซลล์ทาง Rhbg และออกลูเมนทาง Rhcg จับ H เป็น <b>NH4+</b> ซึ่งผ่าน membrane กลับไม่ได้ จึงติดอยู่ในปัสสาวะ (trapping) ราว 2 ใน 3 ของการขับกรด และ <b>HPO4</b> รับ H เป็น H2PO4 (titratable acid) ราว 1 ใน 3",
+   m:"NH4+ เพิ่มได้ถึง 5–10 เท่าใน acidosis เรื้อรังเพราะ PT สร้าง ammonia เพิ่ม titratable acid เพิ่มได้น้อยเพราะขึ้นกับปริมาณ phosphate ที่กรอง ยกเว้น DKA ที่ β-hydroxybutyrate ช่วยเป็น buffer การประเมิน NH4+ ทางอ้อมใช้ urine anion gap หรือ urine osmolal gap"},
+  {f:["AE1","CA2_IC"],c:"Step 4. Each new HCO3 leaves through AE1 in exchange for Cl. This replaces the HCO3 used up by daily acid.",
+   t:"HCO3 ใหม่ออกด้าน blood ทาง <b>AE1</b> แลกกับ Cl ทุก H ที่ขับออกพร้อม buffer = HCO3 ใหม่ 1 ตัว เป็นการทดแทน HCO3 ที่ร่างกายใช้ buffer กรดจากอาหารและ metabolism วันละราว 1 mmol/kg"},
+  {f:["HKATP"],c:"Step 5. H/K-ATPase reclaims K in exchange for H. It works harder when the body is K depleted.",
+   t:"<b>H/K-ATPase</b> ดูด K กลับแลกกับการหลั่ง H ทำงานมากขึ้นเมื่อขาด K เป็นเหตุหนึ่งที่ hypoK ทำให้ metabolic alkalosis คงอยู่"},
+  {f:[],c:"Summary. Net acid excretion = NH4+ + titratable acid − urine HCO3. Each mmol adds one new HCO3 to the blood.",
+   t:"<b>สรุป</b> Net acid excretion = NH4+ + titratable acid − urine HCO3 ปกติเท่ากับกรดที่ร่างกายสร้างวันละราว 1 mmol/kg (เพิ่มได้หลายเท่าเมื่อมี acid load) ถ้า H+-ATPase หรือ AE1 เสีย ปัสสาวะเป็นกรดไม่ได้ (pH > 5.5) NH4+ ถูก trap ไม่ได้ เกิด distal RTA"}],
+ IMCD:[
+  {f:["AQP2i"],c:"Step 1. With vasopressin, AQP2 lets water out into the very concentrated inner medulla.",
+   t:"เมื่อมี vasopressin <b>AQP2</b> ให้น้ำออกไปยัง inner medulla ที่เข้มข้นที่สุด ปัสสาวะเข้มข้นได้ถึงราว 1,200 mOsm (ถ้าไม่มี vasopressin ต่ำได้ถึงราว 50 mOsm)"},
+  {f:["UTA1"],c:"Step 2. UT-A1 releases urea into the medulla, building about half of the inner medullary gradient.",
+   t:"Collecting duct ส่วนต้นไม่ให้ urea ผ่าน น้ำออกไปก่อน urea ในท่อจึงเข้มข้นขึ้นมาก เมื่อถึง IMCD vasopressin เปิด <b>UT-A1</b> (และ UT-A3) urea แพร่ออกไปที่ inner medulla สร้างความเข้มข้นราวครึ่งหนึ่ง คนที่กินโปรตีนน้อยจึง concentrate ได้ไม่สุด",
+   m:"Urea ส่วนหนึ่งแพร่กลับเข้า loop of Henle แล้ววนกลับมาที่ IMCD (urea recycling) ไตจึงขับ urea ปริมาณมากได้โดยใช้น้ำน้อย"},
+  {f:[],c:"Summary. Final urine ranges from about 50 to 1,200 mOsm depending on vasopressin and the medullary gradient.",
+   t:"<b>สรุป</b> ลองเลื่อน vasopressin: ไม่มีฮอร์โมน ปัสสาวะเจือจางและปริมาณมาก มีเต็มที่ ปัสสาวะเข้มข้นและน้อย การ concentrate ต้องมีครบ 2 อย่าง คือ AQP2 ที่ทำงาน และ medulla ที่เข้มข้น",
+   m:"IMCD ยังเป็นที่ ANP ออกฤทธิ์ ลดการดูด Na และลดผลของ vasopressin จึงช่วยขับ Na และน้ำเมื่อ volume เกิน"}],
+ HCO3:[
+  {map:true,hl:["PT","TAL","DCT","CCD","OMCD"],
+   t:"ทุกวันไตกรอง HCO3 ราว <b>4,300 mmol</b> (GFR 180 L/วัน x HCO3 24 mmol/L) ถ้าเสียไปเพียง 5% ก็มากกว่ากรดที่ร่างกายสร้างทั้งวัน งานแรกของไตจึงเป็นการเก็บ HCO3 ที่กรองกลับให้เกือบหมด: <b>PT ราว 80%</b>, <b>TAL ราว 10–15%</b> และ distal nephron เก็บส่วนที่เหลือ ปัสสาวะปกติแทบไม่มี HCO3 (ลูกศรสีฟ้าในภาพ)",
+   m:"งานที่สองคือสร้าง HCO3 ใหม่ทดแทนส่วนที่ใช้ buffer กรดไป ซึ่งเกิดได้หลังจากเก็บ HCO3 ที่กรองกลับหมดแล้วเท่านั้น (ขั้นที่ 9 เป็นต้นไป)"},
+  {seg:"PT",f:["NHE3","HATP_PT"],c:"PT, step A. H is secreted into the lumen by NHE3 (about 2/3) and H+-ATPase (about 1/3).",
+   t:"ที่ PT H ถูกหลั่งลงลูเมน 2 ทาง คือ <b>NHE3</b> แลก Na เข้ากับ H ออก (ราว 2 ใน 3) และ <b>H+-ATPase</b> (ราว 1 ใน 3) H ที่ออกไปนี้จะจับกับ HCO3 ที่ถูกกรองในขั้นถัดไป ไม่ได้ถูกขับทิ้ง"},
+  {seg:"PT",f:["CA"],c:"PT, step B. In the lumen, CA IV on the brush border turns H + HCO3 into CO2 + H2O. HCO3 itself never crosses the membrane.",
+   t:"ในลูเมน H + HCO3 → H2CO3 ถ้าไม่มี enzyme ปฏิกิริยา H2CO3 → CO2 + H2O ช้ามาก H2CO3 จะคั่ง pH ในลูเมนตก และ H secretion หยุด <b>CA IV</b> เป็น enzyme ที่ยึดอยู่บนผิว brush border ด้านลูเมน (GPI anchor ไม่ได้เป็นช่องทะลุ membrane) เร่งให้กลายเป็น CO2 + H2O ทันที ตัว HCO3 เองไม่ได้ผ่าน membrane"},
+  {seg:"PT",f:["CA"],c:"PT, step C. CO2 diffuses into the cell. CA II rebuilds H + HCO3. The H is reused, the HCO3 heads for the blood side.",
+   t:"CO2 แพร่เข้าเซลล์ได้เองอย่างรวดเร็ว (ส่วนหนึ่งผ่าน AQP1) <b>CA II</b> ใน cytosol เร่งปฏิกิริยากลับเป็น H + HCO3 H กลับไปเป็นตัวที่ NHE3 และ H+-ATPase หลั่งรอบต่อไป จึงเป็นวงจรที่ H ไม่ได้ถูกขับออกจากร่างกายเลย"},
+  {seg:"PT",f:["NBC","CA"],c:"PT, step D. HCO3 leaves with Na through NBCe1 (1 Na : 3 HCO3). One filtered HCO3 lost from lumen, one HCO3 back in blood.",
+   t:"HCO3 ออกด้าน blood ทาง <b>NBCe1</b> ซึ่งขน 1 Na กับ 3 HCO3 ประจุลบสุทธิออก จึงใช้ความเป็นลบของเซลล์ช่วยดัน ผลรวมคือ HCO3 ที่กรอง 1 ตัวหายจากลูเมนและ HCO3 1 ตัวกลับเข้าเลือด เรียกว่า <b>reclamation</b> ไม่ได้เพิ่ม HCO3 ใหม่ และไม่มีกรดถูกขับออก",
+   m:"NBCe1 (SLC4A4) เสียทำให้ proximal RTA รุนแรงร่วมกับความผิดปกติทางตา (band keratopathy, glaucoma, cataract) CA II deficiency ทำให้ RTA แบบผสม proximal และ distal ร่วมกับ osteopetrosis และ cerebral calcification"},
+  {seg:"PT",f:["NHE3","NBC"],c:"PT, step E. Volume depletion, angiotensin II, hypoK and high pCO2 turn reclamation up. Volume expansion and PTH turn it down.",
+   t:"PT ไม่ได้ดูดกลับเป็นค่าคงที่ ตัวเร่ง: volume depletion (angiotensin II และ sympathetic กระตุ้น NHE3 และ NBCe1), hypoK (เซลล์เป็นกรด), pCO2 สูง (ชดเชย respiratory acidosis) ตัวลด: volume expansion, PTH, dopamine, pCO2 ต่ำ และ acetazolamide ผลคือระดับ HCO3 ในเลือดที่ไตเริ่มปล่อยให้หลุดไปกับปัสสาวะ (<b>threshold</b> ปกติราว 26 mmol/L) เลื่อนขึ้นหรือลง",
+   m:"เหตุนี้ volume depletion ร่วมกับ Cl และ K ต่ำจึงคง metabolic alkalosis ไว้ (threshold สูงขึ้น ไตเก็บ HCO3 ส่วนเกินไว้หมด) แก้ได้เมื่อให้ NaCl และ KCl ลองเลือกภาวะ Volume and Cl depletion ด้านล่าง"},
+  {seg:"TAL",f:["NHE3_T","NKCC2"],c:"TAL reclaims another 10–15% of filtered HCO3 through NHE3. It also absorbs NH4+ on the K site of NKCC2.",
+   t:"<b>TAL</b> ใช้กลไกเดียวกัน (NHE3 ด้าน apical, carbonic anhydrase และ HCO3 ออกด้าน blood) เก็บ HCO3 อีกราว 10–15% และ TAL ยังดูด <b>NH4+</b> ที่ PT ส่งมา โดย NH4+ เข้าแทน K ที่ NKCC2 แล้วปล่อยเป็น NH3 และ NH4+ สะสมเข้มข้นใน medulla ด้วย countercurrent พร้อมให้ collecting duct ใช้"},
+  {seg:"OMCD",f:["HATP","CA2_IC"],c:"Distal nephron. α-intercalated cells mop up the last few percent of HCO3, so final urine is nearly HCO3-free.",
+   t:"HCO3 ที่เหลือราว 5% ถูกเก็บที่ DCT และ collecting duct ด้วย H+-ATPase ของ α-intercalated cell ส่วนนี้ความจุน้อย เมื่อ HCO3 ในลูเมนหมดแล้ว H ที่หลั่งต่อไปจะทำให้ urine pH ลดลง และเริ่มสร้าง HCO3 ใหม่",
+   m:"ความจุที่จำกัดนี้อธิบายว่าทำไม acetazolamide หรือ proximal RTA ทำให้ HCO3 หลุดมาก เพราะ distal nephron รับ HCO3 ที่ล้นมาไม่ไหว"},
+  {seg:"PT",f:["GLN"],c:"New HCO3, route 1: PT turns glutamine into 2 NH4+ and 2 new HCO3. The new HCO3 goes straight to blood.",
+   t:"การสร้าง HCO3 ใหม่ทางแรกคือ <b>ammoniagenesis</b> ที่ PT glutamine ถูกเปลี่ยนเป็น NH4+ 2 ตัว และ α-ketoglutarate ซึ่งถูก metabolize เป็น <b>HCO3 ใหม่ 2 ตัว</b> ออกด้าน blood ทาง NBCe1 NH4+ ถูกหลั่งลงลูเมน (ผ่าน NHE3 แทน H) กระบวนการนี้เพิ่มได้ 5–10 เท่าใน acidosis เรื้อรัง เพิ่มใน hypoK และลดลงใน hyperK",
+   m:"HCO3 ใหม่นี้จะนับเป็นผลสุทธิก็ต่อเมื่อ NH4+ ถูกขับออกทางปัสสาวะ ถ้า NH4+ กลับเข้าเลือด ตับจะใช้ NH4+ กับ HCO3 สร้าง urea ซึ่งกิน HCO3 ไปเท่ากัน ผลสุทธิเป็นศูนย์ การวัด urine NH4+ (หรือ urine anion gap) จึงบอกการสร้าง HCO3 ใหม่ได้ hyperK ลด ammoniagenesis เป็นกลไกหลักของ type 4 RTA"},
+  {seg:"OMCD",f:["RHBG","RHCG","BUF","HATP"],c:"New HCO3, route 2: NH3 crosses into the collecting duct via Rhbg and Rhcg and is trapped by secreted H as NH4+.",
+   t:"ที่ collecting duct NH3 จาก medulla เข้าเซลล์ทาง <b>Rhbg</b> และออกลูเมนทาง <b>Rhcg</b> พบกับ H ที่ H+-ATPase หลั่ง กลายเป็น <b>NH4+</b> ซึ่งผ่าน membrane กลับไม่ได้ จึงติดอยู่ในปัสสาวะ (trapping) urine pH ยิ่งต่ำ NH3 ยิ่งถูกดึงเข้าลูเมน NH4+ คือทางขับกรดหลัก ราว 2 ใน 3 ในภาวะปกติ และเป็นส่วนที่ปรับเพิ่มได้มาก"},
+  {seg:"OMCD",f:["BUF","CA2_IC","AE1"],c:"New HCO3, route 3: phosphate takes H as H2PO4 (titratable acid). Every H leaving with a buffer leaves one new HCO3 for AE1.",
+   t:"H อีกส่วนจับ HPO4 ที่ถูกกรองเป็น H2PO4 เรียกว่า <b>titratable acid</b> (ราว 1 ใน 3 ในภาวะปกติ เพิ่มได้น้อยเพราะขึ้นกับ phosphate ที่กรอง) ใน α-IC H ทุกตัวที่หลั่งมาจาก CA II คู่กับ HCO3 1 ตัว ซึ่งออกด้าน blood ทาง <b>AE1</b> เป็น HCO3 ใหม่"},
+  {map:true,hl:["PT","TAL","OMCD"],
+   t:"<b>สรุป</b> ไตคุม HCO3 ในเลือดด้วย 2 งาน <b>(1) reclamation</b> เก็บ HCO3 ที่กรองกลับ (PT 80%, TAL 10–15%, distal ที่เหลือ) ไม่ได้เพิ่ม HCO3 ใหม่ <b>(2) generation</b> ขับกรดเป็น NH4+ และ titratable acid ได้ HCO3 ใหม่ทดแทนที่ใช้ไป Net acid excretion = NH4+ + TA − urine HCO3 ปกติเท่ากับกรดที่สร้างวันละราว 1 mmol/kg ลองเลื่อน plasma HCO3 และเลือกภาวะ แล้วดูตัวเลขด้านล่าง",
+   m:"โรคตามจุดที่เสีย: proximal RTA = reclamation ที่ PT เสีย threshold ต่ำลง (urine pH ต่ำกว่า 5.5 ได้เมื่อ HCO3 ในเลือดต่ำกว่า threshold) distal RTA = α-IC หลั่ง H ไม่ได้ urine pH > 5.5 NH4+ ต่ำ type 4 RTA = hyperK หรือ aldosterone ต่ำ ลด ammoniagenesis NH4+ ต่ำแต่ urine pH ต่ำได้"}]
+};
+var PX={
+ PT:{none:{name:"ปกติ"},
+   acz:{name:"Acetazolamide",block:["CA"],flows:{NHE3:0.4,HATP_PT:0.4,NBC:0.35,AQP1:0.8},u:[["HCO3","up"],["Na","up"],["K","up"]],t:"CA ถูกบล็อก H ที่หลั่งออกไปจับ HCO3 แล้วเปลี่ยนเป็น CO2 ไม่ทัน H2CO3 คั่ง H secretion หยุด HCO3 จึงหลุดไปกับปัสสาวะ (urine pH สูง) Na และน้ำที่หลุดไปถึง CCD มากขึ้นจึงขับ K เพิ่ม ผลคือ hyperchloremic acidosis และ hypoK แบบ pRTA",tf:"ใช้แก้ metabolic alkalosis ใน edematous state และป้องกัน high-altitude sickness"},
+   sglt2:{name:"SGLT2 inhibitor",block:["SGLT2"],flows:{NHE3:0.8},u:[["Glucose","up"],["Na","up"]],t:"SGLT2 ถูกบล็อก glucose และ Na หลุดไปกับปัสสาวะ Na ที่ไปถึง macula densa เพิ่ม กระตุ้น TGF ให้ afferent arteriole หด ลด hyperfiltration",tf:"eGFR ลดลงเล็กน้อยช่วงแรก (hemodynamic dip) แล้วชะลอการเสื่อมของไตระยะยาว ยังยับยั้ง NHE3 บางส่วน"},
+   fanc:{name:"Fanconi syndrome",block:["NHE3","SGLT2","NaPi","AA","MEG","URAT1"],flows:{NKA_PT:0.5,NBC:0.4,AQP1:0.6,GLN:0.6},u:[["Glucose","up"],["PO4","up"],["HCO3","up"],["Urate","up"],["AA","up"],["LMW protein","up"]],t:"PT เสียหายทั้งเซลล์ (พลังงานลด) transporter หลายตัวหยุดพร้อมกัน: normoglycemic glycosuria, phosphaturia, aminoaciduria, uricosuria, LMW proteinuria และ pRTA",tf:"สาเหตุ: tenofovir DF, ifosfamide, myeloma light chain, cystinosis, Dent, Lowe, Wilson"},
+   pth:{name:"PTH/FGF23 สูง",flows:{NaPi:0.25,NHE3:0.8},u:[["PO4","up"]],t:"PTH และ FGF23 ดึง NaPi-IIa/IIc ออกจาก apical membrane phosphate จึงหลุดไปกับปัสสาวะ TmP/GFR ลด PTH ยังยับยั้ง NHE3 บางส่วน",tf:"FGF23 ลด 1α-hydroxylase ต่างจาก PTH ที่เพิ่ม"}},
+ TAL:{none:{name:"ปกติ"},
+   furo:{name:"Furosemide",block:["NKCC2"],flows:{ROMK_T:0.2,ClCKb:0.2,NKA_T:0.3,CLDN:0.15},u:[["Na","up"],["Cl","up"],["K","up"],["Ca","up"],["Mg","up"]],t:"NKCC2 ถูกบล็อก NaCl ไม่ถูกดูดกลับ K ไม่วนกลับทาง ROMK แรงดันบวกในลูเมนหายไป Ca และ Mg จึงไม่ผ่านช่องระหว่างเซลล์ เสียทั้ง Na K Cl Ca Mg",tf:"Macula densa ไม่รับรู้ Cl จึงหลั่ง renin เพิ่ม ปัสสาวะ concentrate และ dilute ไม่ได้ (isosthenuria)"},
+   b2:{name:"Bartter type 2 (ROMK)",block:["ROMK_T"],flows:{NKCC2:0.3,CLDN:0.2,NKA_T:0.4},u:[["Na","up"],["Cl","up"],["Ca","up"]],t:"ไม่มี ROMK K ในลูเมนหมด NKCC2 จึงทำงานไม่ได้ (ต้องใช้ K) ผลเหมือน loop diuretic",tf:"ช่วงแรกเกิดมี hyperK เพราะ ROMK ใน CCD ขับ K ไม่ได้ ต่อมา BK channel ช่วยแทน"},
+   adh1:{name:"ADH1 (CaSR gain)",gain:["CaSR"],flows:{ROMK_T:0.4,NKCC2:0.6,CLDN:0.15},u:[["Ca","up"],["Mg","up"],["K","up"]],t:"CaSR ไวเกิน ทำเหมือน Ca สูงตลอด ยับยั้ง ROMK และ paracellular Ca flux Ca จึงหลุดไปกับปัสสาวะทั้งที่ Ca ในเลือดต่ำ",tf:"ห้ามให้ Ca และ vitamin D มากเกิน จะเกิด nephrocalcinosis รุนแรง ถ้ารุนแรงเห็นภาพ Bartter-like (เดิมเคยเรียก Bartter type 5 แต่ปัจจุบัน type 5 หมายถึง MAGED2 transient antenatal Bartter)"},
+   fhhnc:{name:"FHHNC (claudin-16/19)",block:["CLDN"],u:[["Mg","up"],["Ca","up"]],t:"ช่องระหว่างเซลล์เสีย Mg และ Ca ไม่ถูกดูดกลับแม้แรงดันบวกยังอยู่ เกิด hypomagnesemia, hypercalciuria, nephrocalcinosis และ CKD",tf:"CLDN19 มีตาผิดปกติร่วม (myopia, macular coloboma)"}},
+ DCT:{none:{name:"ปกติ"},
+   thz:{name:"Thiazide",block:["NCC"],flows:{NKA_D:0.5,TRPV5:1.8,NCX1:1.8,TRPM6:0.5,ClCKb_D:0.3},u:[["Na","up"],["Cl","up"],["K","up"],["Mg","up"],["Ca","dn"]],t:"NCC ถูกบล็อก Na และ Cl หลุดไป distal มากขึ้นจึงขับ K เพิ่ม Ca ถูกดูดกลับเพิ่ม (urine Ca ต่ำ) Mg หลุดมากขึ้น",tf:"Thiazide ทำให้ hyponatremia ได้เพราะลดการสร้าง free water ที่ DCT ขณะที่ concentrating ยังดี"},
+   git:{name:"Gitelman syndrome",block:["NCC"],flows:{NKA_D:0.5,TRPV5:1.6,NCX1:1.6,TRPM6:0.25,ClCKb_D:0.3},u:[["Na","up"],["K","up"],["Mg","up"],["Ca","dn"]],t:"NCC เสียแต่กำเนิด เหมือนได้ thiazide ตลอดเวลา: hypoK metabolic alkalosis, hypoMg, hypocalciuria BP ปกติหรือต่ำ",tf:"Mg ต่ำมากกว่า thiazide เพราะ DCT atrophy และ TRPM6 ลด chondrocalcinosis จาก hypoMg"},
+   gordon:{name:"Gordon (WNK/KLHL3)",gain:["NCC","WNK"],flows:{NCC:2.2,NKA_D:1.6},u:[["Na","dn"],["K","dn"],["Ca","up"]],t:"WNK–SPAK กระตุ้น NCC เกิน Na ถูกดูดกลับที่ DCT มากจน Na ที่ไปถึง CCD น้อย K จึงขับไม่ออก: HT, hyperK, hyperchloremic acidosis, renin ต่ำ",tf:"ตอบสนองดีมากต่อ thiazide ขนาดต่ำ tacrolimus ทำให้เกิดภาพคล้ายกัน"},
+   ppi:{name:"PPI ระยะยาว",block:["TRPM6"],u:[["Mg","up"]],t:"PPI ระยะยาวลดการดูด Mg ที่ลำไส้ผ่าน TRPM6/7 เป็นหลัก ที่ DCT Mg ถูกดูดกลับไม่พอเติม เกิด hypoMg และตามด้วย hypoK, hypoCa",tf:"FEMg ต่ำในการเสียทางลำไส้ (< 2%) cetuximab ทำให้เสียทางไตผ่าน EGFR → TRPM6"},
+   east:{name:"EAST/SeSAME (Kir4.1)",block:["Kir41"],flows:{NCC:0.4,NKA_D:0.4,TRPM6:0.4},u:[["Na","up"],["K","up"],["Mg","up"],["Ca","dn"]],t:"ไม่มี Kir4.1 K วนกลับด้าน blood ไม่ได้ Na/K-ATPase ทำงานลด NCC ทำงานลดตาม ภาพเหมือน Gitelman",tf:"ร่วมกับ epilepsy, ataxia, sensorineural deafness (Kir4.1 ในสมองและหู)"}},
+ CCD:{none:{name:"ปกติ"},
+   amil:{name:"Amiloride/trimethoprim",block:["ENaC"],flows:{ROMK:0.2,NKA_C:0.4},u:[["Na","up"],["K","dn"]],t:"ENaC ถูกบล็อก ลูเมนไม่เป็นลบ K ขับออกทาง ROMK ไม่ได้ เกิด hyperK (trimethoprim และ pentamidine ออกฤทธิ์แบบเดียวกัน)",tf:"Amiloride ใช้ใน Liddle และ lithium-induced NDI (ลด lithium เข้าเซลล์ทาง ENaC)"},
+   liddle:{name:"Liddle syndrome",gain:["ENaC"],flows:{ENaC:2.4,ROMK:1.9,NKA_C:1.9},u:[["Na","dn"],["K","up"]],t:"ENaC ค้างอยู่บน membrane ดูด Na มาก volume เพิ่ม HT ลูเมนเป็นลบมากจึงขับ K มาก: hypoK, metabolic alkalosis, renin และ aldosterone ต่ำ",tf:"SCNN1B/G ตำแหน่ง PY motif ทำให้ Nedd4-2 จับไม่ได้ spironolactone ไม่ได้ผล ใช้ amiloride"},
+   spiro:{name:"MRA (spironolactone)",block:["MR"],flows:{ENaC:0.35,ROMK:0.35,NKA_C:0.4},u:[["Na","up"],["K","dn"]],t:"MR ถูกบล็อก aldosterone สั่งเพิ่ม ENaC ROMK และ Na/K-ATPase ไม่ได้ ดูด Na ลดและขับ K ลด",tf:"เสี่ยง hyperK เมื่อใช้ร่วม RAASi หรือ eGFR ต่ำ finerenone เป็น non-steroidal MRA"},
+   ame:{name:"AME / liquorice",block:["HSD2"],gain:["MR"],flows:{ENaC:2.0,ROMK:1.8,NKA_C:1.8},u:[["Na","dn"],["K","up"]],t:"11β-HSD2 เสีย cortisol ที่มีมากกว่า aldosterone หลายร้อยเท่าเข้าจับ MR ได้ ENaC และ ROMK ทำงานเกิน: HT, hypoK, alkalosis, renin และ aldosterone ต่ำ",tf:"Glycyrrhetinic acid ในชะเอมเทศและยาบางชนิด (posaconazole) ยับยั้ง 11β-HSD2"},
+   li:{name:"Lithium (NDI)",block:["AQP2"],u:[["H2O","up"]],t:"Lithium เข้าเซลล์ทาง ENaC แล้วลดการสร้าง AQP2 น้ำไม่ถูกดูดกลับ ปัสสาวะเจือจางแม้มี vasopressin",tf:"Amiloride ลด lithium เข้าเซลล์ ใช้รักษา NDI จาก lithium"}},
+ OMCD:{none:{name:"ปกติ"},
+   drtah:{name:"dRTA (H+-ATPase)",block:["HATP"],flows:{AE1:0.3,RHCG:0.3,CA2_IC:0.4},u:[["H+","dn"],["NH4+","dn"],["Citrate","dn"]],t:"ปั๊ม H เสีย ปัสสาวะเป็นกรดไม่ได้ (pH > 5.5) NH4+ ถูก trap ได้น้อย UAG บวก เกิด hyperchloremic acidosis, hypoK, hypocitraturia, nephrocalcinosis",tf:"ATP6V1B1/ATP6V0A4 มักมี sensorineural deafness ตรวจการได้ยินทุกราย"},
+   drtaae1:{name:"dRTA (AE1)",block:["AE1"],flows:{HATP:0.3,RHCG:0.4,CA2_IC:0.4},u:[["H+","dn"],["NH4+","dn"]],t:"AE1 ส่ง HCO3 ออกด้าน blood ไม่ได้ HCO3 ค้างในเซลล์ H+-ATPase จึงทำงานลดตาม ผลเหมือน dRTA",tf:"พบร่วมกับ Southeast Asian ovalocytosis (AR) ในไทย ตรวจ blood smear"},
+   hypok:{name:"K depletion",gain:["HKATP"],flows:{HKATP:2.6,HATP:1.4},u:[["K","dn"],["NH4+","up"]],t:"เมื่อขาด K H/K-ATPase ทำงานเพิ่ม ดูด K กลับแลกกับการหลั่ง H และ ammoniagenesis ที่ PT เพิ่ม ช่วยคง metabolic alkalosis",tf:"HypoK จึงเป็นทั้งผลและตัวคง metabolic alkalosis"}},
+ IMCD:{none:{name:"ปกติ"},
+   ndi:{name:"NDI (AQP2)",block:["AQP2i"],flows:{UTA1:0.5},u:[["H2O","up"]],t:"AQP2 เสีย น้ำผ่าน apical membrane ไม่ได้ ปัสสาวะเจือจางแม้ vasopressin สูง",tf:"AVPR2 (X-linked) พบบ่อยกว่า AQP2 desmopressin ไม่ได้ผล"},
+   tolv:{name:"Tolvaptan",flows:{AQP2i:0.1,UTA1:0.4},u:[["H2O","up"]],t:"V2R ถูกบล็อก AQP2 ไม่ถูกส่งขึ้น membrane ขับน้ำอิสระ (aquaresis) Na ในเลือดขึ้น",tf:"ใช้ใน SIAD และ ADPKD ต้องเฝ้า overcorrection และ liver function"}},
+ HCO3:{none:{name:"ปกติ",m:{ph:24}},
+   acid:{name:"Metabolic acidosis (ไตปกติ)",m:{ph:14},flows:{GLN:2.4,HATP:1.6,RHCG:1.8,NHE3:1.3},u:[["NH4+","up"],["TA","up"]],t:"HCO3 ในเลือดต่ำกว่า threshold มาก ไตเก็บ HCO3 ที่กรองได้หมด ammoniagenesis เพิ่มหลายเท่า urine pH ต่ำ NH4+ และ net acid excretion สูง นี่คือการตอบสนองที่ถูกต้อง",tf:"UAG ลบมาก (NH4+ สูง) ใช้แยกจาก RTA ซึ่ง NH4+ ต่ำ"},
+   acz:{name:"Acetazolamide",m:{ph:24,kPT:0.55,kTAL:0.7,kD:0.8},block:["CA","CA2_IC"],flows:{NHE3:0.5,NBC:0.4},u:[["HCO3","up"],["Na","up"],["K","up"]],t:"CA ถูกบล็อกทั้งใน PT, TAL และ intercalated cell HCO3 ที่กรองหลุดไปมาก urine pH สูง ตามด้วย hyperchloremic acidosis จน HCO3 ในเลือดลดลงต่ำกว่า threshold ใหม่ การหลุดจึงหยุดเอง",tf:"ใช้แก้ metabolic alkalosis จาก diuretic ใน edematous state"},
+   prta:{name:"Proximal RTA",m:{ph:17,kPT:0.62,kN:0.6},block:["NBC"],flows:{NHE3:0.6,NBC:0.5,GLN:0.8},u:[["HCO3","up"]],t:"PT เก็บ HCO3 ได้น้อย threshold ลดเหลือราว 18 เมื่อ HCO3 ในเลือดต่ำกว่านี้ HCO3 ที่กรองน้อยลงจน distal เก็บได้หมด urine pH ต่ำกว่า 5.5 ได้ แต่เมื่อให้ alkali ให้ HCO3 ในเลือดสูงขึ้น HCO3 จะหลุดมาก (ลองเลื่อน plasma HCO3 ขึ้น)",tf:"FEHCO3 > 15% เมื่อแก้ HCO3 ในเลือดให้ปกติ มักพบใน Fanconi"},
+   drta:{name:"Distal RTA",m:{ph:15,kD:0.25,kN:0.35,minpH:6.2},block:["HATP"],flows:{HATP:0.2,RHCG:0.3,CA2_IC:0.4},u:[["NH4+","dn"],["Citrate","dn"]],t:"α-IC หลั่ง H ไม่ได้ urine pH > 5.5 แม้เลือดเป็นกรดมาก NH4+ ถูก trap ได้น้อย ไตสร้าง HCO3 ใหม่ไม่พอกับกรดที่สร้างทุกวัน",tf:"UAG บวก hypocitraturia nephrocalcinosis ในไทยพิจารณา SAO และ Sjögren"},
+   type4:{name:"Type 4 RTA (hyperK)",m:{ph:18,kN:0.35,kD:0.85},flows:{GLN:0.35,RHCG:0.4},u:[["NH4+","dn"]],t:"HyperK และ aldosterone ต่ำกด ammoniagenesis NH4+ ต่ำ ไตจึงสร้าง HCO3 ใหม่ได้น้อย แต่ปั๊ม H ยังทำงาน urine pH จึงต่ำกว่า 5.5 ได้ ต่างจาก distal RTA",tf:"แก้ hyperK (เช่น K binder, หยุดยาที่ทำให้ K สูง) แล้ว NH4+ และ HCO3 ดีขึ้น"},
+   vol:{name:"Volume and Cl depletion",m:{ph:32,kPT:1.25,kTAL:1.1,kD:1.6,kN:1.1},flows:{NHE3:1.6,NBC:1.5},u:[["Cl","dn"],["HCO3","dn"]],t:"Angiotensin II และ aldosterone เพิ่ม NHE3 และการหลั่ง H ทั่ว nephron threshold สูงขึ้นจนไตเก็บ HCO3 ส่วนเกินไว้หมด metabolic alkalosis จึงคงอยู่ (contraction alkalosis) และ pendrin ไม่มี Cl ในลูเมนให้แลก",tf:"แก้ด้วย NaCl และ KCl (Cl-responsive alkalosis) urine Cl < 20 mmol/L"},
+   hypok:{name:"K depletion",m:{ph:28,kPT:1.15,kD:1.3,kN:1.6},flows:{NHE3:1.4,GLN:1.6},u:[["NH4+","up"]],t:"HypoK ทำให้เซลล์ PT เป็นกรด NHE3 และ ammoniagenesis เพิ่ม H/K-ATPase ใน α-IC ทำงานเพิ่ม threshold สูงขึ้น ช่วยคง metabolic alkalosis",tf:"ต้องแก้ K ร่วมด้วย alkalosis จึงหาย"}}
+};
+PX.tDL={none:{name:"ปกติ"}}; PX.tAL={none:{name:"ปกติ"}};
+var EN={acz:"Acetazolamide blocks carbonic anhydrase: HCO3 is lost in urine and more Na reaches the collecting duct.",sglt2:"SGLT2 blocked: glucose and Na stay in the lumen. More NaCl reaches the macula densa.",fanc:"The whole proximal cell fails: glucose, phosphate, amino acids, urate and HCO3 are all lost.",pth:"PTH and FGF23 pull NaPi off the membrane: phosphate is lost in urine.",
+ furo:"Furosemide blocks NKCC2: no K recycling, no positive lumen, so Ca and Mg are lost too.",b2:"No ROMK: no K in the lumen, so NKCC2 stalls. The picture mimics a loop diuretic.",adh1:"Overactive CaSR acts as if Ca were high: ROMK and the Ca/Mg path are switched down.",fhhnc:"Claudin-16/19 lost: Mg and Ca cannot pass between cells.",
+ thz:"Thiazide blocks NCC: Na and Cl reach the collecting duct, Ca uptake rises, Mg is lost.",git:"Inborn loss of NCC: like lifelong thiazide.",gordon:"WNK drives NCC too hard: too little Na reaches the collecting duct, so K cannot be excreted.",ppi:"Long-term PPI reduces Mg uptake through TRPM6.",east:"No Kir4.1: the pump slows and NCC follows. Gitelman-like.",
+ amil:"ENaC blocked: the lumen is no longer negative, so K stays in the body.",liddle:"ENaC stuck on the membrane: Na retained, lumen very negative, K pours out.",spiro:"MR blocked: aldosterone cannot add ENaC, ROMK or pumps.",ame:"No 11β-HSD2: cortisol floods MR and acts like aldosterone excess.",li:"Lithium enters via ENaC and removes AQP2: water stays in the urine.",
+ drtah:"H+-ATPase lost: urine cannot be acidified and NH4+ trapping falls.",drtaae1:"AE1 lost: HCO3 cannot leave the cell, so H secretion slows.",hypok:"K depletion: H/K-ATPase works harder to reclaim K.",ndi:"AQP2 lost: water cannot leave, urine stays dilute.",tolv:"V2R blocked: AQP2 is not inserted, free water is excreted."};
+var BADGE={PT:{lumen:"Na 140",cell:"Na 15, −70 mV",blood:"Na 140"},tDL:{lumen:"300 → 1200 mOsm"},tAL:{lumen:"1200 → 400 mOsm"},TAL:{lumen:"Lumen +8 mV",cell:"Na 15"},DCT:{lumen:"Fluid ~100 mOsm",cell:"Na 15"},CCD:{lumen:"Lumen −40 mV",cell:"K 140"},OMCD:{lumen:"Urine pH 4.5–6"},IMCD:{lumen:"Urine 50–1200 mOsm"}};
+var BADGEPX={furo:{lumen:"Lumen ~0 mV",cell:"Na 15"},b2:{lumen:"Lumen ~0 mV"},amil:{lumen:"Lumen ~0 mV",cell:"K 140"},spiro:{lumen:"Lumen −10 mV",cell:"K 140"},liddle:{lumen:"Lumen −70 mV",cell:"K 140"},ame:{lumen:"Lumen −70 mV",cell:"K 140"},drtah:{lumen:"Urine pH > 5.5"},drtaae1:{lumen:"Urine pH > 5.5"}};
+
+/* ---------- fluid tracker data: index 0 filtrate, 1 end PT, 2 bend, 3 end tAL, 4 end TAL, 5 end DCT, 6 end CCD, 7 end OMCD, 8 urine ---------- */
+var NA0=[100,35,35,30,10,4,1.6,1.0,0.8], K0=[100,35,40,40,10,6,15,12,10], WF=[100,35,18,18,18,17,5,2.5,1], WN=[100,35,18,18,18,17,15,14,12], OF=[300,300,1200,400,100,90,300,600,1200], ON=[300,300,600,250,100,80,70,60,50];
+var TRK={acz:{na:[100,45,45,40,16,8,3.5,2.6,2.2],k:[100,40,45,45,14,9,24,21,19],wm:1.5},sglt2:{na:[100,40,40,34,12,5,2,1.3,1.1],k:[100,38,43,43,11,7,17,14,12],wm:1.3},fanc:{na:[100,55,55,48,20,10,5,3.8,3.4],k:[100,50,55,55,18,12,28,25,22],wm:1.7},
+ furo:{na:[100,35,35,30,28,20,15,13,12],k:[100,35,40,40,30,25,40,35,30],osm:[300,300,450,350,300,290,300,300,300],wm:5},b2:{na:[100,35,35,30,24,17,12,10,9],k:[100,35,40,40,26,22,30,26,22],osm:[300,300,500,370,280,270,300,300,320],wm:4},adh1:{na:[100,35,35,30,13,6,2.2,1.4,1.2],k:[100,35,40,40,14,9,20,17,15],wm:1.4},
+ thz:{na:[100,35,35,30,10,9,4.5,3.4,3],k:[100,35,40,40,10,10,22,19,17],osm5:150,wm:1.4},git:{na:[100,35,35,30,10,9,4.5,3.4,3],k:[100,35,40,40,10,10,22,19,17],osm5:150,wm:1.4},east:{na:[100,35,35,30,10,8,4,3,2.6],k:[100,35,40,40,10,9,20,17,15],osm5:140,wm:1.3},gordon:{na:[100,35,35,30,10,2,0.6,0.4,0.35],k:[100,35,40,40,10,4,6,5,4],wm:0.8},
+ amil:{na:[100,35,35,30,10,4,3,2.4,2.1],k:[100,35,40,40,10,6,3,2.5,2],wm:1.2},spiro:{na:[100,35,35,30,10,4,2.8,2.2,2],k:[100,35,40,40,10,6,4,3.2,2.6],wm:1.2},liddle:{na:[100,35,35,30,10,4,0.6,0.35,0.3],k:[100,35,40,40,10,6,25,21,18],wm:0.9},ame:{na:[100,35,35,30,10,4,0.6,0.35,0.3],k:[100,35,40,40,10,6,25,21,18],wm:0.9},
+ li:{noADH:true},ndi:{noADH:true},tolv:{noADH:true}};
+
+/* ---------- HCO3 model (teaching): saturable reclamation per segment + new HCO3 from NH4+ and TA ---------- */
+var GFR=180, CAP_PT=0.8*GFR*26, CAP_TAL=0.15*GFR*26, CAP_D=0.05*GFR*26;
+function hco3(ph,mm){
+  mm=mm||{}; var kPT=mm.kPT||1, kTAL=mm.kTAL||1, kD=mm.kD||1, kN=mm.kN||1;
+  var F=GFR*ph, rPT=Math.min(0.8*F,CAP_PT*kPT), a1=F-rPT, rTAL=Math.min(0.75*a1,CAP_TAL*kTAL), a2=a1-rTAL, rD=Math.min(a2,CAP_D*kD), uB=a2-rD;
+  var nh4=Math.min(400,48*(1+Math.max(0,24-ph)*0.3)*kN);
+  var phu=uB>40?Math.min(7.8,6.5+uB/2500):Math.max(4.6,6.0-0.09*Math.max(0,24-ph));
+  if(mm.minpH) phu=Math.max(phu,mm.minpH);
+  var ta=Math.max(5,12+24*Math.min(1,Math.max(0,(6.6-phu)/1.4)));
+  return {F:F,rPT:rPT,rTAL:rTAL,rD:rD,uB:uB,nh4:nh4,ta:ta,nae:nh4+ta-uB,phu:phu,fe:100*uB/F};
+}
+function threshold(mm){ for(var x=10;x<=45;x+=0.1){ if(hco3(x,mm).uB>20) return x; } return 45; }
+
+function P(seg,px,o){ var d={seg:seg,px:px,lv:1,aldo:1,adh:1,del:1,ph:24,tour:false,auto:false}; for(var k in o||{}) d[k]=o[k]; return d; }
+var S={
+  tour:{name:"ไล่ทั้ง nephron", p:P("PT","none",{tour:true,auto:true}), rows:[["ลำดับ","PT → thin limbs → TAL → DCT → collecting duct → α-IC → IMCD"],["ดู","ทีละ segment ว่าใช้ transporter อะไร แรงขับมาจากไหน และของเหลวเปลี่ยนอย่างไร"],["หลัก","Na/K-ATPase ด้าน blood เป็นแรงขับของทุก segment"]],
+    take:["ทุก segment ใช้ Na/K-ATPase ด้าน blood สร้างแรงให้ Na เข้าจากลูเมน","PT ดูดปริมาณมาก ปลายท่อปรับละเอียดตามฮอร์โมน","K ถูกดูดกลับเกือบหมดก่อน DCT แล้วถูกขับที่ collecting duct"]},
+  pt:{name:"Proximal tubule", p:P("PT","none"), rows:[["หน้าที่","Na และน้ำ 65%, HCO3 80%, glucose เกือบ 100%"],["แรงขับ","Na gradient จาก Na/K-ATPase"],["ของเหลว","ปริมาตรลด osmolality ยัง 300"]],
+    take:["Na/K-ATPase ด้าน blood เป็นแรงขับของ transporter ด้าน lumen","Carbonic anhydrase เป็น enzyme ที่เปลี่ยน HCO3 เป็น CO2 ให้ข้าม membrane ไม่ใช่ channel","PT เสียทั้งเซลล์ = Fanconi"]},
+  hco3:{name:"HCO3 reclamation ทั้งหมด", p:P("HCO3","none"), rows:[["Filtered","HCO3 ราว 4,300 mmol/วัน"],["Reclamation","PT 80%, TAL 10–15%, distal ที่เหลือ"],["Generation","NH4+ ราว 2 ใน 3 และ titratable acid ราว 1 ใน 3"]],
+    take:["Reclamation คืนเฉพาะ HCO3 ที่กรอง ไม่ได้สร้าง HCO3 ใหม่","HCO3 ใหม่ได้จากการขับ H พร้อม buffer (NH4+ และ titratable acid)","NH4+ ต้องออกทางปัสสาวะจึงนับเป็น HCO3 ใหม่"]},
+  tal:{name:"TAL", p:P("TAL","none"), rows:[["หน้าที่","Na 25% ไม่ดูดน้ำ"],["กลไก","K รั่วกลับทาง ROMK ทำให้ลูเมนเป็นบวก"],["ผล","Ca และ Mg ผ่านระหว่างเซลล์ ของเหลวเจือจาง"]],
+    take:["TAL ไม่มี water channel จึงทำให้ของเหลวเจือจางและ medulla เข้มข้น","แรงดันบวกในลูเมนขับ Ca และ Mg ผ่านระหว่างเซลล์","Loop diuretic ทำให้เสีย Na K Ca Mg และ concentrate ไม่ได้"]},
+  furo:{name:"TAL + furosemide", p:P("TAL","furo"), rows:[["บล็อก","NKCC2"],["ผล","ไม่มี K วนกลับ ลูเมนไม่เป็นบวก"],["ปัสสาวะ","Na K Ca Mg หลุด ปัสสาวะ ~300 mOsm"]],
+    take:["Loop diuretic เสียทั้ง Na K Cl Ca และ Mg","ปัสสาวะ concentrate และ dilute ไม่ได้เพราะ medulla gradient หาย","ใช้เพิ่มการขับ Ca หลังให้ volume พอ"]},
+  dct:{name:"DCT + thiazide", p:P("DCT","thz"), rows:[["บล็อก","NCC"],["ผล","Ca ดูดกลับเพิ่ม Mg หลุด"],["ปัสสาวะ","Na และ K ที่ถึง collecting duct เพิ่ม"]],
+    take:["Thiazide: urine Ca ลด ต่างจาก loop ที่ urine Ca เพิ่ม","Na ที่ไปถึง CCD มากขึ้นทำให้ขับ K เพิ่ม","DCT ไม่ดูดน้ำ thiazide จึงทำให้ hyponatremia ได้"]},
+  ccd:{name:"Collecting duct", p:P("CCD","none",{aldo:1.5,del:1.3}), rows:[["Na","ENaC ทำให้ลูเมนเป็นลบ"],["K","ขับทาง ROMK ตาม aldosterone และ delivery"],["น้ำ","AQP2 ตาม vasopressin"]],
+    take:["การขับ K ต้องมีทั้ง aldosterone และ Na delivery","ENaC blocker และ MRA ทำให้ hyperK","ไม่มี vasopressin ปัสสาวะเจือจางเพราะ AQP2 ไม่ขึ้น membrane"]},
+  liddle:{name:"Liddle", p:P("CCD","liddle",{lv:3}), rows:[["Gain","ENaC ค้างบน membrane"],["ผล","ลูเมนลบมาก ขับ K มาก"],["คลินิก","HT hypoK alkalosis renin และ aldosterone ต่ำ"]],
+    take:["HT + hypoK + aldosterone ต่ำ: Liddle, AME, exogenous mineralocorticoid","Liddle ไม่ตอบสนองต่อ spironolactone","Amiloride แก้ได้"]},
+  aic:{name:"α-intercalated cell", p:P("OMCD","none"), rows:[["H","CA II สร้าง แล้วปั๊มลงปัสสาวะทาง H+-ATPase"],["Buffer","NH3 จับเป็น NH4+ และ HPO4 เป็น H2PO4"],["HCO3","สร้างใหม่ ออกทาง AE1"]],
+    take:["H ทุกตัวที่ขับออกพร้อม buffer ได้ HCO3 ใหม่ 1 ตัว","NH4+ เป็นทางหลักของการขับกรด","H+-ATPase หรือ AE1 เสีย = distal RTA"]},
+  prta:{name:"Proximal RTA", p:P("HCO3","prta",{ph:17}), rows:[["จุดเสีย","PT เก็บ HCO3 ได้น้อย"],["Threshold","ลดเหลือราว 18"],["ปัสสาวะ","pH < 5.5 ได้เมื่อ HCO3 ในเลือดต่ำกว่า threshold"]],
+    take:["Proximal RTA คือ threshold ต่ำ ไม่ใช่ปั๊ม H เสีย","ให้ alkali แล้ว HCO3 หลุดมาก ต้องใช้ขนาดสูงและเสีย K เพิ่ม","Distal nephron ความจุน้อย รับ HCO3 ที่ล้นมาไม่ไหว"]},
+  alk:{name:"Contraction alkalosis", p:P("HCO3","vol",{ph:32}), rows:[["ภาวะ","Volume, Cl และ K ต่ำ"],["กลไก","Angiotensin II และ aldosterone เพิ่มการหลั่ง H"],["ผล","Threshold สูง ไตเก็บ HCO3 ส่วนเกินไว้"]],
+    take:["Metabolic alkalosis คงอยู่ได้เพราะไตไม่ยอมขับ HCO3","Volume, Cl และ K ต่ำทำให้ threshold สูงขึ้น","แก้ด้วย NaCl และ KCl"]},
+  imcd:{name:"ไม่มี vasopressin", p:P("IMCD","none",{adh:0}), rows:[["Vasopressin","ไม่มี"],["ผล","AQP2 ไม่ขึ้น membrane"],["ปัสสาวะ","ปริมาณมาก osmolality ต่ำ"]],
+    take:["Vasopressin กำหนดความเข้มข้นปัสสาวะผ่าน AQP2","Urea ใน medulla ช่วยสร้าง gradient ราวครึ่งหนึ่ง","Medulla ต้องเข้มข้นด้วย ไม่เช่นนั้นแม้มี AQP2 ก็ concentrate ไม่ได้"]}
+};
+var ORDER=["tour","pt","hco3","tal","furo","dct","ccd","liddle","aic","prta","alk","imcd"];
+
+var st={seg:"PT",px:"none",lv:1,step:0,auto:false,tour:false}, timer=null;
+var sb=document.getElementById("segs"), SB={};
+SEGS.forEach(function(s){ if(s[0]==="HCO3") sb.appendChild(Sim.h("span",{class:"gap"}));
+  var b=Sim.h("button",{class:"tog"+(s[0]==="HCO3"?" hco3":""),type:"button","aria-pressed":"false",text:s[2]}); b.title=s[1]; b.addEventListener("click",function(){ st.tour=false; st.auto=false; go(s[0],"none"); }); sb.appendChild(b); SB[s[0]]=b; });
+var lvb=document.getElementById("lv"), LB={};
+[[1,"ภาพรวม"],[2,"กลไก"],[3,"เชิงลึก"]].forEach(function(l){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:l[1]}); b.addEventListener("click",function(){ st.lv=l[0]; render(true); }); lvb.appendChild(b); LB[l[0]]=b; });
+var nav=document.getElementById("nav");
+var bPrev=Sim.h("button",{class:"tog",type:"button",text:"◀"}), bNext=Sim.h("button",{class:"tog",type:"button",text:"▶"}), bAuto=Sim.h("button",{class:"tog",type:"button",text:"Auto"}), lab=Sim.h("b",{text:""}), dots=Sim.h("div",{class:"dots"});
+nav.appendChild(bPrev); nav.appendChild(lab); nav.appendChild(bNext); nav.appendChild(dots); nav.appendChild(bAuto);
+bPrev.addEventListener("click",function(){ st.auto=false; st.step=Math.max(0,st.step-1); render(); });
+bNext.addEventListener("click",function(){ st.auto=false; next(true); });
+bAuto.addEventListener("click",function(){ st.auto=!st.auto; render(); });
+var box=document.getElementById("ctls");
+var pxs=Sim.h("select",{id:"px"}), pxLab=Sim.h("label",{"for":"px",text:"ลองบล็อก"});
+pxs.addEventListener("change",function(){ st.px=pxs.value; var d=PX[st.seg][st.px]; if(st.seg==="HCO3"&&d.m&&d.m.ph) phS.set(d.m.ph); st.step=Math.max(0,STEPS[st.seg].length-1); st.auto=false; render(); });
+box.appendChild(Sim.h("div",{class:"sel"},[pxLab,pxs]));
+var aldo=Sim.slider({id:"aldo",label:"Aldosterone",min:0.2,max:3,step:0.1,value:1,unit:"",fmt:function(v){ return v.toFixed(1)+"x"; },onInput:function(){ render(true); }}); box.appendChild(aldo.el);
+var del=Sim.slider({id:"del",label:"Na delivery",min:0.3,max:2.5,step:0.1,value:1,unit:"",fmt:function(v){ return v.toFixed(1)+"x"; },onInput:function(){ render(true); }}); box.appendChild(del.el);
+var adh=Sim.slider({id:"adh",label:"Vasopressin",min:0,max:1.5,step:0.1,value:1,unit:"",fmt:function(v){ return v.toFixed(1)+"x"; },onInput:function(){ render(true); }}); box.appendChild(adh.el);
+var phS=Sim.slider({id:"phco3",label:"Plasma HCO3",min:8,max:40,step:1,value:24,unit:"mmol/L",onInput:function(){ render(true); }}); box.appendChild(phS.el);
+function fillPx(){ pxs.innerHTML=""; var L=PX[st.seg]; Object.keys(L).forEach(function(k){ pxs.appendChild(Sim.h("option",{value:k,text:L[k].name})); }); pxs.value=st.px; pxLab.textContent=st.seg==="HCO3"?"เลือกภาวะ":"ลองบล็อก"; }
+var cell=Nephron.cell("cell","PT",{level:"basic",levelButtons:false});
+var map=Nephron.map(document.getElementById("map"),{flux:false});
+
+/* ---------- tracker (folded) ---------- */
+var trackEl=document.getElementById("track"), tvSel=document.getElementById("tv"), chart=null, tv="na", NAMES=["Filtrate","PT","Bend","tAL","TAL","DCT","CCD","OMCD","Urine"];
+tvSel.addEventListener("change",function(){ tv=tvSel.value; buildChart(); tracker(); });
+function buildChart(){
+  if(chart&&chart.destroy) chart.destroy(); trackEl.innerHTML="";
+  var y, ser;
+  if(tv==="na"){ y={min:0.2,max:100,log:true,label:"% of filtered amount left in the tubule",labelPos:"top"}; ser=[{id:"a",name:"Na",color:"#E0A100",width:2.8,points:true},{id:"b",name:"Water",color:"#3A9AD9",width:2.2,points:true}]; }
+  else if(tv==="k"){ y={min:0,max:60,label:"% of filtered K left in the tubule",labelPos:"top"}; ser=[{id:"a",name:"K",color:"#8E5BD9",width:2.8,points:true},{id:"b",name:"Normal",color:"#9A9CB2",width:1.4,dash:[5,4]}]; }
+  else if(tv==="osm"){ y={min:0,max:1300,label:"Tubular fluid osmolality (mOsm/kg)",labelPos:"top"}; ser=[{id:"a",name:"Osmolality",color:"#5B4BFF",width:2.8,points:true},{id:"b",name:"Normal",color:"#9A9CB2",width:1.4,dash:[5,4]}]; }
+  else { y={min:0,max:100,label:"% of filtered HCO3 left in the tubule",labelPos:"top"}; ser=[{id:"a",name:"HCO3",color:"#2D7FF9",width:2.8,points:true},{id:"b",name:"Normal",color:"#9A9CB2",width:1.4,dash:[5,4]}]; }
+  chart=Plot.chart(trackEl,{height:Sim.present?150:230,aria:"Tubular fluid along the nephron",x:{min:0,max:8,step:1,label:"End of segment",fmt:function(v){ return NAMES[Math.round(v)]||""; }},y:y,series:ser});
+}
+function hLeft(M){ var a=[100]; var p1=100*(M.F-M.rPT)/M.F, p4=100*(M.F-M.rPT-M.rTAL)/M.F, u=100*M.uB/M.F, dD=p4-u; a.push(p1,p1,p1,p4,p4-dD*0.3,p4-dD*0.7,u,u); return a; }
+function curM(){ var d=PX.HCO3[st.seg==="HCO3"?st.px:"none"]||PX.HCO3.none; return {M:hco3(phS.get(),d.m),mm:d.m||{}}; }
+function tracker(){
+  if(!chart) buildChart();
+  var t=TRK[st.px]||{}, w=Math.min(1,adh.get()), na=(t.na||NA0).slice(), k=(t.k||K0).slice(), W=[], O=[], O0=[];
+  if(t.noADH) w=0;
+  for(var i=0;i<9;i++){ W.push(WN[i]+(WF[i]-WN[i])*w); O.push(ON[i]+(OF[i]-ON[i])*w); O0.push(OF[i]); }
+  if(t.osm) O=t.osm.slice(); if(t.osm5){ O[5]=t.osm5; }
+  if(t.wm) for(var j=1;j<9;j++) W[j]=Math.min(100,W[j]*(1+(t.wm-1)*Math.min(1,j/6)));
+  if(st.seg==="CCD"&&!t.na){ var a=aldo.get(), dd=del.get(); for(var m=6;m<9;m++){ na[m]=na[m]*Math.pow(dd,0.8)/Math.pow(a,0.6); k[m]=Math.max(1,k[m]*Math.pow(a,0.6)*Math.pow(dd,0.8)); } }
+  var f=function(arr){ return arr.map(function(v,i){ return [i,Math.max(0.2,v)]; }); }, g=function(arr){ return arr.map(function(v,i){ return [i,v]; }); };
+  var H=curM(), base=hco3(24,{}), changed, txt;
+  if(tv==="na"){ chart.setSeries("a",f(na)); chart.setSeries("b",f(W)); txt="ปัสสาวะ: FENa <span class='num'>"+na[8].toFixed(1)+"%</span> ปริมาตร <span class='num'>"+W[8].toFixed(1)+"%</span> ของที่กรอง Na ลดจาก 100 เหลือราว 35% ที่ปลาย PT และน้อยกว่า 1% ในปัสสาวะ"; }
+  else if(tv==="k"){ changed=JSON.stringify(k)!==JSON.stringify(K0); chart.setSeries("a",g(k)); chart.setSeries("b",changed?g(K0):[]); txt="K ถูกดูดกลับจนเหลือราว 10% ก่อนถึง DCT แล้วถูกหลั่งเพิ่มที่ collecting duct FEK ในภาวะนี้ <span class='num'>"+Math.round(k[8])+"%</span>"; }
+  else if(tv==="osm"){ changed=JSON.stringify(O)!==JSON.stringify(O0); chart.setSeries("a",g(O)); chart.setSeries("b",changed?g(O0):[]); txt="ของเหลวยัง 300 ตลอด PT เข้มข้นสูงสุดที่ปลายห่วง เจือจางที่สุดหลัง TAL และ DCT แล้วจึงเข้มข้นขึ้นที่ collecting duct ตาม vasopressin Uosm ตอนนี้ <span class='num'>"+Math.round(O[8])+"</span>"; }
+  else { var L=hLeft(H.M); changed=st.seg==="HCO3"&&(st.px!=="none"||phS.get()!==24); chart.setSeries("a",g(L)); chart.setSeries("b",changed?g(hLeft(base)):[]); txt="HCO3 ที่เหลือในท่อ: หลัง PT <span class='num'>"+L[1].toFixed(0)+"%</span> หลัง TAL <span class='num'>"+L[4].toFixed(0)+"%</span> ในปัสสาวะ <span class='num'>"+L[8].toFixed(1)+"%</span> ของที่กรอง"; }
+  var si=st.seg==="HCO3"?null:TIDX[st.seg];
+  chart.update({xbands:si?[{x0:si-1,x1:si,label:st.seg,color:"rgba(91,75,255,0.08)"}]:[]});
+  document.getElementById("ttake").innerHTML=txt;
+}
+
+/* ---------- main ---------- */
+function curStep(){ var steps=STEPS[st.seg]; return steps[Math.min(st.step,steps.length-1)]; }
+function next(manual){ var L=STEPS[st.seg].length; if(st.step<L-1){ st.step++; render(); } else if(st.tour){ var i=SEGS.map(function(s){ return s[0]; }).indexOf(st.seg); go(SEGS[(i+1)%8][0],"none",true); } else if(st.auto||manual){ st.step=0; render(); } }
+function go(seg,px,keepTour){ st.seg=seg; st.px=px||"none"; st.step=0; if(!keepTour) st.tour=false;
+  if(seg==="HCO3"&&tv!=="hco3"){ tv="hco3"; tvSel.value="hco3"; buildChart(); } else if(seg!=="HCO3"&&tv==="hco3"){ tv="na"; tvSel.value="na"; buildChart(); }
+  fillPx(); render(); }
+function schedule(){ clearTimeout(timer); var sp=curStep(), n=(sp.t||"").length; if(st.auto&&!Sim.capture&&!(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches)) timer=setTimeout(function(){ next(false); },Math.max(7000,Math.min(16000,n*38))); }
+function fmt0(v){ return Math.round(v).toLocaleString("en-US"); }
+function render(slider){
+  var isH=st.seg==="HCO3", d=PX[st.seg][st.px]||PX[st.seg].none, steps=STEPS[st.seg], sp=curStep(), fl={}, k;
+  var cellSeg=isH?(sp.seg||"PT"):st.seg, H=isH?curM():null;
+  for(k in d.flows||{}) fl[k]=d.flows[k];
+  aldo.el.style.display=(!isH&&st.seg==="CCD")?"":"none"; del.el.style.display=(!isH&&st.seg==="CCD")?"":"none";
+  adh.el.style.display=(!isH&&["CCD","IMCD","tDL","tAL"].indexOf(st.seg)>=0)?"":"none"; phS.el.style.display=isH?"":"none";
+  if(!isH&&st.seg==="CCD"){ var a=aldo.get(), dl=del.get(), blockMR=(d.block||[]).indexOf("MR")>=0, ind=st.px==="liddle"||st.px==="ame", aEff=blockMR?0.35:ind?1:a;
+    ["ENaC","NKA_C"].forEach(function(id){ fl[id]=(fl[id]||1)*(ind?1:aEff)*Math.pow(dl,0.6); }); fl.ROMK=(fl.ROMK||1)*(ind?1:aEff)*dl; fl.AQP2=(fl.AQP2===undefined?1:fl.AQP2)*adh.get(); }
+  if(!isH&&st.seg==="IMCD"){ fl.AQP2i=(fl.AQP2i===undefined?1:fl.AQP2i)*adh.get(); fl.UTA1=(fl.UTA1===undefined?1:fl.UTA1)*adh.get(); }
+  if(!isH&&st.seg==="tDL") fl.AQP1d=0.3+0.7*Math.min(1,adh.get());
+  var useMap=isH&&sp.map;
+  document.getElementById("cell").style.display=useMap?"none":""; document.getElementById("mapwrap").style.display=useMap?"":"none";
+  if(useMap){
+    var M=H.M, pc=function(v){ return Math.round(1000*v/M.F)/10; }, dD=M.rD;
+    map.setFlux({PT:pc(M.rPT),TAL:pc(M.rTAL),DCT:pc(dD*0.3),CCD:pc(dD*0.4),OMCD:pc(dD*0.3)},{unit:"%",label:"HCO3 reclaimed, % of filtered",color:"#2D7FF9"});
+    map.highlight(sp.hl||[],"#FFDE59"); map.block(d.block||[]); map.gain([]);
+    document.getElementById("mapcap").innerHTML="Filtered HCO3 "+fmt0(M.F)+" mmol/day  |  urine HCO3 "+fmt0(M.uB)+" mmol/day<br>New HCO3 from NH4+ "+fmt0(M.nh4)+" and titratable acid "+fmt0(M.ta)+" mmol/day";
+  } else {
+    var cap=sp.c; if(!isH&&d.t&&st.step===steps.length-1&&EN[st.px]) cap=EN[st.px];
+    var bad=BADGEPX[st.px]||BADGE[cellSeg];
+    if(isH){ bad=cellSeg==="PT"?{lumen:"HCO3 "+phS.get(),cell:"−70 mV",blood:"HCO3 "+phS.get()}:cellSeg==="OMCD"?{lumen:"Urine pH "+H.M.phu.toFixed(1)}:BADGE[cellSeg]; }
+    cell.setLevel(st.lv===1?"basic":"full");
+    cell.update(cellSeg,{blocked:d.block||[],gain:d.gain||[],flows:fl,focus:sp.f||[],caption:cap,badges:bad});
+  }
+  Object.keys(SB).forEach(function(s){ SB[s].setAttribute("aria-pressed",s===st.seg?"true":"false"); });
+  Object.keys(LB).forEach(function(l){ LB[l].setAttribute("aria-pressed",+l===st.lv?"true":"false"); });
+  bAuto.setAttribute("aria-pressed",st.auto?"true":"false");
+  lab.textContent=(st.step+1)+" / "+steps.length; dots.innerHTML="";
+  steps.forEach(function(x,i){ var e=document.createElement("i"); if(i<=st.step) e.className="on"; e.title="Step "+(i+1); e.addEventListener("click",function(){ st.auto=false; st.step=i; render(); }); dots.appendChild(e); });
+  var seg=SEGS.filter(function(s){ return s[0]===st.seg; })[0];
+  document.getElementById("q").textContent=Q[st.seg];
+  document.getElementById("segTitle").innerHTML="<span class='seg'>"+seg[2]+"</span> "+seg[1];
+  document.getElementById("steptxt").innerHTML=sp.t;
+  var h="";
+  if(st.lv>=2&&sp.m) h+="<p><b>กลไก</b> "+sp.m+"</p>";
+  if(st.lv>=3&&BASE[st.seg]) h+="<p><b>คลินิกและพันธุกรรม</b> "+BASE[st.seg].f+"</p>";
+  var dp=document.getElementById("deep"); dp.innerHTML=h; dp.style.display=h?"":"none";
+  document.getElementById("pert").innerHTML=d.t?"<div class='pert'><b>"+d.name+":</b> "+d.t+(st.lv>=3&&d.tf?"<br><b>Pearl:</b> "+d.tf:"")+"</div>":"";
+  var uc=document.getElementById("uchips"); uc.innerHTML="";
+  (d.u||[]).forEach(function(x){ uc.appendChild(Sim.h("span",{class:x[1],text:"Urine "+x[0]+(x[1]==="up"?" ↑":" ↓")})); });
+  var tk=document.getElementById("take"), ro=document.getElementById("ro"), hm=document.getElementById("hmore");
+  ro.style.display=isH?"":"none"; hm.style.display=isH?"":"none";
+  if(isH){ var MM=H.M, thr=threshold(H.mm), ph=phS.get();
+    Sim.ro("r1",fmt0(MM.uB)+(MM.uB>20?" ("+MM.fe.toFixed(0)+"%)":""),MM.uB>200?"flag":false);
+    Sim.ro("r2",MM.phu.toFixed(1),MM.phu>5.5&&ph<20?"flag":false);
+    Sim.ro("r3",fmt0(MM.nh4+MM.ta),false);
+    var NN=hco3(ph,{}); Sim.ro("r4",fmt0(MM.nae),st.px!=="none"&&MM.nae<0.6*NN.nae?"flag":"ok");
+    document.getElementById("hmoreBody").innerHTML="<table class='hm'><tr><td>Filtered HCO3 (GFR 180 L/วัน)</td><td>"+fmt0(MM.F)+"</td></tr><tr><td>PT เก็บคืน</td><td>"+fmt0(MM.rPT)+" ("+(100*MM.rPT/MM.F).toFixed(0)+"%)</td></tr><tr><td>TAL เก็บคืน</td><td>"+fmt0(MM.rTAL)+" ("+(100*MM.rTAL/MM.F).toFixed(0)+"%)</td></tr><tr><td>Distal เก็บคืน</td><td>"+fmt0(MM.rD)+" ("+(100*MM.rD/MM.F).toFixed(1)+"%)</td></tr><tr><td>NH4+ ในปัสสาวะ</td><td>"+fmt0(MM.nh4)+"</td></tr><tr><td>Titratable acid</td><td>"+fmt0(MM.ta)+"</td></tr><tr><td>Threshold ของภาวะนี้</td><td>ราว "+thr.toFixed(0)+" mmol/L</td></tr><tr><td>กรดที่ร่างกายสร้าง (70 kg)</td><td>ราว 70</td></tr></table><p class='hint' style='margin:8px 0 0'>หน่วย mmol/วัน โมเดลเพื่อการสอน</p>";
+    var s1="Plasma HCO3 <span class='num'>"+ph+"</span> ";
+    if(MM.uB>20) s1+="สูงกว่า threshold ของภาวะนี้ (ราว <span class='num'>"+thr.toFixed(0)+"</span>) ไตจึงปล่อย HCO3 ลงปัสสาวะ <span class='num'>"+fmt0(MM.uB)+"</span> mmol/วัน (FEHCO3 <span class='num'>"+MM.fe.toFixed(0)+"%</span>) urine pH ราว <span class='num'>"+MM.phu.toFixed(1)+"</span>";
+    else s1+="ต่ำกว่า threshold ของภาวะนี้ (ราว <span class='num'>"+thr.toFixed(0)+"</span>) ไตเก็บ HCO3 ที่กรองคืนได้หมด แล้วสร้าง HCO3 ใหม่ <span class='num'>"+fmt0(MM.nh4+MM.ta)+"</span> mmol/วันผ่าน NH4+ และ titratable acid (urine pH ราว <span class='num'>"+MM.phu.toFixed(1)+"</span>)";
+    if(st.px!=="none") s1+= NN.nae>=0 ? " เทียบไตปกติที่ plasma HCO3 เท่ากันจะขับกรดได้ราว <span class='num'>"+fmt0(NN.nae)+"</span> mmol/วัน" : " เทียบไตปกติที่ plasma HCO3 เท่ากันจะขับ HCO3 ส่วนเกินออกราว <span class='num'>"+fmt0(-NN.nae)+"</span> mmol/วัน (net acid excretion ติดลบ)";
+    tk.innerHTML=s1; tk.style.display="";
+  } else { tk.innerHTML=st.px==="none"?TAKE[st.seg]:""; tk.style.display=st.px==="none"?"":"none"; }
+  tracker();
+  if(!slider) schedule();
+}
+fillPx(); buildChart(); render();
+Sim.mount({code:"EL-01", title:"Tubular Physiology Live", lead:"ไล่ดูทีละ segment ว่าเซลล์ท่อไตใช้ channel, transporter และ enzyme ตัวไหน ion วิ่งเข้าออกอย่างไร แรงขับมาจากไหน และของเหลวในท่อเปลี่ยนไปอย่างไรจาก glomerulus ถึงปัสสาวะ แท็บ HCO3 ไล่การเก็บ HCO3 ที่กรองกลับและการสร้าง HCO3 ใหม่ตลอด nephron แล้วลองบล็อกด้วยยาหรือโรค",
+  scenarios:S, order:ORDER, captureMs:700,
+  onChange:function(key,s){ var p=s.p; st.lv=p.lv; st.tour=p.tour; st.auto=p.auto; aldo.set(p.aldo); del.set(p.del); adh.set(p.adh); phS.set(p.ph); go(p.seg,p.px,true); if(p.px!=="none"){ st.step=STEPS[p.seg].length-1; render(); } },
+  refs:["Palmer LG, Schnermann J. Integrated control of Na transport along the nephron. Clin J Am Soc Nephrol 2015, 10(4): 676-687",
+        "Curthoys NP, Moe OW. Proximal tubule function and response to acidosis. Clin J Am Soc Nephrol 2014, 9(9): 1627-1638",
+        "Boron WF. Acid-base transport by the renal proximal tubule. J Am Soc Nephrol 2006, 17(9): 2368-2382",
+        "Purkerson JM, Schwartz GJ. The role of carbonic anhydrases in renal physiology. Kidney Int 2007, 71(2): 103-115",
+        "Weiner ID, Verlander JW. Role of NH3 and NH4+ transporters in renal acid-base transport. Am J Physiol Renal Physiol 2011, 300(1): F11-F23",
+        "Hamm LL, Nakhoul N, Hering-Smith KS. Acid-base homeostasis. Clin J Am Soc Nephrol 2015, 10(12): 2232-2242",
+        "Blaine J, Chonchol M, Levi M. Renal control of calcium, phosphate, and magnesium homeostasis. Clin J Am Soc Nephrol 2015, 10(7): 1257-1272",
+        "Welling PA. Roles and regulation of renal K channels. Annu Rev Physiol 2016, 78: 415-435",
+        "Seyberth HW, Schlingmann KP. Bartter- and Gitelman-like syndromes: salt-losing tubulopathies with loop or DCT defects. Pediatr Nephrol 2011, 26(10): 1789-1802"],
+  note:"ภาพเพื่อการสอน: ion แต่ละจุดแทนการขนส่งตาม stoichiometry ความถี่สัมพันธ์กับอัตราการขนส่งโดยประมาณ enzyme (hexagon) ไม่ใช่ทางผ่านของ ion แต่เป็นจุดที่เกิดปฏิกิริยา กราฟของเหลวในท่อใช้ค่าตำราโดยประมาณ โมเดล HCO3: GFR 180 L/วัน, PT เก็บ 80% ของที่กรองจนถึงความจุสูงสุด (เท่ากับ 80% ของ filtered load ที่ HCO3 26), TAL เก็บ 75% ของที่มาถึงจนถึงความจุ, distal เก็บได้ไม่เกินราว 5% ของ filtered load ปกติ, NH4+ พื้นฐานราว 48 mmol/วัน เพิ่มเมื่อ HCO3 ในเลือดต่ำ ภาวะต่าง ๆ ปรับความจุของแต่ละ segment ไม่ใช่การวัดในผู้ป่วยรายบุคคล"
+});
+})();
+</script>
+</body>
+</html>

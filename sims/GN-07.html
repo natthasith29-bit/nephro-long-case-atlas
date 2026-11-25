@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[GN-07] Podocytopathy Spectrum: MCD and FSGS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.2fr 1fr}}
+.pair{display:grid;grid-template-columns:1fr 1.5fr;gap:12px;align-items:center}
+.pair2{display:grid;grid-template-columns:1fr;gap:10px;margin-top:10px}
+@media (max-width:560px){.pair{grid-template-columns:1fr}}
+.sel{display:grid;grid-template-columns:minmax(90px,120px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px;margin:6px 0}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+table.cmp{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:10px}
+table.cmp td{padding:6px 8px;border-bottom:1px solid var(--line)}
+table.cmp td:first-child{color:var(--muted);width:42%}
+table.cmp td.flag{color:var(--red);font-weight:600}
+table.cmp td.ok{color:var(--teal);font-weight:600}
+.act{margin-top:10px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .act{display:none}
+body.present .card{padding:14px 18px}
+body.present .pair2 svg{max-height:230px}
+body.present #curve{max-height:180px;width:auto!important;margin:0 auto}
+body.present table.cmp td{padding:2px 8px;font-size:12px;line-height:1.35}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Podocyte depletion และภาพ biopsy</h2>
+      <div class="svgwrap"><svg id="curve" viewBox="0 0 640 220" role="img" aria-label="Podocyte depletion and glomerular outcome"></svg></div>
+      <div class="pair2"><div class="pair">
+        <div class="svgwrap"><svg id="lm" aria-label="Light microscopy"></svg></div>
+        <div class="svgwrap"><svg id="loop" aria-label="EM foot process effacement"></svg></div>
+      </div></div>
+      <p class="hint no-present">กราฟบนคือ podocyte depletion hypothesis: เสีย podocyte น้อยยังเป็น effacement ที่กลับคืนได้ (MCD) เสียมากขึ้นเกิด segmental แล้ว global sclerosis เส้นประแนวตั้งคือผู้ป่วยตอนนี้ ภาพล่างคือ LM และ EM ที่สอดคล้อง</p>
+    </div>
+    <div class="card">
+      <h2>สาเหตุ ความรุนแรง และการตอบสนอง</h2>
+      <div class="sel"><label for="sEt">สาเหตุ</label><select id="sEt">
+        <option value="mcd">Minimal change disease</option><option value="prim">Primary FSGS (circulating factor)</option><option value="gen">Genetic (NPHS2, INF2, COL4A)</option>
+        <option value="apol">APOL1 high-risk + second hit</option><option value="adapt">Adaptive (obesity, low nephron mass)</option><option value="hiv">Collapsing (HIV, viral, interferon)</option><option value="drug">Drug (pamidronate, lithium, anabolic steroid)</option></select></div>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools"></div>
+      <table class="cmp" id="tab"></table>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/patho.js"></script>
+<script>
+(function(){
+"use strict";
+/* Podocyte depletion teaching curve (Wiggins): loss < 20% effacement only, 20-40% segmental sclerosis, > 60% global sclerosis.
+   Effacement extent: diffuse (> 80%) in MCD and primary FSGS, segmental (< 50%) in adaptive, variable in genetic.
+   Steroid response, KT recurrence and variant per aetiology are rounded literature figures used for teaching. */
+var ET = {
+  mcd:{loss:[0,10], eff:95, alb:"ต่ำ", ns:"ครบ (nephrotic syndrome)", variant:"ไม่มี sclerosis", steroid:90, recur:"ต่ำมาก", collapse:false},
+  prim:{loss:[15,45], eff:90, alb:"ต่ำ", ns:"ครบ เริ่มฉับพลัน", variant:"Tip, cellular หรือ NOS", steroid:55, recur:"30–50%", collapse:false},
+  gen:{loss:[20,60], eff:55, alb:"ปกติหรือต่ำ", ns:"มักไม่ครบ ค่อยเป็นค่อยไป", variant:"NOS หรือ perihilar", steroid:5, recur:"ต่ำ", collapse:false},
+  apol:{loss:[30,70], eff:85, alb:"ต่ำ", ns:"รุนแรง AKI ร่วม", variant:"Collapsing", steroid:15, recur:"ไม่สูง (ขึ้นกับไตผู้ให้)", collapse:true},
+  adapt:{loss:[20,50], eff:35, alb:"ปกติ", ns:"Proteinuria สูงได้แต่ไม่มี hypoalbuminemia", variant:"Perihilar", steroid:0, recur:"ต่ำ", collapse:false},
+  hiv:{loss:[40,80], eff:90, alb:"ต่ำมาก", ns:"รุนแรง AKI เร็ว", variant:"Collapsing + tubular microcysts", steroid:10, recur:"ต่ำ", collapse:true},
+  drug:{loss:[20,60], eff:80, alb:"ต่ำ", ns:"ขึ้นกับยา", variant:"Collapsing (pamidronate, interferon) หรือ NOS", steroid:20, recur:"ต่ำ", collapse:true}
+};
+var S = {
+  mcd:{name:"MCD ผู้ใหญ่", p:{et:"mcd", loss:5, mass:100, bmi:24, up:9, alb:1.8, steroid:true},
+    rows:[["Clinical","ชาย 30 ปี บวมทั้งตัวภายใน 1 สัปดาห์ proteinuria 9 g/d albumin 1.8"],["LM/IF","ปกติ"],["EM","Effacement กระจาย > 80%"]],
+    take:["MCD เสีย podocyte น้อย effacement จึงกลับคืนได้","Steroid ได้ผลดีแต่ผู้ใหญ่ตอบสนองช้ากว่าเด็ก","Relapse บ่อย ใช้ CNI, rituximab หรือ CYC เป็น steroid-sparing"]},
+  tip:{name:"Primary FSGS tip", p:{et:"prim", loss:22, mass:100, bmi:25, up:8, alb:2.0, steroid:true},
+    rows:[["Clinical","หญิง 45 ปี nephrotic ฉับพลัน"],["LM","Segmental lesion ที่ tubular pole (tip variant)"],["EM","Effacement กระจาย"],["Recurrence","สูงหลังปลูกถ่ายไต"]],
+    take:["Primary FSGS มี effacement กระจายและ nephrotic syndrome ครบ","Tip variant ตอบสนองต่อ steroid ดีกว่า variant อื่น","Anti-nephrin antibody เชื่อม MCD และ primary FSGS เข้าด้วยกัน"]},
+  adapt:{name:"Adaptive (obesity)", p:{et:"adapt", loss:30, mass:70, bmi:41, up:4, alb:3.9, steroid:false},
+    rows:[["Clinical","ชาย 38 ปี BMI 41 proteinuria 4 g/d albumin 3.9"],["LM","Perihilar sclerosis glomerulomegaly"],["EM","Effacement เป็นหย่อม < 50%"]],
+    take:["Nephrotic-range proteinuria โดย albumin ปกติชี้ adaptive FSGS","Effacement เป็นหย่อมแยกจาก primary FSGS","รักษาด้วย RAASi, SGLT2i และลดน้ำหนัก ไม่ใช้ immunosuppression"]},
+  apol:{name:"APOL1 collapsing", p:{et:"apol", loss:55, mass:100, bmi:27, up:12, alb:1.5, steroid:false},
+    rows:[["Clinical","ชาย 35 ปี เชื้อสายแอฟริกา หลังติดเชื้อไวรัส AKI + proteinuria 12 g/d"],["Genetics","APOL1 G1/G2 สองตัว"],["LM","Collapsing tuft podocyte hyperplasia"]],
+    take:["APOL1 high-risk genotype ต้องมี second hit เช่น ไวรัส หรือ interferon","Collapsing variant มี prognosis แย่ที่สุด","Steroid ตอบสนองน้อย"]},
+  gen:{name:"Genetic SRNS", p:{et:"gen", loss:35, mass:100, bmi:20, up:5, alb:2.6, steroid:true},
+    rows:[["Clinical","เด็กหญิง 8 ปี nephrotic ไม่ตอบสนองต่อ steroid 6 สัปดาห์"],["Genetics","NPHS2 (podocin) biallelic"],["Plan","หยุด immunosuppression เน้น RAASi"]],
+    take:["Steroid-resistant NS ในเด็กต้องส่ง genetic testing","Genetic FSGS ไม่ตอบสนองต่อ immunosuppression","Recurrence หลังปลูกถ่ายไตต่ำ ยกเว้นบางยีน"]},
+  hiv:{name:"HIVAN", p:{et:"hiv", loss:65, mass:100, bmi:21, up:10, alb:1.6, steroid:false},
+    rows:[["Clinical","ชาย 32 ปี HIV ไม่ได้รักษา AKI proteinuria 10 g/d ไตใหญ่ echogenic"],["LM","Collapsing + tubular microcysts"],["EM","Tubuloreticular inclusions"]],
+    take:["HIVAN เป็น collapsing FSGS ที่รักษาด้วย ART","ไตขนาดใหญ่ echogenic ต่างจาก CKD ทั่วไป","ART ทำให้ไตดีขึ้นได้ถ้าเริ่มเร็ว"]}
+};
+var box = document.getElementById("ctls"), C = {};
+function add(k, o){ o.onInput = update; C[k] = Sim.slider(o); box.appendChild(C[k].el); }
+add("loss", {id:"sL", label:"Podocyte loss", min:0, max:90, step:1, value:20, unit:"%"});
+add("mass", {id:"sM", label:"Nephron mass", min:30, max:120, step:5, value:100, unit:"%"});
+add("bmi", {id:"sB", label:"BMI", min:16, max:50, step:1, value:24, unit:""});
+add("up", {id:"sU", label:"Proteinuria", min:0.5, max:15, step:0.5, value:8, unit:"g/d"});
+add("alb", {id:"sA", label:"Serum albumin", min:1.0, max:4.8, step:0.1, value:2.0, unit:"g/dL"});
+var steroid = true, tSt = Sim.toggle("ให้ steroid แล้ว", function(on){ steroid = on; update(); }, true);
+document.getElementById("tools").appendChild(tSt);
+var sEt = document.getElementById("sEt"); sEt.addEventListener("change", update);
+var lm = Patho.glom("lm", {}), loop = Patho.loop("loop", {labels:false});
+var curve = document.getElementById("curve");
+function drawCurve(loss){
+  curve.innerHTML = "";
+  var FT = "IBM Plex Sans Thai, sans-serif", MO = "Geist Mono, monospace", x0 = 60, x1 = 610, y0 = 180, y1 = 30;
+  var X = function(v){ return x0 + v / 100 * (x1 - x0); }, Y = function(v){ return y0 - v / 100 * (y0 - y1); };
+  [[0,20,"#E8F2E6","Effacement (reversible)"],[20,40,"#FFF1E3","Segmental sclerosis"],[40,60,"#F9EAEA","Progressive"],[60,100,"#F2D6D8","Global sclerosis"]].forEach(function(z){
+    Sim.svg("rect", {x:X(z[0]), y:y1, width:X(z[1]) - X(z[0]), height:y0 - y1, fill:z[2]}, curve);
+    Sim.svg("text", {x:(X(z[0]) + X(z[1])) / 2, y:y1 + 14, "text-anchor":"middle", "font-family":FT, "font-size":10.5, fill:"#5E6075", text:z[3]}, curve); });
+  var d = "", d2 = "";
+  for(var v = 0; v <= 100; v += 2){ var sc = 100 / (1 + Math.exp(-(v - 45) / 8)), pr = Math.min(100, 100 / (1 + Math.exp(-(v - 12) / 6)));
+    d += (v ? "L" : "M") + X(v).toFixed(1) + "," + Y(sc).toFixed(1); d2 += (v ? "L" : "M") + X(v).toFixed(1) + "," + Y(pr).toFixed(1); }
+  Sim.svg("path", {d:d2, fill:"none", stroke:"#5B4BFF", "stroke-width":2.2}, curve);
+  Sim.svg("path", {d:d, fill:"none", stroke:"#B4232A", "stroke-width":2.6}, curve);
+  Sim.svg("line", {x1:X(loss), y1:y1, x2:X(loss), y2:y0, stroke:"#0B0B1F", "stroke-width":1.6, "stroke-dasharray":"5 4"}, curve);
+  Sim.svg("line", {x1:x0, y1:y0, x2:x1, y2:y0, stroke:"#9A9CB2"}, curve);
+  [0,20,40,60,80,100].forEach(function(v){ Sim.svg("text", {x:X(v), y:y0 + 15, "text-anchor":"middle", "font-family":MO, "font-size":10.5, fill:"#5E6075", text:v + "%"}, curve); });
+  Sim.svg("text", {x:(x0 + x1) / 2, y:212, "text-anchor":"middle", "font-family":FT, "font-size":11.5, fill:"#0B0B1F", text:"Podocyte loss per glomerulus"}, curve);
+  Sim.svg("text", {x:x0 + 6, y:y1 + 34, "font-family":FT, "font-size":11, fill:"#5B4BFF", text:"Proteinuria"}, curve);
+  Sim.svg("text", {x:x0 + 6, y:y1 + 50, "font-family":FT, "font-size":11, fill:"#B4232A", text:"Sclerosis"}, curve);
+}
+function row(t, a, b, cls){ return Sim.h("tr", {}, [Sim.h("td", {text:a}), Sim.h("td", {class:cls || "", text:b})]); }
+function update(){
+  var p = {et:sEt.value, loss:C.loss.get(), mass:C.mass.get(), bmi:C.bmi.get(), up:C.up.get(), alb:C.alb.get()}, e = ET[p.et];
+  // adaptive drive: low nephron mass or obesity raises hyperfiltration and segmental loss
+  var hyper = Math.max(0, (100 - p.mass) / 70) + Math.max(0, (p.bmi - 30) / 20);
+  var effLoss = Math.min(90, p.loss + (p.et === "adapt" ? hyper * 10 : 0));
+  drawCurve(effLoss);
+  var scl = effLoss < 15 ? 0 : Math.min(0.9, (effLoss - 12) / 70);
+  lm.update({sclerosis:e.collapse ? 0 : scl, collapse:e.collapse && effLoss > 25, hyper:0.1, mesExpand:p.et === "adapt" ? 0.3 : 0, label:p.et === "adapt" && effLoss > 15 ? "perihilar" : null});
+  loop.update({effacement:e.eff / 100, title:"Effacement about " + e.eff + "%", deposits:[]});
+  var nephrotic = p.up >= 3.5 && p.alb < 3.0, tab = document.getElementById("tab"); tab.innerHTML = "";
+  var resp = steroid ? e.steroid : null;
+  tab.appendChild(row(0, "Nephrotic syndrome เต็มรูป", nephrotic ? "มี (proteinuria + albumin ต่ำ)" : p.up >= 3.5 ? "Nephrotic-range แต่ albumin ปกติ" : "ไม่มี", nephrotic ? "flag" : ""));
+  tab.appendChild(row(0, "รูปแบบที่คาด", e.ns));
+  tab.appendChild(row(0, "Effacement บน EM", e.eff >= 80 ? "กระจาย (≥ 80%)" : e.eff >= 50 ? "ปานกลาง" : "เป็นหย่อม (< 50%)", e.eff >= 80 ? "flag" : "ok"));
+  tab.appendChild(row(0, "Columbia variant", e.variant));
+  tab.appendChild(row(0, "โอกาสตอบสนองต่อ steroid", e.steroid + "%", e.steroid >= 50 ? "ok" : "flag"));
+  tab.appendChild(row(0, "Recurrence หลังปลูกถ่ายไต", e.recur, /30/.test(e.recur) ? "flag" : ""));
+  var mismatch = (p.et === "adapt" && nephrotic) ? " Albumin ต่ำร่วม nephrotic syndrome ไม่เข้ากับ adaptive ให้คิด primary FSGS" : (p.et === "prim" && !nephrotic) ? " ไม่มี nephrotic syndrome เต็มรูป ทบทวนว่าเป็น adaptive หรือ genetic" : "";
+  var n = {mcd:"Prednisolone 1 mg/kg/วัน (สูงสุด 80 mg) ผู้ใหญ่ตอบสนองได้ถึง 16 สัปดาห์ ถ้า frequent relapse หรือ steroid-dependent ใช้ CNI, rituximab หรือ CYC หาสาเหตุรอง (NSAID, lymphoma)",
+    prim:"Steroid ขนาดสูงนานถึง 16 สัปดาห์ (หรือจน remission) ก่อนเรียกว่า steroid-resistant ถ้าดื้อหรือมีข้อห้ามใช้ CNI ร่วม RAASi + SGLT2i เมื่อพร้อม ส่ง genetic testing ถ้า steroid-resistant",
+    gen:"หยุด immunosuppression ที่ไม่ได้ผล เน้น RAASi + SGLT2i ให้ genetic counseling และคัดกรองญาติ CoQ10 ในยีนกลุ่ม COQ",
+    apol:"รักษา second hit (ไวรัส, หยุด interferon) ให้ RAASi + SGLT2i steroid ได้ผลน้อย พิจารณา clinical trial (APOL1 inhibitor)",
+    adapt:"RAASi + SGLT2i, ลดน้ำหนัก (GLP-1RA หรือ bariatric surgery), คุมความดัน ไม่ใช้ steroid หรือ immunosuppression",
+    hiv:"เริ่ม ART ทันที ร่วม RAASi ประเมิน HIVAN เทียบ HIV immune complex disease",
+    drug:"หยุดยาที่เป็นเหตุ (pamidronate, interferon, lithium, anabolic steroid) แล้วติดตาม proteinuria ให้ RAASi"}[p.et];
+  if(steroid && e.steroid < 20 && p.et !== "adapt") n += " ตอนนี้ให้ steroid อยู่ ซึ่งโอกาสได้ผลต่ำ ชั่งพิษยา";
+  if(steroid && p.et === "adapt") n += " Adaptive FSGS ไม่ควรได้ steroid";
+  document.getElementById("act").innerHTML = "<b>Next step:</b> " + n + (mismatch ? "<br><span class='flag-txt'>" + mismatch + "</span>" : "");
+}
+Sim.mount({code:"GN-07", title:"Podocytopathy Spectrum: MCD and FSGS",
+  lead:"เลือกสาเหตุ ระดับการเสีย podocyte, nephron mass และ BMI ดูว่า biopsy, ขอบเขตของ effacement, nephrotic syndrome และการตอบสนองต่อ steroid เปลี่ยนไปอย่างไรในแต่ละกลุ่มของ podocytopathy",
+  scenarios:S, order:["mcd","tip","adapt","apol","gen","hiv"], captureMs:900,
+  onChange:function(k, s){ var q = s.p; sEt.value = q.et; ["loss","mass","bmi","up","alb"].forEach(function(n){ C[n].set(q[n]); }); steroid = q.steroid; tSt.setState(steroid); update(); },
+  refs:["KDIGO 2021 Clinical Practice Guideline for the Management of Glomerular Diseases. Kidney Int 2021, 100(4S): S1-S276",
+        "Wharram BL, Goyal M, Wiggins JE, et al. Podocyte depletion causes glomerulosclerosis. J Am Soc Nephrol 2005, 16(10): 2941-2952",
+        "D'Agati VD, Fogo AB, Bruijn JA, Jennette JC. Pathologic classification of focal segmental glomerulosclerosis: a working proposal. Am J Kidney Dis 2004, 43(2): 368-382",
+        "De Vriese AS, Sethi S, Nath KA, et al. Differentiating primary, genetic, and secondary FSGS in adults: a clinicopathologic approach. J Am Soc Nephrol 2018, 29(3): 759-774",
+        "Hengel FE, Dehde S, Lassé M, et al. Autoantibodies targeting nephrin in podocytopathies. N Engl J Med 2024, 391(5): 422-433",
+        "Kopp JB, Anders HJ, Susztak K, et al. Podocytopathies. Nat Rev Dis Primers 2020, 6(1): 68",
+        "Friedman DJ, Pollak MR. APOL1 nephropathy: from genetics to clinical applications. Clin J Am Soc Nephrol 2021, 16(2): 294-303"],
+  note:"กราฟ podocyte depletion และโอกาสตอบสนองต่อ steroid เป็นค่าประมาณเพื่อการสอน ขอบเขต effacement บน EM ใช้ร่วมกับ clinical เสมอ"
+});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[EL-12] Calcium and the PTH Axis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(110px,140px) 1fr 96px}
+.sel{display:grid;grid-template-columns:minmax(110px,140px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.tools{margin-top:10px}
+.readout{grid-template-columns:repeat(3,1fr)}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,1fr)}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+body.present .bench{grid-template-columns:1.3fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:16px 20px}
+body.present .ro{padding:8px 12px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+body.present #cell svg{max-height:180px;width:auto!important;margin:0 auto}
+body.present #cell .nc-bar{display:none}
+body.present #segt{margin-top:4px!important}
+body.present #segt .tog{padding:3px 8px;font-size:11.5px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>CaSR set point: PTH secretion และ end-organ response</h2>
+      <div id="chart"></div>
+      <div class="tools" id="segt" style="margin-top:10px"></div>
+      <div id="cell"></div>
+      <p class="hint no-present">เส้นม่วงคือ PTH ที่ต่อมหลั่งออกมาที่ iCa แต่ละระดับ (CaSR) เส้น teal คือ iCa ที่ร่างกายสร้างได้จาก PTH แต่ละระดับ (กระดูก ไต calcitriol) จุดตัดคือ steady state ของผู้ป่วย เลื่อนเส้นไหนก็ได้ผลต่างกัน: โรคที่ต่อม (PHPT, FHH) เลื่อนเส้นม่วง โรคที่ end-organ (vitamin D, CKD, PTHrP) เลื่อนเส้น teal</p>
+    </div>
+    <div class="card">
+      <h2>ภาวะและการรักษา</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roI"><b>-</b><span>iCa (mmol/L)</span></div>
+        <div class="ro" id="roT"><b>-</b><span>Total Ca (mg/dL)</span></div>
+        <div class="ro" id="roP"><b>-</b><span>PTH (pg/mL)</span></div>
+        <div class="ro" id="roC"><b>-</b><span>CCCR</span></div>
+        <div class="ro" id="roU"><b>-</b><span>Urine Ca (mg/d)</span></div>
+        <div class="ro" id="roD"><b>-</b><span>1,25(OH)2D</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/nephron.js"></script>
+<script>
+(function(){
+"use strict";
+/* gland: sp set point (mmol/L), pmax; organ: c0 iCa at PTH 40, a gain per ln PTH, ind PTH-independent Ca; renal: fe base, casrK TAL sensing */
+var DX={
+  norm:{name:"ปกติ",sp:1.17,pmax:150,c0:1.20,a:0.2,ind:0,fe:1.0,d:1.0},
+  phpt:{name:"Primary hyperparathyroidism",sp:1.44,pmax:220,c0:1.20,a:0.2,ind:0,fe:1.0,d:1.0},
+  fhh:{name:"FHH (inactivating CaSR)",sp:1.36,pmax:120,c0:1.27,a:0.2,ind:0,fe:0.2,d:1.0},
+  adh:{name:"ADH1 (activating CaSR)",sp:0.92,pmax:150,c0:1.20,a:0.2,ind:0,fe:2.4,d:0.8},
+  hypo:{name:"Post-surgical hypoparathyroidism",sp:1.17,pmax:9,c0:1.20,a:0.2,ind:0,fe:1.6,d:0.4},
+  vitd:{name:"Vitamin D deficiency",sp:1.17,pmax:150,c0:1.02,a:0.14,ind:0,fe:0.6,d:0.5},
+  pthrp:{name:"Humoral hypercalcemia (PTHrP)",sp:1.17,pmax:150,c0:1.20,a:0.2,ind:0.9,fe:0.8,d:0.4},
+  gran:{name:"Granulomatous (1,25D excess)",sp:1.17,pmax:150,c0:1.20,a:0.2,ind:0.6,fe:1.5,d:2.2},
+  ckd:{name:"CKD G4-5 secondary HPT",sp:1.20,pmax:700,c0:1.02,a:0.05,ind:0,fe:0.5,d:0.35}
+};
+var RX={ca:{name:"Ca + calcitriol"},cina:{name:"Cinacalcet"},ptx:{name:"Parathyroidectomy"},bis:{name:"IV bisphosphonate/denosumab"},hct:{name:"Thiazide"}};
+function P(o){ var d={dx:"norm",rx:[],load:0}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  norm:{name:"ปกติ", p:P({}),
+    rows:[["iCa","1.20 mmol/L PTH ราว 40"],["Set point","iCa ที่ PTH ลดลงครึ่งหนึ่ง ราว 1.17"],["Slope","ชัน iCa เปลี่ยนเล็กน้อย PTH เปลี่ยนมาก"]],
+    take:["CaSR ที่ต่อม parathyroid และ TAL ควบคุม iCa ในช่วงแคบ","PTH สัมพันธ์กับ iCa แบบ sigmoid ชันมาก","วัด iCa จริงเมื่อ albumin หรือ pH ผิดปกติ"]},
+  phpt:{name:"PHPT", p:P({dx:"phpt"}),
+    rows:[["ผู้ป่วย","Ca 11.4 PTH 125 urine Ca สูง"],["กลไก","adenoma: set point เลื่อนขวา และ cell mass เพิ่ม"],["แยก FHH","CCCR > 0.02 หนุน PHPT"]],
+    take:["Hypercalcemia + PTH สูงหรือปกติที่ไม่กด = PTH-dependent","CCCR < 0.01 ชวนคิด FHH  > 0.02 ชวนคิด PHPT","Parathyroidectomy เป็นการรักษาหายขาด"]},
+  fhh:{name:"FHH", p:P({dx:"fhh"}),
+    rows:[["ผู้ป่วย","Ca 10.9 PTH ปกติ ไม่มีอาการ ญาติเป็นเหมือนกัน"],["กลไก","CaSR ที่ต่อมและ TAL ไวต่อ Ca ลดลง ไตเก็บ Ca ไว้"],["รักษา","ไม่ต้องผ่าตัด ผ่าแล้ว Ca ไม่ลง"]],
+    take:["FHH: CCCR < 0.01 และ urine Ca ต่ำ","ตรวจยีน CASR (FHH1) ถ้า CCCR อยู่ช่วงก้ำกึ่ง","Thiazide, lithium, vitamin D ต่ำทำให้ CCCR ต่ำหลอกได้"]},
+  adh:{name:"ADH1", p:P({dx:"adh",rx:["ca"]}),
+    rows:[["ผู้ป่วย","Ca ต่ำ PTH ต่ำหรือปกติ urine Ca สูง"],["กลไก","CaSR ไวเกิน set point เลื่อนซ้าย"],["ปัญหา","ให้ Ca + calcitriol แล้ว urine Ca พุ่ง เสี่ยง nephrocalcinosis"]],
+    take:["Hypocalcemia + hypercalciuria + PTH ไม่สูง ชวนคิด activating CaSR","รักษาเฉพาะเมื่อมีอาการ เป้า Ca ต่ำปกติ","Thiazide ช่วยลด urine Ca"]},
+  hypo:{name:"Hypoparathyroidism", p:P({dx:"hypo",rx:["ca"]}),
+    rows:[["ผู้ป่วย","หลังผ่าตัด thyroid Ca 7.2 PTH ต่ำ"],["กลไก","ไม่มี PTH: กระดูกและไตไม่ตอบสนอง calcitriol ต่ำ"],["รักษา","Ca + calcitriol เป้า Ca ต่ำปกติ ติดตาม urine Ca"]],
+    take:["Hypocalcemia + PTH ต่ำ = hypoparathyroidism หรือ hypoMg","ตรวจ Mg ทุกราย","ไม่มี PTH ไตขับ Ca มาก ระวัง hypercalciuria จากการรักษา"]},
+  vitd:{name:"Vitamin D deficiency", p:P({dx:"vitd"}),
+    rows:[["ผู้ป่วย","Ca ต่ำปกติ PTH สูง P ต่ำ ALP สูง"],["กลไก","เส้น end-organ เลื่อนซ้าย ต่อมชดเชย"],["รักษา","cholecalciferol แล้ว PTH กลับปกติ"]],
+    take:["Secondary HPT: PTH สูงเพื่อรักษา Ca","25(OH)D ต่ำร่วมกับ PTH สูง ต้องแก้ให้ ≥ 30 ng/mL ก่อนวินิจฉัย PHPT","Normocalcemic PHPT วินิจฉัยหลังแก้ vitamin D แล้วเท่านั้น"]},
+  pthrp:{name:"PTHrP malignancy", p:P({dx:"pthrp"}),
+    rows:[["ผู้ป่วย","มะเร็ง squamous Ca 13 PTH ถูกกด"],["กลไก","PTHrP เพิ่ม Ca โดยไม่ผ่าน PTH"],["รักษา","NSS, calcitonin, bisphosphonate หรือ denosumab"]],
+    take:["Hypercalcemia + PTH < 20 = PTH-independent","ตรวจ PTHrP, 1,25D, SPEP/FLC, imaging","Denosumab ใช้ได้เมื่อ GFR ต่ำแต่ระวัง hypocalcemia"]},
+  ckd:{name:"CKD secondary HPT", p:P({dx:"ckd"}),
+    rows:[["ผู้ป่วย","CKD G5D Ca ปกติ PTH 600"],["กลไก","end-organ resistance, calcitriol ต่ำ, P สูง, FGF23"],["รักษา","คุม P, calcitriol หรือ calcimimetic"]],
+    take:["CKD: PTH ต้องสูงกว่าปกติเพื่อรักษา Ca","Calcimimetic เลื่อน set point ซ้าย ลด PTH และ Ca","เป้า PTH ใน dialysis ราว 2–9 เท่าของค่าบนปกติ"]}
+};
+var ORDER=["norm","phpt","fhh","adh","hypo","vitd","pthrp","ckd"];
+var box=document.getElementById("ctls");
+var ds=Sim.h("select",{id:"dx"},Object.keys(DX).map(function(k){ return Sim.h("option",{value:k,text:DX[k].name}); })); ds.addEventListener("change",update);
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"dx",text:"ภาวะ"}),ds]));
+var ld=Sim.slider({id:"ld",label:"Ca intake/absorption",min:-0.08,max:0.08,step:0.01,value:0,unit:"",fmt:function(v){ return (v>0?"+":"")+(v*100).toFixed(0)+"%"; },onInput:update});
+box.appendChild(ld.el);
+var T={}, tb=document.getElementById("tools");
+Object.keys(RX).forEach(function(k){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:RX[k].name}); b.addEventListener("click",function(){ b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); tb.appendChild(b); T[k]=b; });
+function on(k){ return T[k].getAttribute("aria-pressed")==="true"; }
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?215:320,aria:"PTH secretion curve and end-organ response curve",
+  x:{min:0.7,max:1.9,step:0.1,label:"Ionized Ca (mmol/L)",fmt:function(v){return v.toFixed(1);}},
+  y:{min:2,max:1000,log:true,label:"PTH (pg/mL)"},
+  xbands:[{x0:1.12,x1:1.32,label:"Normal iCa"}],
+  series:[{id:"ref",name:"Normal gland",color:A.muted,data:[],width:1.2,dash:[4,4]},{id:"g",name:"PTH secretion (CaSR)",color:A.accent,data:[],width:2.6},{id:"o",name:"End-organ response",color:A.teal,data:[],width:2.2}],
+  marks:[],legend:true});
+function sec(ca,g){ return 3+(g.pmax-3)/(1+Math.pow(ca/g.sp,30)); }
+function org(pth,o){ return o.c0+o.a*Math.log(pth/40)+o.ind; }
+function params(){
+  var d=DX[ds.value], g={sp:d.sp,pmax:d.pmax}, o={c0:d.c0+ld.get()*1.5,a:d.a,ind:d.ind}, fe=d.fe, dd=d.d;
+  if(on("ptx")){ if(ds.value==="phpt"){ g.sp=1.17; g.pmax=150; } else if(ds.value!=="hypo"){ g.pmax=9; } }
+  if(on("cina")){ g.sp*=0.88; }
+  if(on("ca")){ o.c0+=0.25; dd*=1.6; fe*=1.25; }
+  if(on("bis")){ o.ind*=0.35; o.c0-=0.04; }
+  if(on("hct")){ fe*=0.6; o.c0+=0.02; }
+  return {d:d,g:g,o:o,fe:fe,dd:dd};
+}
+function solve(g,o){ var lo=0.6, hi=2.2; for(var i=0;i<60;i++){ var m=(lo+hi)/2; if(org(sec(m,g),o)-m>0) lo=m; else hi=m; } return (lo+hi)/2; }
+var cseg="TAL", cell=Nephron.cell("cell","TAL",{level:"basic",levelButtons:false}), SG={};
+[["TAL","TAL: CaSR + paracellular Ca"],["DCT","DCT: PTH + TRPV5"]].forEach(function(x){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:x[1]}); b.addEventListener("click",function(){ cseg=x[0]; update(); }); document.getElementById("segt").appendChild(b); SG[x[0]]=b; });
+function drawCell(ca,pth){
+  var k=ds.value, o={flows:{},blocked:[],gain:[]};
+  Object.keys(SG).forEach(function(x){ SG[x].setAttribute("aria-pressed",x===cseg?"true":"false"); });
+  if(cseg==="TAL"){
+    var brake=Math.max(0,Math.min(1,(ca-1.1)/0.35)); if(k==="fhh") brake*=0.2; if(k==="adh") brake=Math.max(brake,0.85);
+    if(on("cina")) brake=Math.min(1,brake+0.3);
+    o.flows={CLDN:Math.max(0.1,1.6-1.5*brake),ROMK_T:Math.max(0.2,1.4-1.1*brake)}; o.focus=["CaSR","CLDN","ROMK_T","NKCC2"];
+    if(k==="fhh") o.blocked=["CaSR"]; if(k==="adh"||on("cina")) o.gain=["CaSR"];
+    if(on("hct")){}
+    o.badges={blood:"iCa "+ca.toFixed(2),lumen:"Lumen "+(brake>0.6?"+3":"+8")+" mV"};
+    o.caption=k==="fhh"?"Inactive CaSR does not sense the high Ca: TAL keeps reabsorbing Ca, so urine Ca stays low (FHH).":k==="adh"?"Overactive CaSR acts as if Ca were high: ROMK and the paracellular Ca path shut down, so Ca is lost in urine.":brake>0.6?"High blood Ca activates CaSR: less K recycling, less positive lumen, less Ca reabsorbed. Urine Ca rises.":brake<0.2?"Low blood Ca: CaSR is quiet, the lumen stays positive and Ca is reabsorbed between the cells.":"CaSR adjusts paracellular Ca reabsorption to blood Ca.";
+  } else {
+    var pf=Math.pow(Math.max(pth,2)/40,0.45); if(on("ca")) pf*=1.2;
+    o.flows={TRPV5:Math.max(0.1,Math.min(2.5,pf)),NCX1:Math.max(0.1,Math.min(2.5,pf))}; o.focus=["TRPV5","NCX1","NCC"];
+    if(on("hct")){ o.blocked=["NCC"]; o.flows.TRPV5*=1.6; o.flows.NCX1*=1.6; }
+    o.badges={blood:"PTH "+(pth<10?pth.toFixed(1):pth.toFixed(0))};
+    o.caption=on("hct")?"Thiazide blocks NCC: the cell becomes more negative and Ca uptake via TRPV5 rises, so urine Ca falls.":pf>1.4?"High PTH adds TRPV5 and NCX1: more active Ca reabsorption in DCT.":pf<0.5?"Low PTH: little TRPV5 activity, more Ca escapes into urine.":"PTH sets active Ca reabsorption through TRPV5 and NCX1.";
+  }
+  cell.update(cseg,o);
+}
+function update(){
+  var p=params(), g=p.g, o=p.o, x, G=[], O=[], R=[];
+  for(x=0.7;x<=1.901;x+=0.01){ G.push([x,sec(x,g)]); R.push([x,sec(x,{sp:1.17,pmax:150})]); }
+  for(var lp=Math.log(2);lp<=Math.log(1000);lp+=0.05){ var pth=Math.exp(lp), c=org(pth,o); if(c>=0.7&&c<=1.9) O.push([c,pth]); }
+  O.sort(function(a,b){return a[0]-b[0];});
+  chart.setSeries("ref",R); chart.setSeries("g",G); chart.setSeries("o",O);
+  var ca=solve(g,o), pth=sec(ca,g), tot=ca*8.0;
+  chart.update({marks:[{x:ca,y:pth,label:"Patient "+ca.toFixed(2),color:A.red}]});
+  /* urine Ca: filtered load x FE, FE rises with iCa through TAL CaSR and falls with PTH */
+  var fe=0.015*p.fe*Math.pow(ca/1.2,4)*Math.pow(40/Math.max(pth,5),0.25);
+  var ucaMg=fe*1440*tot*0.6, cccr=fe;
+  drawCell(ca,pth);
+  Sim.ro("roI",ca.toFixed(2),ca>1.32||ca<1.12?"flag":"ok");
+  Sim.ro("roT",tot.toFixed(1),tot>10.5||tot<8.6?"flag":"ok");
+  Sim.ro("roP",pth<10?pth.toFixed(1):pth.toFixed(0),pth>65||pth<15?"flag":"ok");
+  Sim.ro("roC",ds.value==="ckd"?"n/a":cccr.toFixed(3),ds.value==="ckd"?null:(cccr<0.01?"flag":null));
+  Sim.ro("roU",ds.value==="ckd"?"n/a":ucaMg.toFixed(0),ds.value==="ckd"?null:(ucaMg>300||ucaMg<100?"flag":"ok"));
+  var dd=p.dd*(["phpt","vitd","norm","fhh"].indexOf(ds.value)>=0?Math.pow(pth/40,0.3):1);
+  Sim.ro("roD",dd>1.4?"สูง":dd<0.6?"ต่ำ":"ปกติ",dd>1.4||dd<0.6?"flag":"ok");
+  var a=document.getElementById("act"), m, bad=true, k=ds.value;
+  if(ca>1.32&&pth>=20){
+    if(k==="fhh"||cccr<0.01) m="<b>PTH-dependent + CCCR "+cccr.toFixed(3)+"</b> นึกถึง FHH ตรวจ CASR gene ประวัติครอบครัว ไม่ผ่าตัด";
+    else m="<b>PTH-dependent hypercalcemia</b> CCCR "+cccr.toFixed(3)+" หนุน PHPT ตรวจ sestamibi/4D-CT, BMD, ultrasound ไต และ urine Ca 24 ชม. ประเมินเกณฑ์ผ่าตัด";
+  } else if(ca>1.32){ m="<b>PTH ถูกกด</b> หาสาเหตุ PTH-independent: PTHrP, 1,25D, SPEP/FLC, TSH, ยา (vitamin D, Ca, thiazide, lithium) รักษา NSS"+(on("bis")?" ให้ antiresorptive แล้ว":" + calcitonin + antiresorptive"); }
+  else if(ca<1.12&&pth<20){ m=(k==="adh"?"<b>PTH ต่ำ + urine Ca สูง</b> นึกถึง activating CaSR ให้ Ca เฉพาะเมื่อมีอาการ เป้า Ca ต่ำปกติ":"<b>Hypoparathyroidism</b> ตรวจ Mg ให้ Ca + calcitriol เป้า Ca ต่ำปกติ ติดตาม urine Ca") + (ucaMg>300?" urine Ca สูงแล้ว พิจารณา thiazide หรือลดขนาด":""); }
+  else if(ca<1.12){ m="<b>Hypocalcemia + PTH สูง</b> secondary HPT ตรวจ 25(OH)D, Mg, P, creatinine, ALP"; }
+  else if(pth>65){ m=k==="ckd"?"<b>CKD-MBD</b> PTH "+pth.toFixed(0)+(pth>600?" เกินเป้า (ราว 2–9 เท่าของค่าบนปกติ) คุม P และให้ calcitriol หรือ calcimimetic":" อยู่ในช่วงเป้า ติดตาม Ca P ALP"):"<b>Ca ปกติ PTH สูง</b> ตรวจ 25(OH)D และ GFR ก่อนสรุป normocalcemic PHPT"; bad=pth>600||k!=="ckd"; }
+  else { m="<b>ปกติ</b> Ca และ PTH อยู่ในจุดสมดุล"; bad=false; }
+  if(on("ptx")&&k==="fhh") { m="<b>ไม่ควรผ่าตัดใน FHH</b> ต่อมที่เหลือยังมี set point ผิดปกติ Ca มักไม่ลง ส่วนผ่าตัดทั้งหมดได้ hypoparathyroidism"; bad=true; }
+  a.innerHTML="<b>Next step:</b> "+m; a.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"EL-12", title:"Calcium and the PTH Axis", lead:"ดูเส้น PTH secretion ตาม CaSR set point คู่กับเส้นการตอบสนองของกระดูก ไต และ calcitriol จุดตัดคือ Ca และ PTH ของผู้ป่วย ใช้แยก PHPT, FHH, activating CaSR และ PTH-independent",
+  scenarios:S, order:ORDER, captureMs:800,
+  onChange:function(k,s){ ds.value=s.p.dx; ld.set(s.p.load); Object.keys(T).forEach(function(x){ T[x].setAttribute("aria-pressed",s.p.rx.indexOf(x)>=0?"true":"false"); }); update(); },
+  refs:["Brown EM. Role of the calcium-sensing receptor in extracellular calcium homeostasis. Best Pract Res Clin Endocrinol Metab 2013, 27(3): 333-343",
+        "Blaine J, Chonchol M, Levi M. Renal control of calcium, phosphate, and magnesium homeostasis. Clin J Am Soc Nephrol 2015, 10(7): 1257-1272",
+        "Bilezikian JP, Khan AA, Silverberg SJ, et al. Evaluation and management of primary hyperparathyroidism: summary statement and guidelines from the Fifth International Workshop. J Bone Miner Res 2022, 37(11): 2293-2314",
+        "Christensen SE, Nissen PH, Vestergaard P, et al. Discriminative power of three indices of renal calcium excretion for the distinction between familial hypocalciuric hypercalcaemia and primary hyperparathyroidism. Clin Endocrinol 2008, 69(5): 713-720",
+        "KDIGO CKD-MBD Work Group. KDIGO 2017 clinical practice guideline update for CKD-MBD. Kidney Int Suppl 2017, 7(1): 1-59"],
+  note:"Model เพื่อการสอน: PTH = 3 + (Pmax − 3)/(1 + (iCa/set point)^30) และ iCa = c0 + a x ln(PTH/40) + Ca ที่ไม่ขึ้นกับ PTH แก้หาจุดตัด total Ca ประมาณ iCa x 8 (albumin ปกติ) CCCR ประมาณจาก fractional Ca excretion"
+});
+})();
+</script>
+</body>
+</html>

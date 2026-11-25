@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[EL-06] Hyperkalemia: ECG and Treatment Timeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(110px,140px) 1fr 90px}
+#ecg{max-height:190px;background:#0B0B1F;border-radius:12px}
+.tools{margin-top:10px}
+.readout{grid-template-columns:repeat(3,1fr)}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,1fr)}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+body.present .bench{grid-template-columns:1.35fr 1fr}
+body.present #ecg{max-height:130px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:16px 20px}
+body.present .ctls{gap:2px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .tools{gap:5px;margin-top:6px}
+body.present .ro{padding:8px 12px}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>ECG และ K ตลอด 8 ชั่วโมง</h2>
+      <div class="svgwrap"><svg id="ecg" viewBox="0 0 640 190" role="img" aria-label="Lead II ECG at the selected time"></svg></div>
+      <div id="chart"></div>
+      <div id="live"></div>
+      <p class="hint no-present">ECG เปลี่ยนตาม K: T สูงแหลม (> 5.5) → PR ยาว P แบน (> 6.5) → QRS กว้าง (> 7.5) → sine wave (> 8.5) ความไวของ ECG ต่ำ คนไข้ CKD เรื้อรังอาจไม่มี ECG change แม้ K สูง Calcium ไม่ลด K แต่ทำให้ membrane คงที่ราว 30–60 นาที</p>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วยและการรักษา</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roK"><b>-</b><span>K ตอนนี้</span></div>
+        <div class="ro" id="roMin"><b>-</b><span>K ต่ำสุด (ชม.)</span></div>
+        <div class="ro" id="ro6"><b>-</b><span>K ที่ 6 ชม.</span></div>
+        <div class="ro" id="roMem"><b>-</b><span>Membrane</span></div>
+        <div class="ro" id="roGlu"><b>-</b><span>Hypoglycemia risk</span></div>
+        <div class="ro" id="roOut"><b>-</b><span>K ออกจากร่างกาย</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/live.js"></script>
+<script>
+(function(){
+"use strict";
+/* therapy: onset/peak/end (h), magnitude mmol/L (negative), shift = transcellular (rebound), remove = ออกจากร่างกาย */
+var TX={
+  ca:{name:"Calcium gluconate 10% 30 ml",shift:0,mem:true},
+  ins:{name:"Insulin 10 U + glucose",mag:-0.8,on:0.25,pk:1,end:5,shift:true},
+  sal:{name:"Salbutamol neb 10–20 mg",mag:-0.6,on:0.5,pk:1.5,end:3,shift:true},
+  bic:{name:"NaHCO3 (ถ้ามี acidosis)",mag:-0.25,on:1,pk:3,end:6,shift:true},
+  szc:{name:"SZC 10 g",mag:-0.7,on:1,pk:4,end:8,remove:true},
+  loop:{name:"Furosemide (ยังมีปัสสาวะ)",mag:-0.5,on:1,pk:4,end:8,remove:true},
+  hd:{name:"Hemodialysis 4 ชม.",remove:true,hd:true}
+};
+function P(o){ var d={k0:7.2,t:1,ckd:"yes",acid:"no",glu:160,tx:["ca","ins"]}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  shift:{name:"Shift อย่างเดียว", p:P({tx:["ca","ins","sal"]}),
+    rows:[["ผู้ป่วย","K 7.2 มี peaked T และ QRS เริ่มกว้าง"],["รักษา","calcium + insulin/glucose + salbutamol"],["ผล","K ลดราว 1.2–1.4 ใน 1–2 ชม. แต่กลับขึ้นใน 4–6 ชม. เพราะ K ยังอยู่ในร่างกาย"]],
+    take:["Calcium ให้ทันทีเมื่อมี ECG change ไม่ลด K แต่ป้องกัน arrhythmia","Insulin + salbutamol ผลรวมกันได้ แต่เป็นการ shift ชั่วคราว","ต้องตามด้วยการเอา K ออกจากร่างกายเสมอ"]},
+  remove:{name:"Shift + SZC", p:P({tx:["ca","ins","szc"]}),
+    rows:[["รักษา","calcium + insulin + sodium zirconium cyclosilicate"],["ผล","K ไม่ rebound เพราะ SZC เริ่มเอา K ออกใน 1–4 ชม."],["ข้อดี","ใช้ได้เมื่อรอ dialysis หรือไม่ต้อง dialysis"]],
+    take:["K binder ที่เร็ว (SZC) เริ่มออกฤทธิ์ราว 1 ชม.","Patiromer เริ่มช้ากว่า (หลายชั่วโมง) ไม่เหมาะกับ emergency","SPS ไม่มีหลักฐานในภาวะเฉียบพลันและเสี่ยง bowel necrosis"]},
+  hd:{name:"ESKD: ต้อง HD", p:P({k0:7.8,tx:["ca","ins","sal","hd"]}),
+    rows:[["ผู้ป่วย","HD ขาดนัด K 7.8 sine wave เริ่มมา"],["รักษา","calcium ทันที, insulin + salbutamol ระหว่างเตรียม HD"],["ผล","HD ลด K ได้มากที่สุด แต่มี rebound ราว 30% ใน 1–2 ชม. หลังหยุด"]],
+    take:["ESKD + hyperK รุนแรง: HD เป็นการรักษาหลัก","Shift therapy ก่อน HD ลด K gradient ทำให้ HD เอา K ออกได้น้อยลงเล็กน้อย แต่ยังจำเป็นเพื่อความปลอดภัย","ตรวจ K หลัง HD 2 ชม. เพราะ rebound"]},
+  hypo:{name:"Insulin ใน CKD ไม่มี glucose พอ", p:P({tx:["ca","ins"],glu:90}),
+    rows:[["ผู้ป่วย","CKD G5 glucose 90"],["ปัญหา","insulin ถูกกำจัดช้าใน CKD เสี่ยง hypoglycemia ชั่วโมงที่ 2–6"],["แนวทาง","insulin 5 U หรือให้ D10 ต่อเนื่อง ตรวจ glucose ทุกชั่วโมง"]],
+    take:["Hypoglycemia หลัง insulin พบได้ถึงราว 1 ใน 5 โดยเฉพาะ CKD และ glucose เริ่มต้นต่ำ","ลด insulin เป็น 5 U หรือให้ dextrose ต่อเนื่อง","ตรวจ glucose ทุกชั่วโมงอย่างน้อย 6 ชม."]},
+  acid:{name:"HyperK + metabolic acidosis", p:P({k0:6.4,acid:"yes",tx:["ins","bic","loop"],ckd:"no"}),
+    rows:[["ผู้ป่วย","AKI ยังมีปัสสาวะ HCO3 12 K 6.4 ไม่มี ECG change"],["รักษา","insulin, NaHCO3, furosemide"],["ผล","NaHCO3 ช่วยเล็กน้อยเมื่อมี acidosis loop diuretic เอา K ออกได้"]],
+    take:["NaHCO3 ช่วยลด K ได้น้อย ใช้เมื่อมี metabolic acidosis","Loop diuretic ใช้ได้เมื่อยังมีปัสสาวะและ volume พอ","ไม่มี ECG change ไม่จำเป็นต้องให้ calcium"]}
+};
+var ORDER=["shift","remove","hd","hypo","acid"];
+var box=document.getElementById("ctls"), C={};
+function sl(k,o){ o.id="s"+k; o.onInput=function(){ update.drag=true; update(); }; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("k0",{label:"K เริ่มต้น",min:5.5,max:9,step:0.1,value:7.2,unit:"mmol/L"});
+sl("t",{label:"ดู ECG ที่",min:0,max:8,step:0.25,value:1,unit:"ชม."}); C.t.el.style.display="none";
+sl("glu",{label:"Glucose",min:60,max:400,step:10,value:110,unit:"mg/dL"});
+var T={}, tb=document.getElementById("tools");
+Object.keys(TX).forEach(function(k){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:TX[k].name}); b.addEventListener("click",function(){ b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); tb.appendChild(b); T[k]=b; });
+var opt={ckd:"yes",acid:"no"};
+
+function shape(t,on,pk,end){ if(t<=on*0.3) return 0; if(t<pk) return Math.min(1,(t-on*0.3)/(pk-on*0.3)); if(t<end) return 1-0.65*(t-pk)/(end-pk); return 0.35*Math.exp(-(t-end)/1.5); }
+function sim(p,on){
+  var out=[], removed=0, minK=99, tMin=0;
+  for(var i=0;i<=32;i++){ var t=i/4, k=p.k0, rm=0;
+    Object.keys(TX).forEach(function(x){ if(!on[x]) return; var d=TX[x];
+      if(d.hd){ if(t>0.5){ var tt=Math.min(t,4.5)-0.5, drop=(p.k0-3.5)*0.72*(1-Math.exp(-tt/1.3)); var reb=t>4.5?drop*0.3*(1-Math.exp(-(t-4.5)/1)):0; k-= drop-reb; rm+=drop; } return; }
+      if(!d.mag) return;
+      var m=d.mag*(x==="bic"&&p.acid!=="yes"?0.2:1)*(x==="loop"&&p.ckd==="yes"?0.3:1);
+      var e=m*(d.remove?Math.min(1,shape(t,d.on,d.pk,99)):shape(t,d.on,d.pk,d.end));
+      k+=e; if(d.remove) rm+=-e; });
+    k=Math.max(2.8,k); out.push([t,k]); if(k<minK){ minK=k; tMin=t; } removed=rm; }
+  return {k:out,minK:minK,tMin:tMin,removed:removed};
+}
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?175:230,aria:"Serum potassium over eight hours",
+  x:{min:0,max:8,step:1,label:"Hours"},y:{min:3,max:9,step:1,label:"Serum K (mmol/L)"},
+  series:[{id:"k",name:"Serum K",color:A.accent,data:[],width:2.8}],
+  bands:[{y0:6.5,y1:10,color:"rgba(180,35,42,0.07)",label:"Severe"}]});
+
+/* ECG */
+var svg=document.getElementById("ecg");
+function ecgPath(K,x0,w,base){
+  var amp=40, p=[], s=w/400;
+  var pAmp=K>8.5?0:K>6.5?Math.max(0,6*(1-(K-6.5)/2)):6, pr=K>6.5?1+(K-6.5)*0.3:1, qrs=K>7.5?1+(K-7.5)*0.8:1, tAmp=K<3.5?6:K>5.5?Math.min(38,12+(K-5.5)*12):12, tW=K>5.5?0.7:1, uAmp=K<3.5?(3.5-K)*6:0;
+  function f(x){ /* x in 0..400 one beat */
+    var y=0;
+    y+=pAmp*Math.exp(-Math.pow((x-60)/12,2));
+    var q=120*pr; y+=-6*Math.exp(-Math.pow((x-q)/(4*qrs),2))+amp*Math.exp(-Math.pow((x-(q+10*qrs))/(5*qrs),2))-10*Math.exp(-Math.pow((x-(q+22*qrs))/(5*qrs),2));
+    if(K>8.5){ y=amp*0.7*Math.sin((x-q)/400*2*Math.PI*1.6); return y; }
+    var tc=q+120+20*qrs; y+=tAmp*Math.exp(-Math.pow((x-tc)/(26*tW),2));
+    y+=uAmp*Math.exp(-Math.pow((x-(tc+70))/16,2));
+    return y; }
+  for(var b=0;b<3;b++) for(var x=0;x<=400;x+=4) p.push([x0+(b*400+x)*w/1200, base-f(x)]);
+  return "M"+p.map(function(q){ return q[0].toFixed(1)+" "+q[1].toFixed(1); }).join(" L");
+}
+var EG=null;
+function drawECG(K,mem){
+  if(!EG){ while(svg.firstChild) svg.removeChild(svg.firstChild);
+    for(var x=0;x<=640;x+=20) Sim.svg("line",{x1:x,y1:0,x2:x,y2:190,stroke:"#1C1F3A","stroke-width":x%100===0?1.2:0.6},svg);
+    for(var y=0;y<=190;y+=20) Sim.svg("line",{x1:0,y1:y,x2:640,y2:y,stroke:"#1C1F3A","stroke-width":0.6},svg);
+    EG={path:Sim.svg("path",{fill:"none","stroke-width":2.2},svg),
+      t1:Sim.svg("text",{x:14,y:22,"font-size":13,fill:"#C9CBDA","font-family":"Geist Mono, monospace"},svg),
+      t2:Sim.svg("text",{x:626,y:22,"text-anchor":"end","font-size":13,"font-weight":600,"font-family":"IBM Plex Sans Thai, sans-serif"},svg)}; }
+  var col=K>=6.5?"#FF6B6B":"#7CFC9A";
+  EG.path.setAttribute("d",ecgPath(K,10,620,120)); EG.path.setAttribute("stroke",col);
+  EG.t1.textContent="Lead II  K "+K.toFixed(1)+" mmol/L";
+  EG.t2.textContent=ecgLab(K)+(mem?"  (membrane stabilized)":""); EG.t2.setAttribute("fill",col);
+}
+function ecgLab(K){ return K>8.5?"Sine wave":K>7.5?"Wide QRS":K>6.5?"PR prolonged, flat P":K>5.5?"Peaked T":K<3.5?"Flat T, U wave":"Normal"; }
+var live=Live.player(chart,{mount:"live"}), LAST=null;
+function events(p,on,R){
+  var E=[], va=Live.valueAt;
+  E.push({t:0,kind:p.k0>=6.5?"warn":"phys",text:"K "+p.k0.toFixed(1)+" ECG: "+ecgLab(p.k0)});
+  if(on.ca){ E.push({t:0.03,kind:"rx",text:"Calcium gluconate: ยก threshold potential คืนระยะห่างจาก resting potential ป้องกัน arrhythmia (K ไม่ลด)"}); E.push({t:1,kind:"phys",text:"ฤทธิ์ calcium เริ่มหมด ถ้า ECG ยังผิดปกติให้ซ้ำ"}); }
+  else if(p.k0>=6.5) E.push({t:0.03,kind:"warn",text:"ยังไม่ได้ stabilize membrane"});
+  if(on.ins) E.push({t:0.25,kind:"rx",text:"Insulin กระตุ้น Na-K-ATPase ดึง K เข้าเซลล์"+(p.glu<120?" glucose "+p.glu+" ต่ำ เสี่ยง hypoglycemia":"")});
+  if(on.sal) E.push({t:0.5,kind:"rx",text:"Salbutamol (β2) ดึง K เข้าเซลล์ เสริมกับ insulin"});
+  if(on.bic) E.push({t:1,kind:"rx",text:"NaHCO3: "+(p.acid==="yes"?"แก้ acidosis K เข้าเซลล์เล็กน้อย":"ไม่มี acidosis แทบไม่ช่วย")});
+  if(on.hd) { E.push({t:0.5,kind:"rx",text:"เริ่ม HD: K แพร่จากเลือดเข้า dialysate (เอาออกจากร่างกาย)"}); E.push({t:4.5,kind:"warn",text:"หยุด HD: K จากในเซลล์ไหลกลับออกมา (rebound)"}); }
+  if(on.szc) E.push({t:1,kind:"rx",text:"SZC จับ K แลก Na/H ในลำไส้ เริ่มเอา K ออกจากร่างกาย"});
+  if(on.loop) E.push({t:1,kind:"rx",text:"Furosemide เพิ่ม distal Na delivery ขับ K ทางปัสสาวะ"+(p.ckd==="yes"?" (CKD ได้ผลน้อย)":"")});
+  if(on.ins&&(p.glu<120||p.ckd==="yes")) E.push({t:2,kind:"warn",text:"ช่วงเสี่ยง hypoglycemia ชม. 2–6 (insulin ค้างนานใน CKD) ตรวจ glucose ทุกชั่วโมง"});
+  for(var i=1;i<R.k.length;i++){ var a=ecgLab(R.k[i-1][1]), b=ecgLab(R.k[i][1]); if(a!==b) E.push({t:R.k[i][0],kind:R.k[i][1]<R.k[i-1][1]?"ok":"warn",text:"ECG เปลี่ยนเป็น "+b+" (K "+R.k[i][1].toFixed(1)+")"}); }
+  if(R.tMin>0) E.push({t:R.tMin,kind:"phys",text:"K ต่ำสุด "+R.minK.toFixed(1)});
+  if(on.ins&&!(on.szc||on.loop||on.hd)) E.push({t:5,kind:"warn",text:"ฤทธิ์ insulin หมด K ที่ shift เข้าเซลล์ไหลกลับ เพราะยังไม่มีการเอา K ออก"});
+  var r6=R.k[24][1]; E.push({t:6,kind:r6>=6?"warn":"ok",text:"K ที่ 6 ชม. "+r6.toFixed(1)});
+  return E.sort(function(a,b){ return a.t-b.t; });
+}
+function onFrame(t,done){
+  var R=LAST.R, on=LAST.on, k=Live.valueAt(R.k,t), mem=on.ca&&t<=1;
+  drawECG(k,mem);
+  Sim.ro("roK",k.toFixed(1),k>=6.5?"flag":k<5.5?"ok":false);
+  Sim.ro("roMem",mem?"Stabilized":k>=6.5&&!on.ca?"ไม่ได้ป้องกัน":"-",mem?"ok":k>=6.5&&!on.ca?"flag":false);
+  if(t>=6-1e-6) Sim.ro("ro6",R.k[24][1].toFixed(1),R.k[24][1]>=6?"flag":"ok"); else Sim.ro("ro6","…");
+  if(done){ Sim.ro("roMin",R.minK.toFixed(1)+" ("+R.tMin+")"); } else Sim.ro("roMin","…");
+  var a=document.getElementById("act");
+  if(done){ a.innerHTML=LAST.act; a.className=LAST.actCls; } else { a.innerHTML="<b>กำลังจำลอง</b> ชม. "+t.toFixed(1)+" K "+k.toFixed(1); a.className="act"; }
+}
+function params(){ return {k0:C.k0.get(),t:C.t.get(),glu:C.glu.get(),ckd:opt.ckd,acid:opt.acid}; }
+function update(){
+  var p=params(), on={}; Object.keys(T).forEach(function(k){ on[k]=T[k].getAttribute("aria-pressed")==="true"; });
+  var R=sim(p,on), kAt=R.k[Math.round(p.t*4)][1], mem=on.ca&&p.t<=1;
+  chart.setSeries("k",R.k); chart.update({xbands:on.ca?[{x0:0,x1:1,label:"Ca effect",color:"rgba(31,122,114,0.08)"}]:[]});
+  var risk=on.ins&&(p.glu<120||p.ckd==="yes")?(p.glu<120?"สูง":"ปานกลาง"):"ต่ำ";
+  Sim.ro("roK",kAt.toFixed(1),kAt>=6.5?"flag":kAt<5.5?"ok":false);
+  Sim.ro("roMin",R.minK.toFixed(1)+" ("+R.tMin+")");
+  Sim.ro("ro6",R.k[24][1].toFixed(1),R.k[24][1]>=6?"flag":"ok");
+  Sim.ro("roMem",mem?"Stabilized":p.k0>=6.5&&!on.ca?"ไม่ได้ป้องกัน":"-",mem?"ok":p.k0>=6.5&&!on.ca?"flag":false);
+  Sim.ro("roGlu",risk,risk==="สูง"?"flag":risk==="ต่ำ"?"ok":false);
+  Sim.ro("roOut",R.removed>0.1?"มี":"ไม่มี (shift)",R.removed>0.1?"ok":"flag");
+  var a=document.getElementById("act"), m, bad=true;
+  if(p.k0>=6.5&&!on.ca&&kAt>=6.5) m="<b>ยังไม่ได้ให้ calcium</b> ถ้ามี ECG change ให้ calcium gluconate 10% 30 ml IV ทันที ซ้ำได้ถ้า ECG ไม่ดีขึ้น";
+  else if(R.removed<=0.1) m="<b>ยังไม่มีการเอา K ออก</b> K จะ rebound หลัง 4–6 ชม. เพิ่ม SZC, loop diuretic (ถ้ามีปัสสาวะ) หรือ HD";
+  else if(risk==="สูง") m="<b>เสี่ยง hypoglycemia</b> ให้ D10 ต่อเนื่องหรือลด insulin เป็น 5 U ตรวจ glucose ทุกชั่วโมง 6 ชม.";
+  else if(R.k[24][1]>=6) m="<b>K ยังสูงที่ 6 ชม.</b> พิจารณา HD โดยเฉพาะ ESKD, AKI oliguric หรือ hyperK ดื้อการรักษา";
+  else { bad=false; m="<b>คุมได้</b> ตรวจ K ซ้ำที่ 1, 2, 4 และ 6 ชม. หาสาเหตุและทบทวนยา (RAASi, MRA, trimethoprim)"; }
+  LAST={R:R,on:on,act:"<b>Next step:</b> "+m,actCls:"act"+(bad?" bad":"")};
+  live.load({tMax:8,unit:"ชม.",ms:8000,events:events(p,on,R),onFrame:onFrame,cursorLabel:function(t){ return "K "+Live.valueAt(R.k,t).toFixed(1); },debounce:!!update.drag});
+  update.drag=false;
+}
+Sim.mount({code:"EL-06", title:"Hyperkalemia: ECG and Treatment Timeline", lead:"ตั้ง K เริ่มต้น เลือกการรักษาแต่ละอย่าง ดู K ตลอด 8 ชั่วโมงและ ECG ณ เวลาที่เลือก แยกการ stabilize membrane, shift เข้าเซลล์ และเอา K ออกจากร่างกาย",
+  scenarios:S, order:ORDER, captureMs:1000,
+  onChange:function(k,s){ var p=s.p; C.k0.set(p.k0); C.t.set(p.t); C.glu.set(p.glu); opt.ckd=p.ckd; opt.acid=p.acid; Object.keys(T).forEach(function(x){ T[x].setAttribute("aria-pressed",p.tx.indexOf(x)>=0?"true":"false"); }); update(); },
+  refs:["Palmer BF, Carrero JJ, Clegg DJ, et al. Clinical management of hyperkalemia. Mayo Clin Proc 2021, 96(3): 744-762",
+        "Clase CM, Carrero JJ, Ellison DH, et al. Potassium homeostasis and management of dyskalemia in kidney diseases: conclusions from a KDIGO Controversies Conference. Kidney Int 2020, 97(1): 42-61",
+        "Packham DK, Rasmussen HS, Lavin PT, et al. Sodium zirconium cyclosilicate in hyperkalemia. N Engl J Med 2015, 372(3): 222-231",
+        "Allon M, Copkney C. Albuterol and insulin for treatment of hyperkalemia in hemodialysis patients. Kidney Int 1990, 38(5): 869-872"],
+  note:"Model เพื่อการสอน: แต่ละการรักษามี onset, peak และระยะเวลา ผลรวมแบบบวก insulin −0.8, salbutamol −0.6, SZC −0.7 ใน 4 ชม., HD ลดราว 70% ของส่วนที่เกิน 3.5 ใน 4 ชม. และ rebound 30% ECG เป็นภาพประกอบ ไม่ใช่การจำลองไฟฟ้าหัวใจจริง"
+});
+})();
+</script>
+</body>
+</html>

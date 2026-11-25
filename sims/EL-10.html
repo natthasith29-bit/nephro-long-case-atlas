@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[EL-10] Toxic Alcohols and the Osmolal Gap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(110px,140px) 1fr 96px}
+.sel{display:grid;grid-template-columns:minmax(110px,140px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.readout{grid-template-columns:repeat(3,1fr)}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,1fr)}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+body.present .bench{grid-template-columns:1.3fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:16px 20px}
+body.present .ctls{gap:4px 14px;grid-template-columns:1fr 1fr}
+body.present .ctl{grid-template-columns:76px 1fr 62px;gap:6px;font-size:12px}
+body.present .ctl output{font-size:12px}
+body.present .sel{grid-template-columns:76px minmax(0,1fr);gap:6px;font-size:12px}
+body.present select{font-size:11.5px;padding:3px 6px}
+body.present .ro{padding:8px 12px}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Osmolal gap และ anion gap ตามเวลา</h2>
+      <div id="chart"></div>
+      <div id="live"></div>
+      <p class="hint no-present">Parent alcohol ทำให้ osmolal gap สูงช่วงแรก เมื่อ alcohol dehydrogenase เปลี่ยนเป็นกรด anion gap จึงขึ้นตามมา (เส้นไขว้กัน) fomepizole หรือ ethanol หยุดการเปลี่ยนนี้ HD เอาทั้ง parent และ metabolite ออก เส้นตั้งคือเวลาที่มาถึงและเริ่มรักษา</p>
+    </div>
+    <div class="card">
+      <h2>สารพิษและการรักษา</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roOG"><b>-</b><span>Osmolal gap ตอนมาถึง</span></div>
+        <div class="ro" id="roAG"><b>-</b><span>AG ตอนมาถึง</span></div>
+        <div class="ro" id="roHC"><b>-</b><span>HCO3 ตอนมาถึง</span></div>
+        <div class="ro" id="roLv"><b>-</b><span>Parent level (mg/dL)</span></div>
+        <div class="ro" id="roMet"><b>-</b><span>Metabolite สูงสุด (mmol/L)</span></div>
+        <div class="ro" id="roHD"><b>-</b><span>ข้อบ่งชี้ HD</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/live.js"></script>
+<script>
+(function(){
+"use strict";
+/* mw, density g/ml, zero-order ADH rate (mg/dL/h), first-order t½ when ADH blocked (h), HD t½ (h), metabolite name, metabolite t½ (h), acid: metabolite is an anion */
+var SUB={
+  meoh:{name:"Methanol",mw:32,dens:0.79,zo:8.5,tBlock:52,tHD:3.5,met:"Formate",tMet:3.5,acid:true},
+  eg:{name:"Ethylene glycol",mw:62,dens:1.11,zo:10,tBlock:17,tHD:3,met:"Glycolate",tMet:7,acid:true},
+  ipa:{name:"Isopropanol",mw:60,dens:0.79,zo:12,tBlock:20,tHD:2.5,met:"Acetone",tMet:22,acid:false},
+  pg:{name:"Propylene glycol (infusion)",mw:76,dens:1.04,zo:0,tFirst:4,tBlock:4,tHD:2.5,met:"Lactate",tMet:1,acid:true,infusion:true},
+  pyro:{name:"Pyroglutamic acid (5-oxoproline)",mw:0,dens:0,zo:0,tBlock:1,tHD:2,met:"5-oxoproline",tMet:14,acid:true,none:true}
+};
+function P(o){ var d={sub:"meoh",ml:100,w:70,arr:12,etoh:0,gfr:90,fome:"yes",hd:"no"}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  meoh:{name:"Methanol มาเร็ว", p:P({arr:4}),
+    rows:[["ประวัติ","ดื่มเหล้าเถื่อน 4 ชม. ก่อน ยังไม่มีอาการทางตา"],["Lab","osmolal gap สูง AG ยังไม่สูงมาก"],["รักษา","fomepizole ทันที หยุดการสร้าง formate และ HD เพราะระดับเกิน 70 mg/dL (500–700 mg/L ตามการใช้ ADH blocker)"]],
+    take:["ช่วงแรก: osmolal gap สูง AG ปกติ ช่วงหลัง: OG ลด AG สูง","OG ปกติไม่ได้ตัด toxic alcohol ออกถ้ามาช้า","Fomepizole (หรือ ethanol) ให้เร็วที่สุดเมื่อสงสัย"]},
+  meohLate:{name:"Methanol มาช้า", p:P({arr:30,ml:150}),
+    rows:[["ประวัติ","ดื่ม 30 ชม. ก่อน ตามัว"],["Lab","OG เกือบปกติ HAGMA รุนแรง formate สูง"],["รักษา","HD + fomepizole + folate แก้ acidosis"]],
+    take:["มาช้า: OG ลดลงเพราะ methanol ถูกเปลี่ยนไปแล้ว","Formate ทำลาย optic nerve และ basal ganglia","HD เมื่อ AG > 24, มีอาการตาหรือระบบประสาท หรือระดับสูง"]},
+  eg:{name:"Ethylene glycol + AKI", p:P({sub:"eg",ml:120,arr:10,fome:"no",gfr:40}),
+    rows:[["ประวัติ","ดื่มน้ำยาหม้อน้ำรถ"],["Lab","HAGMA, OG สูง, Ca oxalate monohydrate crystal ในปัสสาวะ, Ca ต่ำ"],["รักษา","fomepizole, HD เมื่อ acidosis รุนแรงหรือ AKI"]],
+    take:["EG → glycolate (acidosis) → oxalate (crystal, AKI, hypocalcemia)","ไตทำงานดี EG ถูกขับเองได้เมื่อได้ fomepizole","AKI หรือ acidosis รุนแรงเป็นข้อบ่งชี้ HD"]},
+  egFome:{name:"EG + fomepizole เร็ว", p:P({sub:"eg",ml:120,arr:3,fome:"yes",gfr:90}),
+    rows:[["ประวัติ","มา 3 ชม. หลังดื่ม"],["รักษา","fomepizole อย่างเดียว"],["ผล","AG แทบไม่ขึ้น EG ถูกขับทางไตช้าๆ (t½ ราว 17 ชม.)"]],
+    take:["Fomepizole เร็วป้องกันการสร้างกรดได้แทบทั้งหมด","ไตปกติอาจไม่ต้อง HD แม้ EG สูง ถ้าไม่มี acidosis","ต้องให้ fomepizole จนระดับต่ำกว่าเกณฑ์"]},
+  ipa:{name:"Isopropanol", p:P({sub:"ipa",ml:250,arr:6,fome:"no"}),
+    rows:[["ประวัติ","ดื่ม rubbing alcohol"],["Lab","OG สูง ketone (acetone) บวก แต่ไม่มี acidosis"],["รักษา","supportive ไม่ต้อง fomepizole"]],
+    take:["Osmolal gap สูงโดยไม่มี AG = isopropanol (หรือ mannitol, glycine)","Acetone ไม่ใช่กรด ketosis without acidosis","ไม่ต้องใช้ fomepizole เพราะจะทำให้ isopropanol อยู่นานขึ้น"]},
+  pg:{name:"Propylene glycol (lorazepam drip)", p:P({sub:"pg",ml:220,arr:48,fome:"no"}),
+    rows:[["บริบท","ICU ได้ lorazepam ขนาดสูงหลายวัน"],["Lab","OG สูง + lactic acidosis (D และ L-lactate)"],["รักษา","หยุดหรือลดยา เปลี่ยน sedative"]],
+    take:["Propylene glycol เป็นตัวทำละลายของ lorazepam, phenobarbital IV","OG > 10–12 ใน ICU ให้นึกถึง PG","HD ใช้ในรายรุนแรง"]},
+  pyro:{name:"Pyroglutamic acidosis", p:P({sub:"pyro",arr:72,fome:"no"}),
+    rows:[["ผู้ป่วย","หญิงผอม sepsis ได้ paracetamol ทุกวันหลายวัน"],["Lab","HAGMA รุนแรง OG ปกติ lactate และ ketone ไม่สูง"],["รักษา","หยุด paracetamol, N-acetylcysteine, แก้ sepsis และโภชนาการ"]],
+    take:["HAGMA ที่ไม่มี OG และไม่มี lactate/ketone ให้นึกถึง 5-oxoproline","ปัจจัยเสี่ยง: paracetamol เรื้อรัง, malnutrition, sepsis, CKD, หญิง, flucloxacillin","Glutathione depletion เป็นกลไกหลัก"]}
+};
+var ORDER=["meoh","meohLate","eg","egFome","ipa","pg","pyro"];
+var box=document.getElementById("ctls"), C={}, SEL={};
+function sel(k,label,opts){ var s=Sim.h("select",{id:"s"+k},opts.map(function(o){ return Sim.h("option",{value:o[0],text:o[1]}); })); s.addEventListener("change",update); box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"s"+k,text:label}),s])); SEL[k]=s; }
+function sl(k,o){ o.id="s"+k; o.onInput=function(){ update.drag=true; update(); }; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sel("sub","สาร",Object.keys(SUB).map(function(k){ return [k,SUB[k].name]; }));
+sl("ml",{label:"ปริมาณ",min:10,max:400,step:10,value:100,unit:"ml"});
+sl("w",{label:"น้ำหนัก",min:40,max:100,step:1,value:70,unit:"kg"});
+sl("arr",{label:"มาถึงหลังสัมผัส",min:1,max:72,step:1,value:12,unit:"ชม."});
+sl("etoh",{label:"Ethanol ร่วม",min:0,max:300,step:10,value:0,unit:"mg/dL"});
+sl("gfr",{label:"eGFR",min:5,max:120,step:5,value:90});
+sel("fome","Fomepizole",[["yes","ให้เมื่อมาถึง"],["no","ไม่ให้"]]);
+sel("hd","Hemodialysis",[["no","ไม่ทำ"],["yes","ทำ 8 ชม. เมื่อมาถึง"]]);
+
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?280:300,aria:"Osmolal gap and anion gap over time",
+  x:{min:0,max:72,step:12,label:"Hours after exposure"},y:{min:0,max:80,step:10,label:"mOsm/kg or mmol/L"},
+  series:[{id:"og",name:"Osmolal gap",color:A.accent,data:[],width:2.6},{id:"ag",name:"Anion gap",color:A.red,data:[],width:2.6},{id:"hc",name:"HCO3",color:A.teal,data:[],width:1.6,dash:[4,3]}],legend:true});
+
+function params(){ var o={}; for(var k in C) o[k]=C[k].get(); for(var j in SEL) o[j]=SEL[j].value; return o; }
+function sim(p){
+  var s=SUB[p.sub], V=0.6*p.w, dt=0.25, T=72, par=0, met=0, et=p.etoh, out={og:[],ag:[],hc:[],par:[],met:[]};
+  if(!s.none&&!s.infusion) par=p.ml*s.dens*1000/s.mw/V;           /* mmol/L */
+  var maxMet=0;
+  for(var t=0;t<=T+1e-9;t+=dt){
+    var treat=t>=p.arr, onHD=p.hd==="yes"&&t>=p.arr&&t<p.arr+8, block=(treat&&p.fome==="yes")||et>=100;
+    var ogEt=et/3.7, og=par+ogEt+(s.acid?0:met), ag=12+(s.acid?met:0), hc=Math.max(3,24-(ag-12)*0.9);
+    if(Math.abs(t-Math.round(t))<1e-6){ out.og.push([t,og]); out.ag.push([t,ag]); out.hc.push([t,hc]); out.par.push([t,par*s.mw/10]); out.met.push([t,met]); }
+    maxMet=Math.max(maxMet,met);
+    /* parent */
+    var conv=0;
+    if(s.infusion){ if(!treat) par+=(p.ml*s.dens*1000/s.mw/V)/24*dt; conv=par*(Math.LN2/s.tFirst)*dt; }
+    else if(par>0){ conv=block?0:Math.min(par,s.zo/(s.mw/10)*dt); }
+    var ren=(p.sub==="eg"||p.sub==="pg")?par*(Math.LN2/s.tBlock)*(p.gfr/90)*dt*(block?1:0.3):(block?par*Math.LN2/s.tBlock*dt:0);
+    var hdr=onHD?par*(1-Math.exp(-Math.LN2/s.tHD*dt)):0;
+    par=Math.max(0,par-conv-ren-hdr);
+    /* metabolite */
+    var prod=s.none?(t<p.arr?0.6*dt:0):conv;
+    met=Math.max(0,met+prod-met*(Math.LN2/s.tMet)*dt*(p.sub==="eg"?Math.max(0.4,p.gfr/90):1)-(onHD?met*(1-Math.exp(-Math.LN2/2*dt)):0));
+    if(et>0) et=Math.max(0,et-20*dt);
+  }
+  return {out:out,maxMet:maxMet};
+}
+function at(arr,t){ for(var i=0;i<arr.length;i++) if(arr[i][0]>=t) return arr[i][1]; return arr[arr.length-1][1]; }
+var live=Live.player(chart,{mount:"live"}), LAST=null;
+function events(p,s,R){
+  var o=R.out, E=[], cr=Live.cross;
+  E.push({t:0,kind:"phys",text:s.none?"Paracetamol เรื้อรัง + sepsis/malnutrition: glutathione หมด 5-oxoproline สะสม":s.infusion?"เริ่ม infusion ที่มี propylene glycol":"ได้รับ "+s.name+" "+p.ml+" ml ดูดซึมเร็ว osmolal gap ขึ้นทันที"});
+  if(!s.none&&!s.infusion) E.push({t:0.5,kind:"phys",text:p.etoh>=100?"Ethanol "+p.etoh+" mg/dL แย่งจับ ADH ชะลอการสร้าง "+s.met:"Alcohol dehydrogenase เปลี่ยน "+s.name+" เป็น "+s.met+(s.acid?" (กรด)":" (ไม่ใช่กรด)")});
+  var a16=cr(o.ag,16,1); if(a16!==null) E.push({t:a16,kind:"warn",text:"AG เกิน 16: เริ่มเป็น HAGMA"});
+  var x=null; for(var i=1;i<o.og.length;i++){ if(o.og[i-1][1]>o.ag[i-1][1]-12&&o.og[i][1]<=o.ag[i][1]-12&&o.ag[i][1]>16){ x=o.og[i][0]; break; } }
+  if(x!==null) E.push({t:x,kind:"warn",text:"OG ลด AG สูงขึ้น: สารแม่ถูกเปลี่ยนเป็นกรด OG ที่ปกติจึงไม่ตัดโรค"});
+  var a24=cr(o.ag,24,1); if(a24!==null) E.push({t:a24,kind:"warn",text:"AG เกิน 24 (เกณฑ์ HD ใน methanol)"});
+  var h12=cr(o.hc,12,-1); if(h12!==null) E.push({t:h12,kind:"warn",text:"HCO3 ต่ำกว่า 12"});
+  E.push({t:p.arr,kind:"phys",text:"มาถึงโรงพยาบาล: OG "+LAST.og.toFixed(0)+" AG "+LAST.ag.toFixed(0)+" HCO3 "+LAST.hc.toFixed(0)});
+  if(p.fome==="yes"&&!s.none) E.push({t:p.arr+0.05,kind:"rx",text:"Fomepizole บล็อก ADH หยุดการสร้าง "+s.met+" สารแม่ค้างอยู่และถูกขับช้าๆ"});
+  if(p.sub==="pg"||p.sub==="pyro") E.push({t:p.arr+0.05,kind:"rx",text:p.sub==="pg"?"หยุด infusion ที่มี propylene glycol":"หยุด paracetamol ให้ N-acetylcysteine"});
+  if(p.hd==="yes"){ E.push({t:p.arr+0.1,kind:"rx",text:"เริ่ม HD: เอาทั้งสารแม่และกรดออก แก้ acidosis"}); E.push({t:Math.min(72,p.arr+8),kind:"phys",text:"หยุด HD หลัง 8 ชม."}); }
+  E.push({t:72,kind:"phys",text:"72 ชม.: OG "+o.og[72][1].toFixed(0)+" AG "+o.ag[72][1].toFixed(0)});
+  return E.sort(function(a,b){ return a.t-b.t; });
+}
+function onFrame(t,done){
+  var L=LAST, va=Live.valueAt, o=L.R.out;
+  if(t>=L.p.arr-1e-6){ Sim.ro("roOG",L.og.toFixed(0),L.og>10?"flag":"ok"); Sim.ro("roAG",L.ag.toFixed(0),L.ag>16?"flag":"ok"); Sim.ro("roHC",L.hc.toFixed(0),L.hc<18?"flag":"ok"); Sim.ro("roLv",L.s.none?"-":L.lv.toFixed(0)); Sim.ro("roHD",L.hd?"มี":"ไม่มี",L.hd?"flag":"ok"); }
+  else ["roOG","roAG","roHC","roLv","roHD"].forEach(function(id){ Sim.ro(id,"…"); });
+  if(done) Sim.ro("roMet",L.R.maxMet.toFixed(1)+" "+L.s.met.split(" ")[0]); else Sim.ro("roMet","…");
+  var a=document.getElementById("act");
+  if(done){ a.innerHTML=L.act; a.className=L.actCls; } else { a.innerHTML="<b>"+(t<L.p.arr?"ก่อนมาโรงพยาบาล":"หลังเริ่มรักษา")+"</b> ชม. "+Math.round(t)+" OG "+va(o.og,t).toFixed(0)+" AG "+va(o.ag,t).toFixed(0)+" HCO3 "+va(o.hc,t).toFixed(0); a.className="act"; }
+}
+function update(){
+  var p=params(), s=SUB[p.sub], R=sim(p), o=R.out;
+  chart.setSeries("og",o.og); chart.setSeries("ag",o.ag); chart.setSeries("hc",o.hc);
+  var mx=Math.max(40,Math.ceil(Math.max.apply(null,o.og.concat(o.ag).map(function(d){ return d[1]; }))/10)*10+10);
+  chart.update({y:{min:0,max:mx,step:mx>80?20:10,label:"mOsm/kg or mmol/L"},hlines:[{y:10,label:"OG 10",color:A.accent,dash:[2,4]}]});
+  var og=at(o.og,p.arr), ag=at(o.ag,p.arr), hc=at(o.hc,p.arr), lv=at(o.par,p.arr);
+  var hd=false, why=[];
+  if(p.sub==="meoh"){ var lim=p.fome==="yes"?70:p.etoh>=100?60:50; if(lv>lim){ hd=true; why.push("ระดับ > "+lim+" mg/dL"); } if(ag>24){ hd=true; why.push("AG > 24"); } }
+  if(p.sub==="eg"){ if(hc<12||ag>27){ hd=true; why.push("acidosis รุนแรง"); } if(p.gfr<45){ hd=true; why.push("AKI"); } if(lv>50&&p.fome!=="yes"){ hd=true; why.push("EG > 50 โดยไม่มี fomepizole"); } }
+  if(p.sub==="pg"&&hc<12){ hd=true; why.push("acidosis รุนแรง"); }
+  Sim.ro("roOG",og.toFixed(0),og>10?"flag":"ok");
+  Sim.ro("roAG",ag.toFixed(0),ag>16?"flag":"ok");
+  Sim.ro("roHC",hc.toFixed(0),hc<18?"flag":"ok");
+  Sim.ro("roLv",s.none?"-":lv.toFixed(0));
+  Sim.ro("roMet",R.maxMet.toFixed(1)+" "+s.met.split(" ")[0]);
+  Sim.ro("roHD",hd?"มี":"ไม่มี",hd?"flag":"ok");
+  var a=document.getElementById("act"), m, bad=true;
+  if(p.sub==="pyro") m="<b>Pyroglutamic acidosis</b> หยุด paracetamol ให้ N-acetylcysteine แก้ sepsis และโภชนาการ ตรวจ urine 5-oxoproline ยืนยัน";
+  else if(p.sub==="ipa"){ bad=false; m="<b>Isopropanol</b> supportive care HD เฉพาะ hypotension ดื้อหรือระดับสูงมาก ไม่ต้องให้ fomepizole"; }
+  else if(p.sub==="pg") m="<b>Propylene glycol</b> หยุดหรือเปลี่ยนยาที่มี PG (lorazepam, phenobarbital IV) ติดตาม OG และ lactate";
+  else if(hd) m="<b>ทำ HD</b> ("+why.join(", ")+") ร่วมกับ fomepizole (เพิ่มขนาดระหว่าง HD)"+(p.sub==="meoh"?" folate/folinic acid":" thiamine/pyridoxine")+" แก้ acidosis ด้วย NaHCO3";
+  else if(p.fome!=="yes") m="<b>ให้ fomepizole ทันที</b> (15 mg/kg แล้ว 10 mg/kg ทุก 12 ชม.) ระหว่างรอระดับสาร ตรวจ OG, AG และ blood gas ซ้ำ";
+  else { bad=false; m="<b>Fomepizole เพียงพอในตอนนี้</b> ติดตาม blood gas, OG และระดับสารทุก 4–6 ชม. จนระดับต่ำกว่าเกณฑ์และ acidosis หาย"; }
+  LAST={p:p,s:s,R:R,og:og,ag:ag,hc:hc,lv:lv,hd:hd,act:"<b>Next step:</b> "+m,actCls:"act"+(bad?" bad":"")};
+  live.load({tMax:72,unit:"ชม.",ms:9000,events:events(p,s,R),onFrame:onFrame,baseVlines:[{x:p.arr,label:"Arrival"}],cursorLabel:function(t){ return "OG "+Live.valueAt(o.og,t).toFixed(0)+"  AG "+Live.valueAt(o.ag,t).toFixed(0); },debounce:!!update.drag});
+  update.drag=false;
+}
+Sim.mount({code:"EL-10", title:"Toxic Alcohols and the Osmolal Gap", lead:"เลือกสาร ปริมาณ และเวลาที่มาถึง ดู osmolal gap กับ anion gap ไขว้กันตามการเปลี่ยนเป็นกรด แล้วดูผลของ fomepizole และ hemodialysis",
+  scenarios:S, order:ORDER, captureMs:1000,
+  onChange:function(k,s){ var p=s.p; ["sub","fome","hd"].forEach(function(x){ SEL[x].value=p[x]; }); ["ml","w","arr","etoh","gfr"].forEach(function(x){ C[x].set(p[x]); }); update(); },
+  refs:["Roberts DM, Yates C, Megarbane B, et al (EXTRIP). Recommendations for the role of extracorporeal treatments in the management of acute methanol poisoning: a systematic review and consensus statement. Crit Care Med 2015, 43(2): 461-472",
+        "Kraut JA, Mullins ME. Toxic alcohols. N Engl J Med 2018, 378(3): 270-280",
+        "Brent J, McMartin K, Phillips S, et al. Fomepizole for the treatment of ethylene glycol poisoning. N Engl J Med 1999, 340(11): 832-838",
+        "Brent J, McMartin K, Phillips S, Aaron C, Kulig K. Fomepizole for the treatment of methanol poisoning. N Engl J Med 2001, 344(6): 424-429",
+        "Fenves AZ, Kirkpatrick HM, Patel VV, Sweetman L, Emmett M. Increased anion gap metabolic acidosis as a result of 5-oxoproline (pyroglutamic acid): a role for acetaminophen. Clin J Am Soc Nephrol 2006, 1(3): 441-447"],
+  note:"Model เพื่อการสอน: Vd 0.6 L/kg ดูดซึมทันที ADH metabolism แบบ zero-order (methanol 8.5, EG 10 mg/dL/h) ถูกหยุดด้วย fomepizole หรือ ethanol ≥ 100 mg/dL แล้วเหลือ elimination ตาม t½ (methanol 52, EG 17 ชม. ขึ้นกับ GFR) HD t½ ราว 3 ชม. metabolite เพิ่ม AG 1:1 OG รวมผลของ ethanol (mg/dL ÷ 3.7) เกณฑ์ HD ของ methanol ตาม EXTRIP ส่วน EG ใช้เกณฑ์ทางคลินิกที่ใช้ทั่วไป"
+});
+})();
+</script>
+</body>
+</html>

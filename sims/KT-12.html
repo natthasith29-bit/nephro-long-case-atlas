@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[KT-12] Recurrent Disease After Kidney Transplantation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.35fr 1fr}}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.ro b{font-size:19px}
+.sel{display:grid;grid-template-columns:minmax(110px,150px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px;margin:6px 0}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.sub{font-size:12.5px;color:var(--muted);margin:12px 0 4px}
+.tools{margin-top:4px}
+.pv{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--ink);color:#fff;font-size:14px}
+.pv b{font-weight:600;color:var(--accent2)}
+.act{margin-top:10px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .act{display:none}
+body.present .card{padding:14px 18px}
+body.present .sel{margin:2px 0}
+body.present .tools{gap:5px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .ro{padding:6px 12px}
+body.present .ro b{font-size:17px}
+body.present .pv{margin-top:6px;padding:8px 12px;font-size:13px}
+body.present .svgwrap svg{max-height:440px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>อัตรา recurrence ทางคลินิกและเวลาที่เกิด</h2>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 680 520" role="img" aria-label="Clinical recurrence rates of native kidney diseases after transplantation and typical time of onset"></svg></div>
+      <p class="hint no-present">แท่งคืออัตรา recurrence ทางคลินิกโดยประมาณจาก cohort (ช่วงที่รายงานกว้าง ใช้ค่ากลาง) จุดเพชรคือความเสี่ยงของผู้ป่วยรายนี้หลังรวมปัจจัยที่เลือก แถบล่างคือช่วงเวลาที่มักเกิด recurrence ของโรคที่เลือก</p>
+    </div>
+    <div class="card">
+      <h2>Native disease และปัจจัยเสี่ยง</h2>
+      <div class="sel"><label for="sDz">Native disease</label><select id="sDz"></select></div>
+      <div class="sel" id="selMut"><label for="sMut">Complement defect</label><select id="sMut"><option value="cfh">CFH variant</option><option value="cfi">CFI variant</option><option value="c3">C3 or CFB gain of function</option><option value="mcp">MCP (CD46) variant</option><option value="abh">Anti-factor H antibody</option><option value="none">ไม่พบ variant</option></select></div>
+      <div class="sub">ปัจจัยของผู้ป่วยรายนี้</div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roPop"><b>-</b><span>Recurrence ในประชากร</span></div>
+        <div class="ro" id="roPt"><b>-</b><span>ผู้ป่วยรายนี้</span></div>
+        <div class="ro" id="roLoss"><b>-</b><span>Graft loss จาก recurrence</span></div>
+      </div>
+      <div class="pv" id="pv"></div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script>
+(function(){
+"use strict";
+/* rate = clinical recurrence (%), loss = graft loss among recurrences, onset = [early, late] in days, mods: [id, label, fn(rate)] */
+var DZ = {
+  fsgs:{n:"Primary FSGS", rate:35, loss:"สูง (ราวครึ่งหนึ่งของรายที่เป็นซ้ำ)", onset:[1, 60], mods:[["prior","Graft ก่อนเสียจาก recurrence",function(r){ return Math.max(r, 80); }],["fast","ESKD ภายใน 3 ปีหลังวินิจฉัย",function(r){ return r * 1.4; }],["young","อายุน้อย",function(r){ return r * 1.25; }],["gen","Genetic FSGS (NPHS2 เป็นต้น)",function(r){ return 3; }],["adapt","Adaptive FSGS",function(r){ return 1; }]],
+    prev:"ตรวจ UPCR ทุกวันในสัปดาห์แรกและบ่อยในเดือนแรก ถ้า proteinuria ขึ้นเริ่ม PLEX + rituximab เร็ว ไม่แนะนำ living related donor ที่เป็นพาหะยีน"},
+  mn:{n:"Membranous (PLA2R)", rate:35, loss:"ต่ำถ้ารักษาด้วย rituximab", onset:[90, 900], mods:[["pla","Anti-PLA2R บวกตอนปลูกถ่าย",function(r){ return 60; }],["hi","Titer สูงมาก",function(r){ return Math.max(r, 75); }],["neg","Anti-PLA2R ลบ > 6 เดือนก่อน KT",function(r){ return 15; }]],
+    prev:"ตรวจ anti-PLA2R ก่อนและหลังปลูกถ่ายทุก 1–3 เดือน ร่วม UPCR ถ้า titer ขึ้นหรือ proteinuria ให้ rituximab"},
+  igan:{n:"IgA nephropathy", rate:20, loss:"ราว 5–10% ใน 10 ปี", onset:[365, 3650], mods:[["young","อายุ < 30 ปีตอนวินิจฉัย",function(r){ return r * 1.3; }],["fast","Native disease ดำเนินเร็ว หรือ crescentic",function(r){ return r * 1.4; }],["sw","Steroid-free maintenance",function(r){ return r * 1.4; }],["prior","Graft ก่อนเสียจาก IgAN",function(r){ return Math.max(r, 45); }]],
+    prev:"ไม่มีการป้องกันเฉพาะ คุม BP, RAASi เมื่อมี proteinuria พิจารณาคง low-dose steroid ตรวจ urinalysis และ UPCR สม่ำเสมอ"},
+  c3gn:{n:"C3 glomerulonephritis", rate:67, loss:"ราว 30–50% ของรายที่เป็นซ้ำ", onset:[60, 730], mods:[["mono","มี monoclonal gammopathy",function(r){ return r * 1.15; }],["prior","Graft ก่อนเสียจาก recurrence",function(r){ return Math.max(r, 85); }]],
+    prev:"ตรวจ complement work-up และ SPEP ก่อน KT ติดตาม C3, UPCR, urinalysis พิจารณา complement inhibitor (C5 หรือ factor B) ในรายที่เป็นซ้ำ"},
+  ddd:{n:"Dense deposit disease", rate:85, loss:"ราว 50%", onset:[30, 400], mods:[["c3nef","C3NeF สูง",function(r){ return Math.min(95, r * 1.08); }]],
+    prev:"ติดตาม C3 และ proteinuria ใกล้ชิด ยังไม่มีการป้องกันที่พิสูจน์ได้"},
+  icmpgn:{n:"Immune-complex MPGN", rate:35, loss:"ปานกลาง", onset:[90, 1095], mods:[["hcv","HCV หรือ cryoglobulin ยังไม่หาย",function(r){ return r * 1.6; }],["mono","Monoclonal gammopathy",function(r){ return r * 1.4; }]],
+    prev:"รักษาสาเหตุให้หายก่อน (DAA สำหรับ HCV, clone-directed therapy สำหรับ MGRS)"},
+  ahus:{n:"Atypical HUS", rate:50, loss:"สูงถ้าไม่มี C5 inhibitor", onset:[1, 365], mods:[["ecu","Prophylactic C5 inhibitor",function(r){ return r * 0.1; }]],
+    prev:"ตรวจ genetic และ anti-factor H ก่อน KT กลุ่มเสี่ยงสูงให้ eculizumab หรือ ravulizumab ตั้งแต่วันผ่าตัด ห้าม living related donor ก่อนตรวจยีนของ donor ฉีดวัคซีน meningococcal"},
+  gbm:{n:"Anti-GBM disease", rate:3, loss:"ต่ำ", onset:[30, 365], mods:[["pos","Anti-GBM ยังบวกตอนปลูกถ่าย",function(r){ return 50; }]],
+    prev:"รอ anti-GBM ลบอย่างน้อย 6 เดือนก่อนปลูกถ่าย"},
+  aav:{n:"ANCA vasculitis", rate:6, loss:"ต่ำ", onset:[180, 3650], mods:[["act","ยังไม่ remission หรือ remission < 12 เดือน",function(r){ return r * 3; }]],
+    prev:"ปลูกถ่ายเมื่อ remission อย่างน้อย 6–12 เดือน ANCA บวกอย่างเดียวไม่ใช่ข้อห้าม"},
+  ln:{n:"Lupus nephritis", rate:5, loss:"ต่ำ", onset:[180, 3650], mods:[["act","SLE active หรือ remission < 6 เดือน",function(r){ return r * 2.5; }],["aps","Antiphospholipid antibody",function(r){ return r; }]],
+    prev:"ปลูกถ่ายเมื่อ SLE สงบ ถ้ามี APS วางแผน anticoagulation ป้องกัน graft thrombosis"},
+  dkd:{n:"Diabetic kidney disease", rate:40, loss:"ต่ำ (histologic มากกว่าทางคลินิก)", onset:[1095, 3650], mods:[["poor","HbA1c สูง",function(r){ return r * 1.3; }],["spk","Simultaneous pancreas-kidney",function(r){ return r * 0.3; }]],
+    prev:"คุมน้ำตาล BP และ lipid ใช้ SGLT2i ตามข้อบ่งชี้ ระวัง PTDM จาก tacrolimus และ steroid"},
+  ph1:{n:"Primary hyperoxaluria type 1", rate:90, loss:"สูงมากและเร็ว", onset:[3, 180], mods:[["rnai","Lumasiran หรือ nedosiran",function(r){ return 15; }],["lkt","Combined liver-kidney transplant",function(r){ return 8; }]],
+    prev:"ลด oxalate ด้วย RNAi therapy หรือ combined liver-kidney transplant ฟอกเข้มข้นก่อนและหลังผ่าตัด ให้น้ำมาก citrate และ pyridoxine ถ้าตอบสนอง"},
+  al:{n:"AL amyloidosis", rate:30, loss:"ปานกลาง", onset:[365, 2190], mods:[["cr","Hematologic complete response",function(r){ return 8; }]],
+    prev:"ปลูกถ่ายเมื่อได้ hematologic CR หรือ VGPR ที่ยั่งยืน ติดตาม free light chain"},
+  alport:{n:"Alport syndrome", rate:3, loss:"สูงถ้าเกิด de novo anti-GBM", onset:[30, 1095], mods:[["del","ชาย XLAS large deletion หรือ truncating",function(r){ return 8; }]],
+    prev:"ไม่ใช่ recurrence แต่เกิด de novo anti-GBM ต่อ collagen ของ donor ได้ ติดตาม Cr และ hematuria"}
+};
+var ORDERD = ["fsgs","mn","igan","c3gn","ddd","icmpgn","ahus","gbm","aav","ln","dkd","ph1","al","alport"];
+var AHUS = {cfh:80, cfi:70, c3:60, mcp:15, abh:30, none:40};
+var S = {
+  fsgs:{name:"Primary FSGS", p:{dz:"fsgs", on:["fast","young"], mut:"cfh"},
+    rows:[["Native","Primary FSGS อายุ 22 ปี จาก nephrotic ถึง ESKD 2 ปี"],["Genetic","Panel ไม่พบ variant"],["Risk","Recurrence สูงกว่าค่าเฉลี่ย"],["Plan","ติดตาม UPCR ทุกวันในสัปดาห์แรก"]],
+    take:["Primary FSGS เป็นซ้ำได้ภายในชั่วโมงถึงสัปดาห์","Genetic และ adaptive FSGS แทบไม่เป็นซ้ำ","Graft ก่อนเสียจาก recurrence ทำให้ graft ถัดไปเสี่ยงสูงมาก"]},
+  fsgs2:{name:"FSGS graft ที่สอง", p:{dz:"fsgs", on:["prior"], mut:"cfh"},
+    rows:[["Native","Primary FSGS"],["Graft แรก","เสียใน 1 ปีจาก recurrence"],["Risk","Recurrence ราว 80%"],["Plan","Counseling, PLEX รอบผ่าตัด, หลีกเลี่ยง living related donor"]],
+    take:["Recurrence ใน graft แรกทำนาย recurrence ใน graft ถัดไปได้ดีที่สุด","ต้องให้ข้อมูลผู้ป่วยและ donor ก่อนตัดสินใจ","PLEX และ rituximab ก่อนผ่าตัดยังมีหลักฐานจำกัด"]},
+  mn:{name:"MN anti-PLA2R บวก", p:{dz:"mn", on:["pla"], mut:"cfh"},
+    rows:[["Native","PLA2R-associated MN"],["ก่อน KT","Anti-PLA2R 80 RU/mL"],["Risk","Recurrence สูง"],["Plan","ตรวจ titer ทุกเดือนหลังผ่าตัด"]],
+    take:["Anti-PLA2R ที่ยังบวกตอนปลูกถ่ายทำนาย recurrence","Recurrent MN มักเกิดในปีแรกถึงปีที่สอง","Rituximab ได้ผลดีใน recurrent MN"]},
+  ahus:{name:"aHUS CFH ไม่มี C5i", p:{dz:"ahus", on:[], mut:"cfh"},
+    rows:[["Native","aHUS CFH pathogenic variant"],["Plan เดิม","ไม่ได้วาง C5 inhibitor"],["Risk","Recurrence ราว 80% graft loss สูง"],["ควรทำ","Prophylactic eculizumab หรือ ravulizumab"]],
+    take:["CFH, CFI, C3 variant เสี่ยง recurrence สูงมาก","MCP variant เสี่ยงต่ำเพราะไตใหม่มี MCP ของ donor","Prophylactic C5 inhibitor ลด recurrence ลงมาก"]},
+  ahusE:{name:"aHUS + C5 inhibitor", p:{dz:"ahus", on:["ecu"], mut:"cfh"},
+    rows:[["Native","aHUS CFH variant"],["Plan","Eculizumab ตั้งแต่วันผ่าตัด + meningococcal vaccine"],["Risk","Recurrence ต่ำมาก"],["ระยะยาว","ระยะเวลาให้ยายังไม่มีข้อสรุป"]],
+    take:["C5 inhibitor prophylaxis ทำให้ปลูกถ่ายใน aHUS ได้ผลดี","ต้องฉีดวัคซีน meningococcal และพิจารณายาปฏิชีวนะป้องกัน","Living related donor ต้องตรวจว่าไม่มี variant เดียวกัน"]},
+  ph1:{name:"PH1 ไม่มี RNAi", p:{dz:"ph1", on:[], mut:"cfh"},
+    rows:[["Native","PH1 (AGXT) oxalosis systemic"],["Plan","Kidney alone ไม่มี lumasiran"],["Risk","Oxalate ตกตะกอนใน graft เร็วมาก"],["ควรทำ","RNAi therapy หรือ combined liver-kidney"]],
+    take:["PH1 ที่ปลูกถ่ายไตอย่างเดียวโดยไม่ลด oxalate graft เสียเร็ว","Lumasiran ลดการสร้าง oxalate ที่ตับ","ต้องเอา oxalate สะสมออกด้วยการฟอกเข้มข้นรอบผ่าตัด"]},
+  igan:{name:"IgAN", p:{dz:"igan", on:["young"], mut:"cfh"},
+    rows:[["Native","IgAN อายุ 25 ปี"],["Risk","Recurrence ทางคลินิกราว 1 ใน 4 ใน 10 ปี"],["Graft loss","ไม่บ่อยแต่เพิ่มขึ้นตามเวลา"],["Plan","Urinalysis และ UPCR ทุกครั้งที่ตรวจ"]],
+    take:["IgAN เป็นซ้ำทางพยาธิบ่อยแต่ทางคลินิกน้อยกว่า","Recurrence มักเกิดหลังหลายปี","IgAN ไม่ใช่ข้อห้ามของ living related donor"]}
+};
+var ORDER = ["fsgs","fsgs2","mn","ahus","ahusE","ph1","igan"];
+var sDz = document.getElementById("sDz"), sMut = document.getElementById("sMut");
+ORDERD.forEach(function(k){ var o = document.createElement("option"); o.value = k; o.textContent = DZ[k].n; sDz.appendChild(o); });
+sDz.addEventListener("change", function(){ build([]); update(); });
+sMut.addEventListener("change", update);
+var T = {};
+function build(onList){
+  var box = document.getElementById("tools"); box.innerHTML = ""; T = {};
+  DZ[sDz.value].mods.forEach(function(m){ T[m[0]] = Sim.toggle(m[1], update, onList.indexOf(m[0]) >= 0); box.appendChild(T[m[0]]); });
+  document.getElementById("selMut").style.display = sDz.value === "ahus" ? "" : "none";
+}
+function on(k){ return T[k] && T[k].getAttribute("aria-pressed") === "true"; }
+function patient(){
+  var d = DZ[sDz.value], r = sDz.value === "ahus" ? AHUS[sMut.value] : d.rate;
+  var base = r;
+  d.mods.forEach(function(m){ if(on(m[0])) r = m[2](r); });
+  return {pop:d.rate, base:base, pt:Math.max(0.5, Math.min(97, r))};
+}
+var svg = document.getElementById("vis"), FT = "IBM Plex Sans Thai, sans-serif", MO = "Geist Mono, monospace";
+function SV(t, a, p){ var o = {}; Object.keys(a).forEach(function(k){ if(a[k] !== null && a[k] !== undefined) o[k] = a[k]; }); return Sim.svg(t, o, p); }
+function LX(d){ return 190 + 450 * (Math.log10(Math.max(1, d)) / Math.log10(3650)); }
+function draw(R){
+  svg.innerHTML = "";
+  var x0 = 190, w = 400, sel = sDz.value;
+  [0, 25, 50, 75, 100].forEach(function(v){ var x = x0 + w * v / 100; SV("line", {x1:x, y1:20, x2:x, y2:20 + ORDERD.length * 24, stroke:"#E6E7F0"}, svg); SV("text", {x:x, y:14, "text-anchor":"middle", "font-family":MO, "font-size":10.5, fill:"#9A9CB2", text:v + "%"}, svg); });
+  ORDERD.forEach(function(k, i){
+    var d = DZ[k], y = 22 + i * 24, isS = k === sel, r = k === "ahus" ? 50 : d.rate;
+    SV("text", {x:x0 - 10, y:y + 13, "text-anchor":"end", "font-family":FT, "font-size":12.5, "font-weight":isS ? 600 : 400, fill:isS ? "#0B0B1F" : "#5E6075", text:d.n}, svg);
+    SV("rect", {x:x0, y:y + 3, width:Math.max(2, w * r / 100), height:14, rx:5, fill:isS ? "#5B4BFF" : r >= 50 ? "#E9B9BC" : "#D3D5E2"}, svg);
+    if(isS){ var px = x0 + w * R.pt / 100; SV("path", {d:"M" + px + "," + (y + 1) + " l7,9 l-7,9 l-7,-9 z", fill:R.pt > 50 ? "#B4232A" : R.pt < 15 ? "#1F7A72" : "#0B0B1F", stroke:"#fff", "stroke-width":1.2}, svg);
+      SV("text", {x:Math.min(664, px + 12), y:y + 14, "font-family":MO, "font-size":11.5, "font-weight":600, fill:"#0B0B1F", text:Math.round(R.pt) + "%"}, svg); }
+    else SV("text", {x:x0 + w * r / 100 + 6, y:y + 14, "font-family":MO, "font-size":10.5, fill:"#9A9CB2", text:r + "%"}, svg);
+  });
+  // onset timeline
+  var d = DZ[sel], y0 = 22 + ORDERD.length * 24 + 34;
+  SV("text", {x:16, y:y0, "font-family":FT, "font-size":13, "font-weight":600, fill:"#0B0B1F", text:"Typical onset of recurrence: " + d.n}, svg);
+  var ty = y0 + 26;
+  SV("line", {x1:LX(1), y1:ty + 10, x2:LX(3650), y2:ty + 10, stroke:"#D3D5E2", "stroke-width":2}, svg);
+  [[1,"Day 1"],[7,"1 wk"],[30,"1 mo"],[180,"6 mo"],[365,"1 yr"],[1825,"5 yr"],[3650,"10 yr"]].forEach(function(t){ SV("line", {x1:LX(t[0]), y1:ty + 4, x2:LX(t[0]), y2:ty + 16, stroke:"#9A9CB2"}, svg); SV("text", {x:LX(t[0]), y:ty + 32, "text-anchor":"middle", "font-family":MO, "font-size":10.5, fill:"#5E6075", text:t[1]}, svg); });
+  SV("rect", {x:LX(d.onset[0]), y:ty + 2, width:Math.max(6, LX(d.onset[1]) - LX(d.onset[0])), height:16, rx:8, fill:R.pt > 50 ? "#B4232A" : "#5B4BFF", "fill-opacity":0.85}, svg);
+  SV("text", {x:16, y:ty + 14, "font-family":FT, "font-size":12, fill:"#5E6075", text:"Time after KT"}, svg);
+  SV("text", {x:16, y:ty + 60, "font-family":FT, "font-size":11, fill:"#9A9CB2", text:"Bars: approximate clinical recurrence across cohorts. Diamond: this patient after selected risk factors."}, svg);
+  SV("text", {x:16, y:ty + 76, "font-family":FT, "font-size":11, fill:"#9A9CB2", text:"aHUS bar shows an overall average. The patient estimate uses the selected complement defect."}, svg);
+}
+function update(){
+  var d = DZ[sDz.value], R = patient();
+  draw(R);
+  Sim.ro("roPop", (sDz.value === "ahus" ? R.base : d.rate) + "%");
+  Sim.ro("roPt", Math.round(R.pt) + "%", R.pt > 50 ? "flag" : R.pt < 15 ? "ok" : null);
+  Sim.ro("roLoss", d.loss.split(" ")[0], /สูง/.test(d.loss) ? "flag" : /ต่ำ/.test(d.loss) ? "ok" : null);
+  var on_ = d.onset, t = function(x){ return x < 14 ? x + " วัน" : x < 60 ? Math.round(x / 7) + " สัปดาห์" : x < 730 ? Math.round(x / 30) + " เดือน" : Math.round(x / 365) + " ปี"; };
+  document.getElementById("pv").innerHTML = "<b>Graft loss:</b> " + d.loss + "<br><b>มักเกิด:</b> " + t(on_[0]) + " ถึง " + t(on_[1]) + " หลังปลูกถ่าย";
+  var n = d.prev;
+  if(sDz.value === "ahus" && !on("ecu") && R.pt >= 50) n = "ความเสี่ยงสูง ให้ C5 inhibitor prophylaxis ตั้งแต่วันผ่าตัด " + n;
+  if(sDz.value === "ahus" && sMut.value === "mcp") n = "MCP variant เสี่ยงต่ำ ปลูกถ่ายโดยไม่ใช้ prophylaxis ได้แต่ติดตามใกล้ชิด " + n;
+  if(sDz.value === "gbm" && on("pos")) n = "เลื่อนการปลูกถ่ายจน anti-GBM ลบอย่างน้อย 6 เดือน";
+  document.getElementById("act").innerHTML = "<b>Next step:</b> " + n;
+}
+Sim.mount({code:"KT-12", title:"Recurrent Disease After Kidney Transplantation",
+  lead:"เลือก native disease และปัจจัยเสี่ยงของผู้ป่วย ดูโอกาส recurrence เทียบกับโรคอื่น ช่วงเวลาที่มักเกิด ผลต่อ graft และวิธีป้องกันหรือเฝ้าระวัง",
+  scenarios:S, order:ORDER, captureMs:700,
+  onChange:function(k, s){ sDz.value = s.p.dz; sMut.value = s.p.mut; build(s.p.on); update(); },
+  refs:["Cosio FG, Cattran DC. Recent advances in our understanding of recurrent primary glomerulonephritis after kidney transplantation. Kidney Int 2017, 91(2): 304-314",
+        "Uffing A, Pérez-Sáez MJ, Mazzali M, et al. Recurrence of FSGS after kidney transplantation in adults. Clin J Am Soc Nephrol 2020, 15(2): 247-256",
+        "Kidney Disease: Improving Global Outcomes (KDIGO) Kidney Transplant Candidate Work Group. KDIGO clinical practice guideline on the evaluation and management of candidates for kidney transplantation. Transplantation 2020, 104(4S1): S11-S103",
+        "Goodship THJ, Cook HT, Fakhouri F, et al. Atypical hemolytic uremic syndrome and C3 glomerulopathy: conclusions from a KDIGO Controversies Conference. Kidney Int 2017, 91(3): 539-551",
+        "Quintana LF, Blasco M, Seras M, et al. Antiphospholipase A2 receptor antibody levels predict the risk of posttransplantation recurrence of membranous nephropathy. Transplantation 2015, 99(8): 1709-1714",
+        "Metry EL, Garrelfs SF, Peters-Sengers H, et al. Long-term transplantation outcomes in patients with primary hyperoxaluria type 1 included in the European Hyperoxaluria Consortium (OxalEurope) Registry. Kidney Int Rep 2022, 7(2): 210-220"],
+  note:"อัตรา recurrence เป็นค่ากลางโดยประมาณจาก cohort ที่รายงานต่างกันมากตามนิยาม (histologic หรือ clinical) และระยะติดตาม ตัวคูณของปัจจัยเสี่ยงเป็นค่าประมาณเพื่อการสอน"
+});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[EL-16] IV Fluids: Composition, Distribution and Acid-Base</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(110px,140px) 1fr 90px}
+.sel{display:grid;grid-template-columns:minmax(110px,140px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.readout{grid-template-columns:repeat(3,1fr)}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,1fr)}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.two{display:grid;grid-template-columns:1.25fr 1fr;gap:14px;align-items:start}
+@media (max-width:760px){.two{grid-template-columns:1fr}}
+table.fl{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:10px}
+table.fl th,table.fl td{padding:4px 6px;border-bottom:1px solid var(--line);text-align:right;font-family:var(--mono)}
+table.fl th:first-child,table.fl td:first-child{text-align:left;font-family:inherit}
+table.fl tr.on td{background:var(--accent-soft)}
+body.present .bench{grid-template-columns:1.35fr 1fr}
+body.present .find{display:none!important}
+body.present .hint,body.present table.fl{display:none}
+body.present .card{padding:12px 16px}
+body.present .ro{padding:6px 10px}
+body.present .act{margin-top:6px;padding:6px 10px;font-size:12.5px}
+body.present #gg{max-height:230px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>สารน้ำไปอยู่ที่ไหน และเปลี่ยน acid-base อย่างไร</h2>
+      <div id="chart"></div>
+      <div id="live"></div>
+      <div class="two">
+        <div class="svgwrap"><svg id="gg" viewBox="0 0 360 300" role="img" aria-label="Gamblegram of plasma cations and anions"></svg></div>
+        <div><table class="fl" id="fl" aria-label="Fluid composition"></table></div>
+      </div>
+      <p class="hint no-present">กราฟบนคือปริมาตรที่เพิ่มใน plasma และ interstitium ตามเวลา crystalloid อยู่ในหลอดเลือดราว 1 ใน 4 เมื่อสมดุล ภาวะ capillary leak เหลือน้อยกว่านั้น Gamblegram แสดงประจุบวกและลบใน plasma กรอบเส้นประคือก่อนให้ SID (strong ion difference) ลดลงเมื่อได้ Cl มากกว่า Na เท่าใด HCO3 ก็ลดเท่านั้น</p>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วยและสารน้ำ</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roNa"><b>-</b><span>Na</span></div>
+        <div class="ro" id="roCl"><b>-</b><span>Cl</span></div>
+        <div class="ro" id="roHC"><b>-</b><span>HCO3</span></div>
+        <div class="ro" id="roSID"><b>-</b><span>SID</span></div>
+        <div class="ro" id="roPH"><b>-</b><span>pH</span></div>
+        <div class="ro" id="roPV"><b>-</b><span>Plasma ↑ ที่ 6 ชม. (ml)</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/live.js"></script>
+<script>
+(function(){
+"use strict";
+/* na k cl (mmol/L), sid = effective SID after lactate/acetate metabolism, alb g/dL, kind: c crystalloid, a colloid, w free water */
+var FL={
+  nss:{name:"0.9% NaCl",na:154,k:0,cl:154,sid:0,alb:0,kind:"c",osm:308,buf:"-"},
+  lrs:{name:"Lactated Ringer",na:130,k:4,cl:109,sid:28,alb:0,kind:"c",osm:273,buf:"Lactate 28"},
+  pl:{name:"Plasma-Lyte 148",na:140,k:5,cl:98,sid:50,alb:0,kind:"c",osm:294,buf:"Acetate 27 + gluconate 23"},
+  half:{name:"0.45% NaCl",na:77,k:0,cl:77,sid:0,alb:0,kind:"c",osm:154,buf:"-"},
+  alb:{name:"5% Albumin",na:145,k:0,cl:100,sid:45,alb:5,kind:"a",osm:300,buf:"-"},
+  d5w:{name:"D5W",na:0,k:0,cl:0,sid:0,alb:0,kind:"w",osm:278,buf:"-"},
+  bic:{name:"Isotonic NaHCO3 150",na:150,k:0,cl:0,sid:150,eff:75,alb:0,kind:"c",osm:300,buf:"HCO3 150"}
+};
+var BL={
+  norm:{name:"ปกติ",na:140,k:4,cl:104,ua:2,alb:4,leak:false},
+  dka:{name:"DKA (HAGMA)",na:132,k:5,cl:98,ua:12,alb:4,leak:false},
+  diar:{name:"Diarrhea (NAGMA)",na:138,k:3,cl:115,ua:2,alb:4,leak:false},
+  sep:{name:"Septic shock (capillary leak)",na:138,k:4,cl:102,ua:6,alb:2.5,leak:true}
+};
+function P(o){ var d={fl:"nss",bl:"norm",v:2,rate:2,w:70}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  nss:{name:"0.9% NaCl 2 L", p:P({}), rows:[["สารน้ำ","Na 154 Cl 154 SID 0"],["ผล","Cl ขึ้น SID ลด HCO3 ลด (hyperchloremic acidosis)"],["ปริมาตร","plasma เพิ่มราว 1 ใน 4 ของที่ให้เมื่อสมดุล"]],
+    take:["NSS มี Cl สูงกว่า plasma มาก ปริมาณมากทำให้ hyperchloremic metabolic acidosis","HCO3 เปลี่ยนตาม SID: Na + K − Cl ที่ลดลง","Crystalloid อยู่ในหลอดเลือดราว 1 ใน 4 ที่เหลือไป interstitium"]},
+  pl:{name:"Balanced 2 L", p:P({fl:"pl"}), rows:[["สารน้ำ","Plasma-Lyte SID ราว 50 หลัง metabolize acetate"],["ผล","Cl ไม่ขึ้น HCO3 คงที่หรือขึ้นเล็กน้อย (SID สูงกว่า plasma และ albumin เจือจาง)"],["ปริมาตร","เท่ากับ NSS"]],
+    take:["Balanced crystalloid มี SID ใกล้ plasma จึงไม่ทำให้ acidosis","ใช้เป็นสารน้ำ resuscitation หลักได้ในผู้ป่วยส่วนใหญ่","ระวังใน traumatic brain injury เพราะ hypotonic เล็กน้อย (LRS)"]},
+  dka:{name:"DKA + NSS 4 L", p:P({bl:"dka",v:4,rate:1}), rows:[["ผู้ป่วย","DKA HCO3 14 AG สูง"],["NSS","Cl ขึ้นตามมา เกิด NAGMA ซ้อนขณะ ketone ลด"],["ผล","HCO3 ฟื้นช้า"]],
+    take:["NSS ใน DKA เพิ่ม hyperchloremia ทำให้ HCO3 ฟื้นช้าแม้ ketone หาย","Balanced crystalloid ทำให้ DKA หายเร็วขึ้น","ดู AG ร่วม HCO3: AG ปกติแล้วแต่ HCO3 ต่ำ = hyperchloremia"]},
+  dkab:{name:"DKA + balanced 4 L", p:P({bl:"dka",fl:"pl",v:4,rate:1}), rows:[["สารน้ำ","Plasma-Lyte 4 L"],["ผล","SID ไม่ลด HCO3 เพิ่มขึ้นเล็กน้อยจากการเจือจาง UA"],["หมายเหตุ","model ไม่คิดการ metabolize ketone"]],
+    take:["Balanced fluid ไม่เพิ่ม Cl","ใน DKA ยังต้องให้ insulin และ K ตามแนวทาง","ติดตาม K เพราะ balanced fluid มี K เล็กน้อยแต่ไม่ใช่ข้อห้าม"]},
+  alb:{name:"5% Albumin 1 L", p:P({fl:"alb",v:1,rate:1}), rows:[["สารน้ำ","colloid อยู่ในหลอดเลือดได้นาน"],["ผล","plasma เพิ่มราว 800–900 ml ใน 6 ชม."],["acid-base","albumin เป็น weak acid HCO3 ลดเล็กน้อย"]],
+    take:["Albumin เพิ่ม plasma volume ได้มากกว่า crystalloid ต่อ ml","ใช้เฉพาะข้อบ่งชี้ เช่น large-volume paracentesis, SBP, HRS","Capillary leak ลดผลของ albumin เช่นกัน"]},
+  d5w:{name:"D5W 1 L", p:P({fl:"d5w",v:1,rate:1}), rows:[["สารน้ำ","glucose ถูก metabolize เหลือน้ำอิสระ"],["ผล","กระจายทั่ว TBW plasma เพิ่มน้อยมาก"],["ระวัง","Na ลด"]],
+    take:["D5W ไม่ใช่สารน้ำ resuscitation","ใช้แก้ free water deficit","ผู้ป่วย ADH สูงเสี่ยง hyponatremia"]},
+  bic:{name:"Diarrhea + isotonic bicarbonate", p:P({bl:"diar",fl:"bic",v:1.5,rate:0.5}), rows:[["ผู้ป่วย","NAGMA จาก diarrhea HCO3 11"],["สารน้ำ","NaHCO3 150 mmol/L SID 150"],["ผล","SID และ HCO3 ขึ้น ราวครึ่งหนึ่งของ HCO3 ที่ให้ถูก buffer ในเซลล์"]],
+    take:["NAGMA จากการเสีย HCO3 แก้ได้ด้วย SID สูง","ตรวจ K ก่อนแก้ acidosis เพราะ K จะเข้าเซลล์","NSS ในผู้ป่วยนี้ทำให้ acidosis แย่ลง"]},
+  sep:{name:"Sepsis leak + NSS", p:P({bl:"sep",fl:"nss",v:3,rate:1.5}), rows:[["ผู้ป่วย","septic shock glycocalyx เสีย albumin 2.5"],["ผล","crystalloid ออกจากหลอดเลือดเร็ว plasma เพิ่มน้อย"],["ตามมา","บวม ISF มาก"]],
+    take:["Capillary leak ทำให้สารน้ำค้างในหลอดเลือดน้อยลง","ประเมิน fluid responsiveness ก่อนให้ซ้ำ","Albumin ต่ำทำให้ HCO3 สูงขึ้น ต้องดู corrected AG"]}
+};
+var ORDER=["nss","pl","dka","dkab","alb","d5w","bic","sep"];
+var box=document.getElementById("ctls"), SEL={}, C={};
+function sel(k,label,opts){ var s=Sim.h("select",{id:"s"+k},opts.map(function(o){ return Sim.h("option",{value:o[0],text:o[1]}); })); s.addEventListener("change",function(){ update(); }); box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"s"+k,text:label}),s])); SEL[k]=s; }
+function sl(k,o){ o.id="s"+k; o.onInput=function(){ update.drag=true; update(); }; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sel("bl","ผู้ป่วย",Object.keys(BL).map(function(k){ return [k,BL[k].name]; }));
+sel("fl","สารน้ำ",Object.keys(FL).map(function(k){ return [k,FL[k].name]; }));
+sl("v",{label:"ปริมาตร",min:0.25,max:6,step:0.25,value:2,unit:"L"});
+sl("rate",{label:"อัตรา",min:0.25,max:4,step:0.25,value:2,unit:"L/h"});
+sl("w",{label:"น้ำหนัก",min:40,max:110,step:5,value:70,unit:"kg"});
+var tb=document.getElementById("fl");
+tb.appendChild(Sim.h("tr",{},["","Na","K","Cl","SID","Osm"].map(function(t){ return Sim.h("th",{text:t}); })));
+Object.keys(FL).forEach(function(k){ var f=FL[k]; tb.appendChild(Sim.h("tr",{id:"r"+k},[Sim.h("td",{text:f.name}),Sim.h("td",{text:String(f.na)}),Sim.h("td",{text:String(f.k)}),Sim.h("td",{text:String(f.cl)}),Sim.h("td",{text:String(f.sid)}),Sim.h("td",{text:String(f.osm)})])); });
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?165:240,aria:"Plasma and interstitial volume expansion over six hours",
+  x:{min:0,max:6,step:1,label:"Hours"},y:{min:0,max:2000,step:500,label:"Volume added (ml)"},y2:{min:0,max:40,step:10,label:"HCO3 (mmol/L)"},
+  series:[{id:"pv",name:"Plasma",color:A.red,data:[],width:2.6,fill:true},{id:"isf",name:"Interstitium",color:"#19C8E6",data:[],width:2},{id:"icf",name:"Cells",color:A.accent,data:[],width:1.6,dash:[4,3]},{id:"hc",name:"HCO3",color:A.teal,data:[],width:2,axis:"y2",dash:[6,3]}],legend:true});
+function sim(p){
+  var f=FL[p.fl], b=BL[p.bl], ECF=0.2*p.w, TBW=0.6*p.w, PV0=0.045*p.w, ti=p.v/p.rate, dt=0.05;
+  var eq=f.kind==="a"?(b.leak?0.5:0.8):f.kind==="w"?0.08:(b.leak?0.12:0.25), kk=f.kind==="a"?Math.LN2/8:f.kind==="w"?Math.LN2/0.3:Math.LN2/(b.leak?0.25:0.4);
+  var pv=0, out={pv:[],isf:[],icf:[],hc:[],st:[]};
+  for(var i=0;i<=120;i++){ var t=i*dt, vin=Math.min(p.v,p.rate*t);
+    if(i>0){ var inR=t<=ti+1e-9?p.rate:0; pv+=(inR-kk*(pv-eq*vin))*dt; pv=Math.max(0,Math.min(vin,pv)); }
+    var icf=f.kind==="w"?vin*2/3:0, isf=vin-pv-icf;
+    var c=chem(p,vin,pv);
+    if(i%2===0){ out.pv.push([t,pv*1000]); out.isf.push([t,isf*1000]); out.icf.push([t,icf*1000]); out.hc.push([t,c.hc]); out.st.push(c); }
+  }
+  return out;
+}
+function chem(p,vin,pv){
+  var f=FL[p.fl], b=BL[p.bl], ECF=0.2*p.w, TBW=0.6*p.w, PV0=0.045*p.w, x, na, k, cl, ua, sidF;
+  if(f.kind==="w"){ x=vin/(TBW+vin); na=b.na*(1-x); k=b.k*(1-x); cl=b.cl*(1-x); ua=b.ua*(1-x); }
+  else { x=vin/(ECF+vin); na=b.na*(1-x)+f.na*x; k=b.k*(1-x)+f.k*x; cl=b.cl*(1-x)+f.cl*x; ua=b.ua*(1-x); }
+  var other=3*(1-x)+(f.kind==="c"&&f.sid>0&&f.sid<100?3*x:0);
+  var sid0=b.na+b.k+3-b.cl-b.ua, sid;
+  if(f.kind==="w") sid=sid0*(1-x); else sid=sid0*(1-x)+(f.eff||f.sid)*x;
+  var alb=(b.alb*PV0+f.alb*10*pv/10)/(PV0+pv); if(f.alb) alb=(b.alb*PV0+f.alb*pv)/(PV0+pv);
+  var aminus=3.4*alb+2.6, hc=Math.max(2,sid-aminus), pco2=hc<22?1.5*hc+8:40, ph=6.1+Math.log10(hc/(0.03*pco2));
+  return {na:na,k:k,cl:cl,ua:ua,sid:sid,alb:alb,aminus:aminus,hc:hc,ph:ph,pco2:pco2};
+}
+var svg=document.getElementById("gg"), Fn="IBM Plex Sans Thai, sans-serif", Mn="Geist Mono, monospace";
+function gg(c0,c){
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  var sc=1.55, base=275, w=70, xC=70, xA=190;
+  function col(x,parts,dash){ var y=base; parts.forEach(function(q){ var h=Math.max(0,q[1])*sc; y-=h; Sim.svg("rect",{x:x,y:y,width:w,height:h,fill:dash?"none":q[2],stroke:dash?"#9A9CB2":"#FFFFFF","stroke-width":dash?1.2:1,"stroke-dasharray":dash?"4 3":"none"},svg); if(!dash&&h>12) Sim.svg("text",{x:x+w/2,y:y+h/2+4,"text-anchor":"middle","font-size":11,"font-weight":600,fill:"#0B0B1F","font-family":Mn,text:q[0]+" "+Math.round(q[1])},svg); }); return y; }
+  function parts(s){ return {cat:[["Na",s.na,"#F7D36B"],["K+Ca+Mg",s.k+3,"#C9B6F2"]],an:[["Cl",s.cl,"#9AD8B4"],["HCO3",s.hc,"#8EC1F7"],["A-",s.aminus,"#D3D5E2"],["UA",s.ua,"#F2A7A9"]]}; }
+  var p0=parts(c0), p1=parts(c);
+  col(xC,p0.cat,true); col(xA,p0.an,true);
+  col(xC,p1.cat,false); col(xA,p1.an,false);
+  Sim.svg("text",{x:xC+w/2,y:292,"text-anchor":"middle","font-size":12,"font-weight":600,fill:"#0B0B1F","font-family":Fn,text:"Cations"},svg);
+  Sim.svg("text",{x:xA+w/2,y:292,"text-anchor":"middle","font-size":12,"font-weight":600,fill:"#0B0B1F","font-family":Fn,text:"Anions"},svg);
+  var yS=base-(c.cl+c.ua)*sc, yT=base-(c.na+c.k+3)*sc;
+  Sim.svg("path",{d:"M"+(xA+w+8)+" "+yS+" L"+(xA+w+14)+" "+yS+" L"+(xA+w+14)+" "+yT+" L"+(xA+w+8)+" "+yT,fill:"none",stroke:"#5B4BFF","stroke-width":2},svg);
+  Sim.svg("text",{x:xA+w+18,y:(yS+yT)/2+4,"font-size":12,"font-weight":700,fill:"#5B4BFF","font-family":Mn,text:"SID "+Math.round(c.sid)},svg);
+  Sim.svg("text",{x:8,y:16,"font-size":12,fill:"#5E6075","font-family":Fn,text:"Plasma (mmol/L), dashed = before"},svg);
+}
+var live=Live.player(chart,{mount:"live"}), LAST=null;
+function events(p,R){
+  var f=FL[p.fl], b=BL[p.bl], ti=p.v/p.rate, E=[], st=R.st, c0=st[0], fin=st[st.length-1];
+  E.push({t:0,kind:"phys",text:b.name+": Na "+b.na+" Cl "+b.cl+" HCO3 "+c0.hc.toFixed(0)+" SID "+Math.round(c0.sid)+" albumin "+b.alb});
+  E.push({t:0.02,kind:"rx",text:"เริ่ม "+f.name+" "+p.v+" L ที่ "+p.rate+" L/h (Na "+f.na+" Cl "+f.cl+" SID "+f.sid+")"});
+  E.push({t:0.05,kind:"phys",text:f.kind==="w"?"Glucose ถูก metabolize เหลือน้ำอิสระ กระจายทั่ว TBW 2 ใน 3 เข้าเซลล์":f.kind==="a"?"Albumin ค้างในหลอดเลือด ดึงน้ำไว้ด้วย oncotic pressure":"Crystalloid เข้าหลอดเลือดก่อน แล้วซึมออกสู่ interstitium"+(b.leak?" เร็วขึ้นเพราะ capillary leak":"")});
+  var pk=0, pt=0; R.pv.forEach(function(x){ if(x[1]>pk){ pk=x[1]; pt=x[0]; } });
+  E.push({t:Math.min(6,ti),kind:"phys",text:"ให้ครบ "+p.v+" L: plasma เพิ่ม "+Math.round(Live.valueAt(R.pv,Math.min(6,ti)))+" ml"});
+  var clx=null; for(var i=1;i<st.length;i++){ if(st[i-1].cl<110&&st[i].cl>=110){ clx=R.pv[i][0]; break; } } if(clx!==null) E.push({t:clx,kind:"warn",text:"Cl เกิน 110: SID ลด HCO3 ลดตาม (hyperchloremia)"});
+  var hx=Live.cross(R.hc,22,-1); if(hx!==null&&c0.hc>=22) E.push({t:hx,kind:"warn",text:"HCO3 ต่ำกว่า 22"});
+  if(f.sid>=40&&c0.hc<22) E.push({t:Math.min(6,ti*0.6),kind:"ok",text:"SID ของสารน้ำสูงกว่า plasma HCO3 ค่อยๆ ขึ้น"});
+  if(f.alb) E.push({t:Math.min(6,ti),kind:"phys",text:"Albumin ใน plasma "+fin.alb.toFixed(1)+" g/dL (weak acid เพิ่ม HCO3 ลดเล็กน้อย)"});
+  if(f.kind==="w") E.push({t:Math.min(6,ti),kind:"warn",text:"Na ลดเหลือ "+fin.na.toFixed(0)+" โดย plasma เพิ่มเพียง "+Math.round(pk)+" ml"});
+  E.push({t:6,kind:"ok",text:"6 ชม.: plasma +"+Math.round(R.pv[R.pv.length-1][1])+" ml interstitium +"+Math.round(R.isf[R.isf.length-1][1])+" ml HCO3 "+fin.hc.toFixed(1)+" pH "+fin.ph.toFixed(2)});
+  return E.sort(function(a,b){ return a.t-b.t; });
+}
+function onFrame(t,done){
+  var L=LAST, R=L.R, i=Math.min(R.st.length-1,Math.round(t/0.1)), c=R.st[i], c0=R.st[0];
+  gg(c0,c);
+  Sim.ro("roNa",c.na.toFixed(0),c.na<135||c.na>145?"flag":"ok");
+  Sim.ro("roCl",c.cl.toFixed(0),c.cl>110?"flag":"ok");
+  Sim.ro("roHC",c.hc.toFixed(1),c.hc<22?"flag":"ok");
+  Sim.ro("roSID",c.sid.toFixed(0),c.sid<36?"flag":"ok");
+  Sim.ro("roPH",c.ph.toFixed(2),c.ph<7.35||c.ph>7.45?"flag":"ok");
+  if(done){ Sim.ro("roPV","+"+Math.round(R.pv[R.pv.length-1][1])); var a=document.getElementById("act"); a.innerHTML=L.act; a.className=L.actCls; }
+  else { Sim.ro("roPV","…"); var a2=document.getElementById("act"); a2.innerHTML="<b>กำลังจำลอง</b> ชม. "+t.toFixed(1)+" plasma +"+Math.round(Live.valueAt(R.pv,t))+" ml interstitium +"+Math.round(Live.valueAt(R.isf,t))+" ml"; a2.className="act"; }
+}
+function update(){
+  var p={bl:SEL.bl.value,fl:SEL.fl.value,v:C.v.get(),rate:C.rate.get(),w:C.w.get()}, R=sim(p), f=FL[p.fl], b=BL[p.bl];
+  Object.keys(FL).forEach(function(k){ document.getElementById("r"+k).className=k===p.fl?"on":""; });
+  var vmax=Math.max(500,Math.ceil(p.v*1000/500)*500);
+  chart.update({y:{min:0,max:vmax,step:vmax>2000?1000:500,label:"Volume added (ml)"},xbands:[{x0:0,x1:Math.min(6,p.v/p.rate),label:"Infusing",color:"rgba(91,75,255,0.06)"}]});
+  chart.setSeries("pv",R.pv); chart.setSeries("isf",R.isf); chart.setSeries("icf",R.icf); chart.setSeries("hc",R.hc);
+  var c0=R.st[0], fin=R.st[R.st.length-1], m, bad=false;
+  if(f.kind==="w") { bad=fin.na<135; m="<b>D5W</b> เพิ่ม plasma เพียง "+Math.round(R.pv[R.pv.length-1][1])+" ml ไม่ใช้ resuscitate ใช้แก้ free water deficit ตรวจ Na"; }
+  else if(fin.cl>110&&fin.hc<c0.hc-1) { bad=true; m="<b>Hyperchloremic acidosis</b> SID ลดจาก "+Math.round(c0.sid)+" เป็น "+Math.round(fin.sid)+" เปลี่ยนเป็น balanced crystalloid โดยเฉพาะเมื่อให้ปริมาณมาก, DKA หรือ AKI"; }
+  else if(p.bl==="diar"&&f.sid<40) { bad=true; m="<b>NAGMA จากการเสีย HCO3</b> สารน้ำ SID ต่ำทำให้แย่ลง ใช้ balanced หรือ isotonic bicarbonate และแก้ K"; }
+  else if(b.leak&&f.kind==="c") { bad=true; m="<b>Capillary leak</b> plasma เพิ่มเพียง "+Math.round(R.pv[R.pv.length-1][1])+" ml จาก "+p.v+" L ประเมิน fluid responsiveness ก่อนให้ซ้ำ ให้ vasopressor เร็ว"; }
+  else if(f.alb) m="<b>Albumin</b> plasma เพิ่ม "+Math.round(R.pv[R.pv.length-1][1])+" ml ใช้เมื่อมีข้อบ่งชี้ (cirrhosis: LVP, SBP, HRS) ไม่ใช่สารน้ำแรกใน sepsis";
+  else if(f.sid>=40&&c0.hc<22) m="<b>SID สูงช่วยแก้ acidosis</b> HCO3 "+c0.hc.toFixed(0)+" → "+fin.hc.toFixed(0)+" ตรวจ K และ Ca ระหว่างให้";
+  else m="<b>Composition เหมาะสม</b> Cl และ HCO3 คงที่ ประเมิน volume status และ urine output ต่อ";
+  LAST={R:R,act:"<b>Next step:</b> "+m,actCls:"act"+(bad?" bad":"")};
+  live.load({tMax:6,unit:"ชม.",ms:8000,events:events(p,R),onFrame:onFrame,cursorLabel:function(t){ return "Plasma +"+Math.round(Live.valueAt(R.pv,t))+" ml"; },debounce:!!update.drag});
+  update.drag=false;
+}
+Sim.mount({code:"EL-16", title:"IV Fluids: Composition, Distribution and Acid-Base", lead:"เลือกสารน้ำ ปริมาตร และอัตรา ดูว่าน้ำไปอยู่ใน plasma, interstitium หรือเซลล์ตามเวลา และ Na, Cl, SID, HCO3 เปลี่ยนอย่างไรใน Gamblegram",
+  scenarios:S, order:ORDER, captureMs:900,
+  onChange:function(k,s){ var p=s.p; SEL.bl.value=p.bl; SEL.fl.value=p.fl; C.v.set(p.v); C.rate.set(p.rate); C.w.set(p.w); update(); },
+  refs:["Stewart PA. Modern quantitative acid-base chemistry. Can J Physiol Pharmacol 1983, 61(12): 1444-1461",
+        "Figge J, Jabor A, Kazda A, Fencl V. Anion gap and hypoalbuminemia. Crit Care Med 1998, 26(11): 1807-1810",
+        "Semler MW, Self WH, Wanderer JP, et al (SMART). Balanced crystalloids versus saline in critically ill adults. N Engl J Med 2018, 378(9): 829-839",
+        "Finfer S, Micallef S, Hammond N, et al (PLUS). Balanced multielectrolyte solution versus saline in critically ill adults. N Engl J Med 2022, 386(9): 815-826",
+        "Self WH, Evans CS, Jenkins CA, et al. Clinical effects of balanced crystalloids vs saline in adults with diabetic ketoacidosis: a subgroup analysis of cluster randomized clinical trials. JAMA Netw Open 2020, 3(11): e2024596",
+        "Woodcock TE, Woodcock TM. Revised Starling equation and the glycocalyx model of transvascular fluid exchange: an improved paradigm for prescribing intravenous fluid therapy. Br J Anaesth 2012, 108(3): 384-394"],
+  note:"Model เพื่อการสอน: crystalloid ผสมใน ECF (0.2 x น้ำหนัก), D5W ผสมใน TBW, ปริมาตรใน plasma เข้าหาสัดส่วนสมดุล (crystalloid 0.25, leak 0.12, albumin 0.8) แบบ first-order HCO3 = SID − A− (A− = 3.4 x albumin + 2.6) pCO2 ตาม Winter's เมื่อ HCO3 < 22 SID ของ lactate และ acetate คิดหลัง metabolize, bicarbonate คิดผลต่อ ECF ครึ่งหนึ่ง (ส่วนที่เหลือถูก buffer ในเซลล์) ไม่คิดการขับทางไตและการ metabolize ketone"
+});
+})();
+</script>
+</body>
+</html>

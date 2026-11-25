@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[EL-11] Metabolic Alkalosis: Generation and Maintenance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.sel{display:grid;grid-template-columns:minmax(110px,140px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.tools{margin-top:10px}
+.mt{display:grid;grid-template-columns:auto 1fr auto;gap:6px 10px;font-size:13.5px;margin-top:12px;align-items:center}
+.mt .bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden}
+.mt .bar i{display:block;height:100%;background:var(--red)}
+.mt span:nth-child(3n){font-family:var(--mono);color:var(--muted)}
+.readout{grid-template-columns:repeat(3,1fr)}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,1fr)}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+body.present .bench{grid-template-columns:1.3fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:16px 20px}
+body.present .ro{padding:8px 12px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .mt{font-size:11px;gap:2px 8px}
+body.present .readout .ro span{font-size:11px}
+body.present .take li{font-size:13px}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+body.present #cell svg{max-height:150px;width:auto!important;margin:0 auto}
+body.present #cell .nc-bar{display:none}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>HCO3 และ K ใน 7 วัน</h2>
+      <div id="chart"></div>
+      <div id="live"></div>
+      <div class="mt" id="mt" aria-label="Maintenance factors"></div>
+      <div id="cell" style="margin-top:10px"></div>
+      <p class="hint no-present">ไตปกติขับ HCO3 ส่วนเกินได้เร็วมาก alkalosis จะคงอยู่ได้ต้องมีปัจจัย maintenance แถบแดงคือความแรงของแต่ละปัจจัย การรักษาที่ถูกต้องคือแก้ปัจจัยเหล่านี้ ไม่ใช่แค่หยุด generation</p>
+    </div>
+    <div class="card">
+      <h2>สาเหตุและการรักษา</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roH0"><b>-</b><span>HCO3 วันที่ 0</span></div>
+        <div class="ro" id="roH3"><b>-</b><span>HCO3 วันที่ 3</span></div>
+        <div class="ro" id="roK"><b>-</b><span>K วันที่ 0</span></div>
+        <div class="ro" id="roUCl"><b>-</b><span>Urine Cl</span></div>
+        <div class="ro" id="roUNa"><b>-</b><span>Urine Na</span></div>
+        <div class="ro" id="roCat"><b>-</b><span>Category</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/live.js"></script>
+<script src="../core/nephron.js"></script>
+<script>
+(function(){
+"use strict";
+/* gen: mmol/L/day while ongoing, f: maintenance factors 0..1 [Cl/volume, hypoK, aldosterone, low GFR], ucl/una, bp */
+var CAU={
+  vom:{name:"Vomiting / NG suction",gen:5,f:[0.9,0.6,0.5,0.1],h0:36,k0:2.9,ucl:"< 20",una:"> 20 ช่วงแรก (bicarbonaturia)",bp:"ต่ำหรือปกติ",cat:"Cl-responsive"},
+  remote:{name:"Diuretic หยุดแล้ว",gen:0,f:[0.7,0.5,0.4,0.1],h0:33,k0:3.1,ucl:"< 20",una:"< 20",bp:"ต่ำหรือปกติ",cat:"Cl-responsive"},
+  current:{name:"Diuretic ยังใช้อยู่",gen:2,f:[0.6,0.6,0.5,0.1],h0:34,k0:3.0,ucl:"> 40",una:"> 40",bp:"ต่ำหรือปกติ",cat:"Cl-responsive (urine Cl สูงระหว่างได้ยา)"},
+  pa:{name:"Primary aldosteronism",gen:1.5,f:[0,0.5,1,0],h0:31,k0:2.8,ucl:"> 40",una:"> 40",bp:"สูง",cat:"Cl-resistant + HT"},
+  git:{name:"Gitelman/Bartter",gen:1.5,f:[0.3,0.6,0.8,0],h0:31,k0:2.7,ucl:"> 40",una:"> 40",bp:"ต่ำหรือปกติ",cat:"Cl-resistant normotensive"},
+  hyp:{name:"Post-hypercapnic",gen:0,f:[0.5,0.2,0.2,0.1],h0:38,k0:3.8,ucl:"< 20",una:"แปรผัน",bp:"แปรผัน",cat:"Cl-responsive"},
+  milk:{name:"Milk-alkali (Ca carbonate + AKI)",gen:3,f:[0.5,0.1,0.1,0.8],h0:35,k0:3.8,ucl:"แปรผัน",una:"แปรผัน",bp:"แปรผัน",cat:"Alkali load + low GFR"},
+  hf:{name:"HF + loop diuretic ขนาดสูง",gen:2,f:[0.4,0.5,0.6,0.3],h0:34,k0:3.3,ucl:"> 40 ระหว่างได้ยา",una:"> 40",bp:"แปรผัน บวม",cat:"Contraction alkalosis ใน edematous state"}
+};
+var RX={stop:{name:"หยุด generation (หยุดยา/อาเจียน)"},nacl:{name:"0.9% NaCl"},kcl:{name:"KCl"},ppi:{name:"PPI (NG suction)"},acz:{name:"Acetazolamide"},mra:{name:"MRA/amiloride"}};
+function P(o){ var d={c:"vom",rx:[]}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  vom:{name:"Vomiting ไม่รักษา", p:P({}),
+    rows:[["ผู้ป่วย","อาเจียนหลายวัน HCO3 36 K 2.9"],["Maintenance","Cl depletion, volume ลด, hypoK, aldosterone สูง"],["Urine","Cl < 20 แต่ Na อาจ > 20 ช่วงแรกเพราะ HCO3 พา Na ออก"]],
+    take:["Urine Cl ดีกว่า urine Na ในการประเมิน volume ของ metabolic alkalosis","Generation: เสีย HCl  Maintenance: Cl และ volume depletion, hypoK","HCO3 ไม่ลงแม้หยุดอาเจียน ถ้ายังไม่ให้ Cl"]},
+  vomTx:{name:"Vomiting + NaCl + KCl", p:P({rx:["stop","nacl","kcl"]}),
+    rows:[["รักษา","หยุดอาเจียน, 0.9% NaCl, KCl"],["ผล","ไตขับ HCO3 ได้ทันทีที่ Cl และ volume กลับมา HCO3 ลดภายใน 2–3 วัน"],["สังเกต","urine pH สูงขึ้น (bicarbonaturia) เมื่อเริ่มดีขึ้น"]],
+    take:["Cl-responsive: รักษาด้วย NaCl และ KCl","KCl จำเป็นเพราะ hypoK ทำให้ไตเก็บ HCO3 (เพิ่ม ammoniagenesis และ H+ secretion)","PPI ลดการเสีย HCl ในผู้ป่วยใส่ NG suction"]},
+  current:{name:"Diuretic ยังใช้อยู่", p:P({c:"current"}),
+    rows:[["ผล","urine Cl > 40 ระหว่างได้ยา"],["จุดหลอก","ดูเหมือน Cl-resistant ถ้าไม่ซักประวัติยา"],["ต่อไป","หยุดยาแล้ว urine Cl จะต่ำลง (remote diuretic)"]],
+    take:["Urine Cl สูงใน diuretic ปัจจุบัน ต่ำเมื่อหยุดยาแล้ว","Urine diuretic screen ช่วยแยกจาก Bartter/Gitelman","แก้ K และ Mg ร่วม"]},
+  pa:{name:"Primary aldosteronism", p:P({c:"pa"}),
+    rows:[["ผู้ป่วย","HT HCO3 31 K 2.8 urine Cl > 40"],["กลไก","aldosterone เพิ่ม H+ และ K secretion อิสระจาก volume"],["รักษา","NaCl ไม่ช่วย ใช้ MRA และ KCl หรือผ่าตัด"]],
+    take:["Cl-resistant + HT: PA, Cushing, Liddle, AME, renovascular","NaCl ไม่แก้และอาจทำให้ HT แย่ลง","รักษาที่ mineralocorticoid excess"]},
+  git:{name:"Gitelman", p:P({c:"git",rx:["kcl"]}),
+    rows:[["ผู้ป่วย","BP ปกติ HCO3 31 K 2.7 Mg ต่ำ urine Cl สูง"],["กลไก","NCC loss → volume ลด → aldosterone สูง"],["รักษา","KCl + Mg ± amiloride/MRA"]],
+    take:["Cl-resistant normotensive: Bartter, Gitelman, diuretic abuse, severe hypoK หรือ hypoMg","ตรวจ urine Ca แยก Bartter และ Gitelman","KCl อย่างเดียวแก้ได้ไม่หมด"]},
+  hf:{name:"HF + acetazolamide", p:P({c:"hf",rx:["acz","kcl"]}),
+    rows:[["ผู้ป่วย","HF บวมได้ loop ขนาดสูง HCO3 34"],["ปัญหา","ให้ NaCl ไม่ได้เพราะน้ำเกิน"],["รักษา","acetazolamide เพิ่ม HCO3 excretion และช่วย natriuresis"]],
+    take:["Edematous state: ใช้ acetazolamide แทน NaCl","Acetazolamide ทำให้ K ลดต่อ ต้องเสริม KCl","ทางเลือกอื่น: MRA, ลด loop ถ้าทำได้"]},
+  milk:{name:"Milk-alkali syndrome", p:P({c:"milk"}),
+    rows:[["ผู้ป่วย","กิน CaCO3 วันละมากเพื่อ osteoporosis/dyspepsia Ca สูง AKI"],["กลไก","alkali load + hypercalcemia ลด GFR และ volume"],["รักษา","หยุด Ca/alkali, NaCl, ระวัง rebound hypocalcemia"]],
+    take:["Triad: hypercalcemia, metabolic alkalosis, AKI","Hypercalcemia ทำให้ volume ลดและ GFR ลด จึงขับ HCO3 ไม่ได้","พบมากขึ้นจาก Ca supplement ขนาดสูง"]}
+};
+var ORDER=["vom","vomTx","current","pa","git","hf","milk"];
+var box=document.getElementById("ctls");
+var cs=Sim.h("select",{id:"sc"},Object.keys(CAU).map(function(k){ return Sim.h("option",{value:k,text:CAU[k].name}); })); cs.addEventListener("change",update);
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"sc",text:"สาเหตุ"}),cs]));
+var T={}, tb=document.getElementById("tools");
+Object.keys(RX).forEach(function(k){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:RX[k].name}); b.addEventListener("click",function(){ b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); tb.appendChild(b); T[k]=b; });
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?150:260,aria:"Serum bicarbonate and potassium over seven days",
+  x:{min:0,max:7,step:1,label:"Days"},y:{min:20,max:45,step:5,label:"HCO3 (mmol/L)"},y2:{min:2,max:5,step:0.5,label:"K (mmol/L)"},
+  series:[{id:"h",name:"HCO3",color:A.accent,data:[],width:2.8},{id:"k",name:"K",color:A.teal,data:[],width:1.8,axis:"y2",dash:[4,3]}],legend:true});
+var FN=["Cl and volume depletion","Hypokalemia","Aldosterone excess","Low GFR"];
+function on(k){ return T[k].getAttribute("aria-pressed")==="true"; }
+function drawBars(f0,f){
+  var mt=document.getElementById("mt"); mt.innerHTML="";
+  FN.forEach(function(n,i){ var bar=Sim.h("span",{class:"bar"}); var fill=document.createElement("i"); fill.style.width=Math.round(f[i]*100)+"%"; bar.appendChild(fill);
+    mt.appendChild(Sim.h("span",{text:n})); mt.appendChild(bar); mt.appendChild(Sim.h("span",{text:Math.round(f0[i]*100)+"% → "+Math.round(f[i]*100)+"%"})); });
+}
+var live=Live.player(chart,{mount:"live"}), LAST=null;
+function events(c,H,K,FH){
+  var E=[], k=cs.value;
+  E.push({t:0,kind:"phys",text:c.name+": HCO3 "+c.h0+" K "+c.k0.toFixed(1)+" urine Cl "+c.ucl+(c.gen>0&&!on("stop")?" generation ยังดำเนินอยู่":" generation หยุดแล้ว")});
+  E.push({t:0.02,kind:"phys",text:"Maintenance: "+FN.filter(function(n,i){ return c.f[i]>=0.4; }).join(", ")+" ทำให้ไตเก็บ HCO3 ไว้"});
+  if(on("stop")) E.push({t:0.05,kind:"rx",text:"หยุด generation แต่ถ้า maintenance ยังอยู่ HCO3 จะไม่ลด"});
+  if(on("ppi")) E.push({t:0.06,kind:"rx",text:"PPI ลดการเสีย HCl ทาง NG"});
+  if(on("nacl")) E.push({t:0.08,kind:"rx",text:k==="pa"||k==="git"?"0.9% NaCl: ไม่ได้แก้ต้นเหตุ (Cl-resistant) และเพิ่ม volume":"0.9% NaCl: คืน Cl และ volume ลด aldosterone pendrin กลับมาขับ HCO3"});
+  if(on("kcl")) E.push({t:0.1,kind:"rx",text:"KCl: แก้ hypoK ลด ammoniagenesis และ H+ secretion ที่ collecting duct"});
+  if(on("acz")) E.push({t:0.12,kind:"rx",text:"Acetazolamide: บล็อก carbonic anhydrase ที่ proximal tubule ขับ HCO3 ทางปัสสาวะ"});
+  if(on("mra")) E.push({t:0.14,kind:"rx",text:"MRA/amiloride ลด H+ และ K secretion ที่ collecting duct"});
+  var d1=null; for(var i=1;i<H.length;i++){ if(H[i-1][1]-H[i][1]>0.6){ d1=H[i][0]; break; } }
+  if(d1!==null) E.push({t:d1,kind:"ok",text:"ไตเริ่มขับ HCO3 (urine pH สูงขึ้น bicarbonaturia)"});
+  var k35=Live.cross(K,3.5,1); if(k35!==null) E.push({t:k35,kind:"ok",text:"K กลับเกิน 3.5"});
+  var k25=Live.cross(K,2.5,-1); if(k25!==null) E.push({t:k25,kind:"warn",text:"K ต่ำกว่า 2.5"});
+  var h30=Live.cross(H,30,-1); if(h30!==null) E.push({t:h30,kind:"ok",text:"HCO3 ต่ำกว่า 30"});
+  var h3=H[12][1]; E.push({t:3,kind:h3>30?"warn":"ok",text:"วันที่ 3: HCO3 "+h3.toFixed(0)+(h3>30&&!on("nacl")&&c.cat.indexOf("Cl-responsive")===0?" ยังสูงเพราะยังไม่ได้คืน Cl":"")});
+  E.push({t:7,kind:"phys",text:"วันที่ 7: HCO3 "+H[28][1].toFixed(0)+" K "+K[28][1].toFixed(1)});
+  return E.sort(function(a,b){ return a.t-b.t; });
+}
+var cell=Nephron.cell("cell","CCD",{level:"basic",levelButtons:false}), ckey="";
+function cellAt(f){
+  var q=function(x){ return Math.round(x*5)/5; }, key=[cs.value,q(f[0]),q(f[1]),q(f[2]),on("acz"),on("mra")].join();
+  if(key===ckey) return; ckey=key;
+  var fl={PDS:Math.max(0.05,1-0.95*f[0]),ENaC:1+1.3*f[2],ROMK:1+1.3*f[2],NKA_C:1+f[2]}, o={focus:["PDS","ENaC","ROMK","MR"],flows:fl,badges:{lumen:"Lumen Cl "+(f[0]>0.5?"low":"normal"),cell:"Aldo "+(f[2]>0.5?"high":"normal")}};
+  if(on("mra")){ o.blocked=["MR"]; fl.ENaC*=0.4; fl.ROMK*=0.4; }
+  var c;
+  if(f[0]>0.5) c="Low luminal Cl stalls pendrin, so HCO3 cannot be secreted. High aldosterone keeps H and K pouring out. Alkalosis persists.";
+  else if(f[2]>0.5) c="Cl is available but aldosterone drives ENaC and K/H secretion: Cl-resistant alkalosis. Treat the mineralocorticoid excess.";
+  else if(f[1]>0.3) c="HypoK keeps H secretion and ammoniagenesis high. Give KCl.";
+  else c="Cl and volume restored: pendrin secretes HCO3 in exchange for Cl and the kidney clears the extra HCO3.";
+  o.caption=c; cell.update("CCD",o);
+}
+function onFrame(t,done){
+  cellAt(LAST.FH[Math.min(28,Math.round(t*4))]);
+  var L=LAST, i=Math.min(28,Math.round(t*4));
+  drawBars(L.f0,L.FH[i]);
+  if(t>=3-1e-6){ var h3=L.H[12][1]; Sim.ro("roH3",h3.toFixed(0),h3>30?"flag":"ok"); } else Sim.ro("roH3","…");
+  var a=document.getElementById("act");
+  if(done){ a.innerHTML=L.act; a.className=L.actCls; } else { a.innerHTML="<b>กำลังจำลอง</b> วันที่ "+t.toFixed(1)+" HCO3 "+Live.valueAt(L.H,t).toFixed(1)+" K "+Live.valueAt(L.K,t).toFixed(1); a.className="act"; }
+}
+function update(){
+  var c=CAU[cs.value], f=c.f.slice();
+  function capOf(ff){ return Math.max(0.04,1.4*(1-0.45*ff[0]-0.25*ff[1]-0.25*ff[2]-0.4*ff[3])); }
+  var f00=c.f.slice(); f00[1]=Math.max(0,Math.min(1,(3.6-c.k0)/1.0));
+  var gen=c.gen>0?capOf(f00)*(c.h0-24):0;
+  if(on("stop")) gen=0; if(on("ppi")&&cs.value==="vom") gen*=0.3;
+  var H=[], K=[], FH=[], h=c.h0, k=c.k0, f0=c.f.slice();
+  for(var i=0;i<=28;i++){ var d=i/4;
+    H.push([d,h]); K.push([d,k]); var fs=f.slice(); fs[1]=Math.max(0,Math.min(1,(3.6-k)/1.0)); FH.push(fs);
+    /* treatment reduces factors progressively */
+    if(on("nacl")) f[0]=Math.max(cs.value==="pa"?0:0.05,f[0]-0.12*(cs.value==="pa"||cs.value==="git"?0.2:1));
+    if(on("kcl")){ k=Math.min(4.2,k+0.12); }
+    if(on("mra")) f[2]=Math.max(0,f[2]-0.15);
+    f[1]=Math.max(0,Math.min(1,(3.6-k)/1.0));
+    var cap=capOf(f);
+    if(on("acz")) cap+=0.5;
+    h=Math.max(22,h+(gen-cap*(h-24))*0.25);
+    if(!on("kcl")) k=Math.max(2.3,k-(gen>0&&cs.value==="vom"?0.01:0));
+    if(on("acz")) k=Math.max(2.3,k-0.03);
+  }
+  chart.setSeries("h",H); chart.setSeries("k",K);
+  drawBars(f0,f0);
+  var h3=H[12][1];
+  Sim.ro("roH0",c.h0,"flag"); Sim.ro("roH3",h3.toFixed(0),h3>30?"flag":"ok");
+  Sim.ro("roK",c.k0.toFixed(1),c.k0<3.5?"flag":"ok");
+  Sim.ro("roUCl",c.ucl); Sim.ro("roUNa",c.una.split(" ")[0]+" "+(c.una.split(" ")[1]||""));
+  Sim.ro("roCat",c.cat.indexOf("Cl-responsive")===0?"Cl-responsive":c.cat.indexOf("Cl-resistant")===0?"Cl-resistant":c.cat.indexOf("Alkali")===0?"Alkali load":"Contraction");
+  var a=document.getElementById("act"), m, bad=h3>30;
+  if(cs.value==="pa") m=on("mra")?"<b>MRA เริ่มแล้ว</b> เพิ่ม KCl ตรวจ aldosterone/renin, CT adrenal และ AVS ถ้าจะผ่าตัด":"<b>Cl-resistant + HT</b> NaCl ไม่ช่วย ตรวจ aldosterone/renin ratio ให้ MRA + KCl";
+  else if(cs.value==="git"||cs.value==="current") m="<b>Urine Cl สูง</b> ซักประวัติ diuretic, ตรวจ urine diuretic screen, urine Ca และ Mg ให้ KCl + Mg ± amiloride";
+  else if(cs.value==="hf") m=on("acz")?"<b>Acetazolamide</b> ติดตาม HCO3 และ K ทุกวัน เสริม KCl":"<b>ให้ NaCl ไม่ได้เพราะบวม</b> ใช้ acetazolamide 250–500 mg/วัน หรือ MRA";
+  else if(cs.value==="milk") m="<b>Milk-alkali</b> หยุด Ca carbonate/alkali ให้ NaCl ตรวจ Ca และ creatinine ระวัง hypocalcemia rebound";
+  else if(!(on("nacl")&&on("kcl"))) m="<b>Cl-responsive</b> ให้ 0.9% NaCl และ KCl"+(cs.value==="vom"?" ถ้า NG suction ให้ PPI":"")+" HCO3 จะลดเมื่อ Cl และ volume กลับมา";
+  else { bad=false; m="<b>ตอบสนองดี</b> ติดตาม HCO3, K, urine pH (จะสูงขึ้นเมื่อขับ HCO3) และ volume"; }
+  ckey=""; LAST={H:H,K:K,FH:FH,f0:f0,act:"<b>Next step:</b> "+m,actCls:"act"+(bad?" bad":"")};
+  live.load({tMax:7,unit:"วัน",ms:8000,num:function(x){ return x.toFixed(1); },events:events(c,H,K,FH),onFrame:onFrame,cursorLabel:function(t){ return "HCO3 "+Live.valueAt(H,t).toFixed(1); }});
+}
+Sim.mount({code:"EL-11", title:"Metabolic Alkalosis: Generation and Maintenance", lead:"เลือกสาเหตุ ดู HCO3 และ K ใน 7 วันพร้อมปัจจัยที่ทำให้ไตเก็บ HCO3 ไว้ แล้วลองการรักษาเพื่อแยก Cl-responsive จาก Cl-resistant",
+  scenarios:S, order:ORDER, captureMs:1000,
+  onChange:function(k,s){ cs.value=s.p.c; Object.keys(T).forEach(function(x){ T[x].setAttribute("aria-pressed",s.p.rx.indexOf(x)>=0?"true":"false"); }); update(); },
+  refs:["Emmett M. Metabolic alkalosis: a brief pathophysiologic review. Clin J Am Soc Nephrol 2020, 15(12): 1848-1856",
+        "Luke RG, Galla JH. It is chloride depletion alkalosis, not contraction alkalosis. J Am Soc Nephrol 2012, 23(2): 204-207",
+        "Gennari FJ. Pathophysiology of metabolic alkalosis: a new classification based on the centrality of stimulated collecting duct ion transport. Am J Kidney Dis 2011, 58(4): 626-636",
+        "Mullens W, Dauw J, Martens P, et al (ADVOR). Acetazolamide in acute decompensated heart failure with volume overload. N Engl J Med 2022, 387(13): 1185-1195"],
+  note:"Model เพื่อการสอน: dHCO3/dt = generation − capacity x (HCO3 − 24) โดย capacity ลดตาม Cl/volume depletion, hypoK, aldosterone excess และ GFR ต่ำ การรักษาลดปัจจัยเหล่านี้ทีละน้อย ค่า urine Cl/Na เป็นรูปแบบทั่วไปของแต่ละสาเหตุ"
+});
+})();
+</script>
+</body>
+</html>

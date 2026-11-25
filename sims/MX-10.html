@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[MX-10] Kidney Imaging Pattern Atlas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.2fr 1fr}}
+.sel{display:grid;grid-template-columns:minmax(80px,120px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px;margin-bottom:8px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%;font:inherit;padding:6px 10px;border-radius:10px;border:1px solid var(--line-strong);background:#fff}
+.tools{margin-top:6px}
+table.card2{width:100%;border-collapse:collapse;margin-top:10px;font-size:13.5px}
+table.card2 th{text-align:left;font-weight:500;color:var(--muted);width:24%;padding:6px 8px 6px 0;vertical-align:top;border-top:1px solid var(--line)}
+table.card2 td{padding:6px 0;border-top:1px solid var(--line)}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:12px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .svgwrap svg{max-height:440px}
+body.present .tog{padding:3px 8px;font-size:11.5px}
+body.present table.card2{font-size:12px}
+body.present table.card2 th,body.present table.card2 td{padding:3px 0}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+body.present .sel{margin-bottom:4px;font-size:12.5px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2 id="vt">ภาพ</h2>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 640 460" role="img" aria-label="Schematic kidney imaging finding"></svg></div>
+      <p class="hint no-present">ภาพวาดเชิงสัญลักษณ์ของ CT axial (ซ้ายของภาพ = ขวาของผู้ป่วย), ultrasound sagittal หรือ CT urography แบบ coronal ปิดป้ายเพื่อฝึกบรรยายภาพแบบ OSCE ก่อนเปิดดูเฉลย</p>
+    </div>
+    <div class="card">
+      <h2>Finding</h2>
+      <div class="sel"><label for="f">ภาพ</label><select id="f"></select></div>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools"></div>
+      <table class="card2" id="info"></table>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script>
+(function(){
+"use strict";
+function SV(t,a,p){ var b={}; for(var k in a) if(a[k]!==null&&a[k]!==undefined) b[k]=a[k]; return Sim.svg(t,b,p); }
+var F={
+  hydro:{n:"Hydronephrosis",mod:"US",grade:"Grade",sign:"Anechoic pelvis และ calyces ขยาย ต่อเนื่องกันเป็นกิ่ง เกรด 1 pelvis ขยาย ถึงเกรด 4 cortex บาง",ddx:"Obstruction (นิ่ว, BPH, มะเร็ง, retroperitoneal fibrosis), VUR, extrarenal pelvis, ตั้งครรภ์ (ขวา), parapelvic cyst (ไม่ต่อกัน)",next:"ประเมินว่าอุดจริงหรือไม่ (Cr, UO, residual urine) อุดสองข้างหรือไตเดียวต้อง decompress (Foley, nephrostomy, stent) ด่วน ดู AKI-11"},
+  epn:{n:"Emphysematous pyelonephritis",mod:"CT",grade:"Class",sign:"Gas (density อากาศ ดำสนิท) ในเนื้อไต collecting system หรือรอบไต",ddx:"Emphysematous pyelitis (gas เฉพาะ collecting system พยากรณ์ดีกว่า), fistula, หลังทำหัตถการ",next:"เบาหวานคุมไม่ดีเป็นส่วนใหญ่ เชื้อ E. coli, Klebsiella ให้ antibiotic + คุม glucose class 1–2 antibiotic ร่วม percutaneous drainage และแก้การอุดตัน class 3–4 ใช้ PCD ก่อนถ้า risk factor น้อย nephrectomy เมื่อ PCD ไม่ได้ผลหรือ risk factor หลายข้อ"},
+  xgp:{n:"Xanthogranulomatous pyelonephritis",mod:"CT",sign:"Staghorn calculus กลางไต calyces ขยายถูกแทนที่ด้วยเนื้อ low density รอบเป็นรูปอุ้งเท้าหมี (bear paw sign) ไตโต ไม่ทำงาน",ddx:"Pyonephrosis, RCC, TB, renal lymphoma",next:"Urine culture (Proteus, E. coli) antibiotic แล้ว nephrectomy เป็นการรักษาหลักในรายที่ไตไม่ทำงาน"},
+  papnec:{n:"Papillary necrosis",mod:"CTU",sign:"Contrast เข้าไปในตำแหน่ง papilla ที่ตาย (ring sign) calyx ปลายมน (clubbed) papilla หลุดเป็น filling defect",ddx:"POSTCARDS: pyelonephritis, obstruction, sickle cell, TB, cirrhosis, analgesic, renal vein thrombosis, DM, systemic vasculitis",next:"หาและหยุดสาเหตุ (NSAID, analgesic) คุมเบาหวาน รักษา infection papilla ที่หลุดอาจอุด ureter"},
+  msk:{n:"Medullary sponge kidney",mod:"CTU",sign:"Contrast ขังใน collecting duct ที่ขยายของ papilla เป็นเส้นรัศมี (paintbrush) ร่วม medullary nephrocalcinosis",ddx:"Papillary blush ปกติ, medullary nephrocalcinosis จากสาเหตุอื่น (dRTA, hyperPTH)",next:"ตรวจ 24-h urine หา hypercalciuria, hypocitraturia รักษาป้องกันนิ่ว (ดู MX-03) พยากรณ์ไตดี"},
+  ncalc:{n:"Medullary nephrocalcinosis",mod:"US",sign:"Pyramids echogenic (สว่างกว่า cortex ปกติจะมืด) มี acoustic shadow เมื่อรุนแรง",ddx:"dRTA, primary hyperparathyroidism, MSK, hypercalciuria, furosemide ในทารก, primary hyperoxaluria, sarcoidosis, vitamin D excess",next:"ตรวจ Ca, PTH, HCO3, urine pH, 24-h urine Ca/oxalate/citrate หาสาเหตุที่รักษาได้ (ดู EL-09)"},
+  infarct:{n:"Renal infarction",mod:"CT",sign:"บริเวณรูปลิ่ม (wedge) ไม่ enhance ฐานอยู่ที่ capsule มี cortical rim sign (ขอบ cortex ยัง enhance จาก capsular artery)",ddx:"Acute pyelonephritis (striated), tumor, contusion",next:"หา embolic source (AF, echocardiography) ตรวจ LDH (สูงมาก) anticoagulation หา hypercoagulable state และ dissection หรือ FMD ในคนอายุน้อย"},
+  rvt:{n:"Renal vein thrombosis",mod:"CT",sign:"ไตโต nephrogram ช้าหรือลดลง filling defect ใน renal vein อาจลามเข้า IVC",ddx:"Membranous nephropathy, nephrotic syndrome albumin ต่ำ, RCC tumor thrombus, hypercoagulable state",next:"Anticoagulation ตรวจ nephrotic syndrome (UPCR, albumin, PLA2R) ถ้าลามเข้า IVC พิจารณา thrombectomy"},
+  cortnec:{n:"Bilateral cortical necrosis",mod:"CT",sign:"Cortex ทั้งสองข้างไม่ enhance แต่ medulla ยัง enhance subcapsular rim บาง ๆ ยัง enhance (reverse rim sign) ระยะหลังเกิด calcification เป็นแนวราง (tramline)",ddx:"Severe ATN (ไม่มี pattern นี้), renal infarction ทั้งสองข้าง",next:"สาเหตุ: obstetric hemorrhage, septic abortion, snake bite, DIC, HUS ต้องการ dialysis ยาว โอกาสฟื้นน้อย"},
+  aml:{n:"Angiomyolipoma",mod:"CT",sign:"Mass ที่มี macroscopic fat (density ติดลบ เท่าไขมันรอบไต) ไม่มี calcification",ddx:"RCC ที่มี fat (พบน้อย มักมี calcification), liposarcoma, fat-poor AML",next:"> 4 cm หรือมี aneurysm > 5 mm เสี่ยงเลือดออก พิจารณา embolization หลายก้อนสองข้างให้นึกถึง tuberous sclerosis (mTOR inhibitor)"},
+  rcc:{n:"Renal cell carcinoma",mod:"CT",sign:"Solid mass enhance (เพิ่ม > 20 HU หลังฉีด) heterogeneous อาจมี tumor thrombus ใน renal vein",ddx:"Oncocytoma (central scar), fat-poor AML, metastasis, lymphoma, complex cyst (Bosniak)",next:"Staging CT chest ส่งปรึกษา urology partial nephrectomy เมื่อทำได้เพื่อรักษาไต ประเมิน eGFR ก่อนผ่าตัด"}
+};
+var S={
+  hydro:{name:"Hydronephrosis grade 3", f:"hydro", g:3, rows:[["ภาพ","US sagittal ไตซ้าย"],["Finding","calyces ขยายต่อกับ pelvis cortex ยังพอ"],["ต่อ","หาจุดอุด decompress"]], take:["Hydronephrosis ไม่ได้แปลว่าอุดเสมอ และอุดตันเฉียบพลันหรือ retroperitoneal fibrosis อาจไม่ขยาย","ภาพ calyces ที่ต่อกับ pelvis แยกจาก parapelvic cyst","อุดสองข้างหรือไตเดียวเป็นภาวะเร่งด่วน"]},
+  epn:{name:"Emphysematous pyelonephritis", f:"epn", g:3, rows:[["ผู้ป่วย","DM HbA1c 12 ไข้ ช็อก"],["CT","gas ในเนื้อไตลามรอบไต"],["ต่อ","antibiotic, glucose, drainage หรือ nephrectomy"]], take:["Gas ในเนื้อไตคือ emergency ในผู้ป่วยเบาหวาน","Class ตามตำแหน่ง gas และ extension ใช้เลือกการรักษา","Percutaneous drainage + antibiotic ลดความจำเป็นของ nephrectomy"]},
+  xgp:{name:"XGP bear paw", f:"xgp", rows:[["CT","staghorn stone + calyces ขยายเนื้อ low density"],["ไต","โต ไม่ทำงาน"],["ต่อ","nephrectomy"]], take:["Bear paw sign: staghorn + calyces ขยายแทนที่ด้วยเนื้อ xanthogranulomatous","มักเกิดจากนิ่วอุดเรื้อรังและติดเชื้อ Proteus","แยกจาก RCC ได้ยาก การรักษาหลักคือผ่าตัด"]},
+  papnec:{name:"Papillary necrosis", f:"papnec", rows:[["ผู้ป่วย","DM ใช้ NSAID ประจำ hematuria"],["CTU","ring sign, clubbed calyx"],["ต่อ","หยุด NSAID"]], take:["Ring sign คือ contrast ล้อม papilla ที่ตาย","สาเหตุสำคัญ: DM, analgesic, sickle cell, obstruction, pyelonephritis","Papilla ที่หลุดทำให้ ureteric colic และอุดได้"]},
+  msk:{name:"Medullary sponge kidney", f:"msk", rows:[["ผู้ป่วย","นิ่วซ้ำ หญิงอายุ 30"],["CTU","paintbrush striations ที่ papilla"],["ต่อ","24-h urine ป้องกันนิ่ว"]], take:["MSK คือ collecting duct ขยายในส่วน papilla","สัมพันธ์กับนิ่ว Ca, nephrocalcinosis และ incomplete dRTA","ไตมักทำงานปกติระยะยาว"]},
+  ncalc:{name:"Medullary nephrocalcinosis", f:"ncalc", rows:[["ผู้ป่วย","Sjögren K ต่ำ normal AG acidosis"],["US","pyramids echogenic"],["ต่อ","ประเมิน dRTA และ hypercalciuria"]], take:["ปกติ pyramid มืดกว่า cortex ใน US ถ้าสว่างกว่าคือ medullary nephrocalcinosis","สาเหตุที่ต้องหา: dRTA, hyperparathyroidism, MSK, hypercalciuria","Cortical nephrocalcinosis พบน้อย เช่น หลัง cortical necrosis"]},
+  infarct:{name:"Renal infarction", f:"infarct", rows:[["ผู้ป่วย","AF ปวดเอวเฉียบพลัน LDH 1,200"],["CT","wedge-shaped non-enhancing + cortical rim sign"],["ต่อ","anticoagulation หา embolic source"]], take:["Renal infarction วินิจฉัยช้าบ่อย เพราะคล้ายนิ่วหรือ pyelonephritis","LDH สูงมากโดย transaminase ปกติเป็น clue","Cortical rim sign ช่วยแยกจาก pyelonephritis"]},
+  rvt:{name:"Renal vein thrombosis", f:"rvt", rows:[["ผู้ป่วย","nephrotic albumin 1.8 ปวดเอวซ้าย hematuria"],["CT","renal vein ซ้ายมี thrombus ไตโต"],["ต่อ","anticoagulation หา MN"]], take:["Membranous nephropathy เสี่ยง RVT มากที่สุดในกลุ่ม nephrotic","Albumin < 2.0–2.5 g/dL เพิ่มความเสี่ยง VTE","พิจารณา prophylactic anticoagulation ใน MN ตาม albumin และ bleeding risk (ดู GN-06)"]},
+  cortnec:{name:"Cortical necrosis", f:"cortnec", rows:[["ผู้ป่วย","postpartum hemorrhage DIC anuria 3 สัปดาห์"],["CT","cortex ไม่ enhance สองข้าง medulla enhance"],["ต่อ","dialysis เตรียมระยะยาว"]], take:["Bilateral cortical necrosis ต่างจาก ATN ตรงที่มักไม่ฟื้น","สาเหตุที่พบบ่อยในไทย: obstetric, งูกัด, sepsis","Calcification ของ cortex แบบ tramline เห็นได้หลังหลายสัปดาห์"]},
+  aml:{name:"Angiomyolipoma", f:"aml", rows:[["CT","mass มีไขมัน density ติดลบ"],["ขนาด","5 cm"],["ต่อ","พิจารณา embolization"]], take:["Macroscopic fat ใน renal mass แทบยืนยัน AML","AML ใหญ่เสี่ยงเลือดออก (Wunderlich syndrome)","AML หลายก้อนสองข้างให้นึกถึง tuberous sclerosis"]},
+  rcc:{name:"RCC + tumor thrombus", f:"rcc", rows:[["CT","solid enhancing mass + renal vein tumor thrombus"],["ผู้ป่วย","hematuria น้ำหนักลด"],["ต่อ","staging, urology"]], take:["Solid mass ที่ enhance ให้ถือว่าเป็น RCC จนพิสูจน์ได้ว่าไม่ใช่","RCC ชอบลามเข้า renal vein และ IVC","Partial nephrectomy รักษาไตได้มากกว่า ลดความเสี่ยง CKD"]}
+};
+var ORDER=["hydro","epn","xgp","papnec","msk","ncalc","infarct","rvt","cortnec","aml","rcc"];
+var fs=document.getElementById("f"); Object.keys(F).forEach(function(k){ fs.appendChild(Sim.h("option",{value:k,text:F[k].n})); }); fs.addEventListener("change",function(){ update(); });
+var C={}, box=document.getElementById("ctls");
+C.g=Sim.slider({id:"sg",label:"Grade/class",min:1,max:4,step:1,value:3,unit:"",onInput:function(){ update(); }}); box.appendChild(C.g.el);
+var LAB=true; var labB=Sim.toggle("แสดงป้าย (เฉลย)",function(){ LAB=!LAB; update(); },true); document.getElementById("tools").appendChild(labB);
+var svg=document.getElementById("vis"), FT="IBM Plex Sans Thai, sans-serif";
+function lbl(x,y,tx_,ty,s){ if(!LAB) return; SV("line",{x1:x,y1:y,x2:tx_,y2:ty,stroke:"#FFDE59","stroke-width":1.4},svg); SV("circle",{cx:x,cy:y,r:2.6,fill:"#FFDE59"},svg);
+  var w=s.length*6.4+14, ax=tx_>320?Math.min(tx_,634-w):Math.max(6,tx_-w); SV("rect",{x:ax,y:ty-12,width:w,height:20,rx:6,fill:"rgba(11,11,31,0.85)"},svg); SV("text",{x:ax+7,y:ty+3,"font-family":FT,"font-size":11.5,fill:"#FFDE59",text:s},svg); }
+function head(t,sub){ SV("text",{x:18,y:24,"font-family":FT,"font-size":13,"font-weight":600,fill:"#fff",text:t},svg); SV("text",{x:18,y:42,"font-family":FT,"font-size":11,fill:"#B9BBCB",text:sub},svg); }
+/* kidney path centered 0,0, length ry, width rx, hilum on +x side */
+function kPath(rx,ry){ return "M0 "+(-ry)+" C"+(rx*1.1)+" "+(-ry)+" "+(rx*1.05)+" "+(-ry*0.3)+" "+(rx*0.55)+" "+(-ry*0.18)+" C"+(rx*0.35)+" 0 "+(rx*0.35)+" 0 "+(rx*0.55)+" "+(ry*0.18)+" C"+(rx*1.05)+" "+(ry*0.3)+" "+(rx*1.1)+" "+ry+" 0 "+ry+" C"+(-rx*1.25)+" "+ry+" "+(-rx*1.25)+" "+(-ry)+" 0 "+(-ry)+" Z"; }
+function grp(x,y,flip,rot){ return SV("g",{transform:"translate("+x+","+y+") scale("+(flip?-1:1)+",1) rotate("+(rot||0)+")"},svg); }
+/* ---------- CT axial ---------- */
+function ctBase(){
+  SV("rect",{x:0,y:0,width:640,height:460,fill:"#050505"},svg);
+  SV("ellipse",{cx:320,cy:250,rx:290,ry:190,fill:"#3a3a3a"},svg);
+  SV("ellipse",{cx:320,cy:250,rx:270,ry:172,fill:"#555"},svg);
+  SV("ellipse",{cx:320,cy:250,rx:250,ry:158,fill:"#383838"},svg);
+  /* bowel and liver hints */
+  SV("ellipse",{cx:200,cy:170,rx:90,ry:60,fill:"#6d6d6d"},svg);
+  SV("ellipse",{cx:420,cy:160,rx:60,ry:40,fill:"#5d5d5d"},svg);
+  /* spine, psoas, aorta, IVC */
+  SV("circle",{cx:320,cy:330,r:34,fill:"#e8e8e8"},svg); SV("circle",{cx:320,cy:330,r:24,fill:"#9a9a9a"},svg);
+  SV("path",{d:"M300 360 L320 404 L340 360 Z",fill:"#e8e8e8"},svg);
+  SV("ellipse",{cx:274,cy:340,rx:22,ry:30,fill:"#6a6a6a"},svg); SV("ellipse",{cx:366,cy:340,rx:22,ry:30,fill:"#6a6a6a"},svg);
+  SV("circle",{cx:338,cy:280,r:15,fill:"#d8d8d8"},svg);
+  SV("ellipse",{cx:296,cy:280,rx:15,ry:12,fill:"#b0b0b0"},svg);
+}
+function ctKidney(x,y,flip,o){ o=o||{}; var g=grp(x,y,flip,flip?-14:14), rx=o.rx||46, ry=o.ry||64;
+  SV("path",{d:kPath(rx,ry),fill:o.cortex||"#d6d6d6",stroke:"#8a8a8a","stroke-width":1},g);
+  if(!o.homog){ [[-18,-34],[-26,0],[-18,34],[ -6,-14],[-6,16]].slice(0,4).forEach(function(q,i){ SV("path",{d:"M"+(q[0]-14)+" "+q[1]+" L"+(q[0]+16)+" "+(q[1]-12)+" L"+(q[0]+16)+" "+(q[1]+12)+" Z",fill:o.med||"#9a9a9a"},g); }); }
+  SV("path",{d:"M"+(rx*0.15)+" -22 Q"+(rx*0.7)+" 0 "+(rx*0.15)+" 22 Q"+(rx*0.05)+" 0 "+(rx*0.15)+" -22 Z",fill:"#4a4a4a"},g);
+  return g; }
+var L=[210,252], Rk=[430,252]; /* image left = patient right */
+function drawCT(k){
+  ctBase(); head("CT abdomen, axial, nephrographic phase","Image left = patient right");
+  var g=+C.g.get();
+  if(k==="cortnec"){ [L,Rk].forEach(function(p,i){ var kk=ctKidney(p[0],p[1],i===1,{cortex:"#5a5a5a",med:"#cfcfcf"}); SV("path",{d:kPath(46,64),fill:"none",stroke:"#d6d6d6","stroke-width":2.2},kk); });
+    lbl(Rk[0]-30,Rk[1]-30,520,110,"Non-enhancing cortex"); lbl(Rk[0]-10,Rk[1]+6,560,330,"Enhancing medulla"); lbl(L[0]-48,L[1],120,110,"Thin subcapsular rim"); return; }
+  ctKidney(L[0],L[1],false);
+  if(k==="rvt"){ var kk=ctKidney(Rk[0],Rk[1],true,{rx:56,ry:74,cortex:"#a8a8a8",med:"#8c8c8c",homog:false}); SV("path",{d:"M380 266 Q350 274 338 280",stroke:"#d8d8d8","stroke-width":13,fill:"none"},svg); SV("ellipse",{cx:362,cy:271,rx:12,ry:5,fill:"#6a6a6a"},svg);
+    lbl(362,271,520,360,"Filling defect in renal vein"); lbl(Rk[0]+30,Rk[1]-40,540,110,"Enlarged, delayed nephrogram"); return; }
+  var K=ctKidney(Rk[0],Rk[1],true);
+  if(k==="epn"){ var n=[0,6,14,26,40][g];
+    for(var i=0;i<n;i++){ var a=i*2.39, r=8+(i*13)%34; SV("ellipse",{cx:Math.cos(a)*r*0.8-6,cy:Math.sin(a)*r*1.3,rx:3+i%4,ry:2+i%3,fill:"#000"},K); }
+    if(g>=3) for(var j=0;j<14;j++){ var b=j*0.45-2.6; SV("ellipse",{cx:Math.cos(b)*62-8,cy:Math.sin(b)*80,rx:4,ry:3,fill:"#000"},K); }
+    if(g>=4){ var L2=grp(L[0],L[1],false,14); for(var q=0;q<6;q++) SV("ellipse",{cx:-10+q*4,cy:-30+q*11,rx:3,ry:2.4,fill:"#000"},L2); }
+    lbl(Rk[0]+8,Rk[1]-8,540,110,"Gas in parenchyma"); if(g>=3) lbl(Rk[0]+56,Rk[1]+40,560,380,"Perinephric gas"); if(g>=4) lbl(L[0],L[1]-20,110,110,"Bilateral gas"); return; }
+  if(k==="xgp"){ SV("path",{d:kPath(58,78),fill:"#8a8a8a",stroke:"#9a9a9a"},K);
+    [[-22,-40],[-30,-4],[-22,32],[-8,-20],[-8,14]].forEach(function(q){ SV("circle",{cx:q[0],cy:q[1],r:13,fill:"#4e4e4e",stroke:"#b6b6b6","stroke-width":2},K); });
+    SV("path",{d:"M0 -26 L10 -8 L4 6 L12 22 L0 30 L-6 12 L-2 -4 Z",fill:"#ffffff"},K);
+    lbl(Rk[0]-4,Rk[1],540,110,"Staghorn calculus"); lbl(Rk[0]+26,Rk[1]-38,560,380,"Dilated calyces, low density (bear paw)"); return; }
+  if(k==="infarct"){ SV("path",{d:"M-8 -6 L-50 -50 Q-58 -20 -56 10 Z",fill:"#5e5e5e"},K); SV("path",{d:"M-50 -50 Q-58 -20 -56 10",stroke:"#d6d6d6","stroke-width":3,fill:"none"},K);
+    lbl(Rk[0]+38,Rk[1]-14,540,110,"Wedge-shaped non-enhancing area"); lbl(Rk[0]+54,Rk[1]+4,560,380,"Cortical rim sign"); return; }
+  if(k==="aml"){ SV("circle",{cx:-46,cy:24,r:26,fill:"#2e2e2e",stroke:"#6a6a6a"},K); for(var m=0;m<5;m++) SV("circle",{cx:-46+(m-2)*8,cy:24+((m*7)%10-5),r:2.2,fill:"#7a7a7a"},K);
+    lbl(Rk[0]+48,Rk[1]+28,560,380,"Mass with fat density (negative HU)"); return; }
+  if(k==="rcc"){ SV("circle",{cx:-40,cy:-30,r:30,fill:"#b9b9b9",stroke:"#e0e0e0","stroke-width":2},K); SV("circle",{cx:-40,cy:-30,r:12,fill:"#7a7a7a"},K);
+    SV("path",{d:"M380 266 Q350 274 338 280",stroke:"#9a9a9a","stroke-width":13,fill:"none"},svg); SV("ellipse",{cx:360,cy:271,rx:14,ry:5,fill:"#c6c6c6"},svg);
+    lbl(Rk[0]+40,Rk[1]-40,540,110,"Enhancing heterogeneous mass"); lbl(360,271,540,380,"Tumor thrombus in renal vein"); return; }
+}
+/* ---------- US sagittal ---------- */
+function drawUS(k){
+  SV("rect",{x:0,y:0,width:640,height:460,fill:"#000"},svg);
+  SV("path",{d:"M320 40 L600 400 Q320 470 40 400 Z",fill:"#1c1c1c"},svg);
+  for(var i=0;i<260;i++){ var x=60+((i*97)%520), y=70+((i*53)%360); SV("circle",{cx:x,cy:y,r:1.1,fill:"#3a3a3a"},svg); }
+  head(k==="ncalc"?"Ultrasound, kidney sagittal":"Ultrasound, left kidney sagittal","B-mode");
+  var g=SV("g",{transform:"translate(320,250)"},svg);
+  SV("ellipse",{rx:190,ry:92,fill:"#5a5a5a",stroke:"#9a9a9a","stroke-width":2},g);
+  var pyr=[[-120,-40],[-60,-62],[10,-66],[80,-58],[130,-30],[-110,40],[-40,62],[30,64],[100,52]];
+  pyr.forEach(function(q){ var a=Math.atan2(q[1],q[0]); var gg=SV("g",{transform:"translate("+q[0]+","+q[1]+") rotate("+(a*180/Math.PI+90)+")"},g);
+    SV("path",{d:"M-14 -14 L14 -14 L0 16 Z",fill:k==="ncalc"?"#f2f2f2":"#2c2c2c"},gg);
+    if(k==="ncalc") SV("path",{d:"M-4 16 L-10 60 L10 60 L4 16 Z",fill:"rgba(0,0,0,0.55)"},gg); });
+  if(k==="hydro"){ var gr=+C.g.get();
+    SV("ellipse",{rx:105,ry:40,fill:"#d0d0d0"},g);
+    var pw=[0,26,40,56,70][gr], ph=[0,16,24,34,46][gr];
+    SV("ellipse",{cx:10,cy:6,rx:pw,ry:ph,fill:"#050505"},g);
+    if(gr>=2) pyr.forEach(function(q,i){ var s=gr>=3?1:0.6; SV("ellipse",{cx:q[0]*0.72,cy:q[1]*0.62,rx:(gr>=3?20:12)*s+4,ry:(gr>=3?15:9)*s+3,fill:"#050505"},g); SV("line",{x1:q[0]*0.72,y1:q[1]*0.62,x2:10,y2:6,stroke:"#050505","stroke-width":gr>=3?12:7},g); });
+    if(gr===4) SV("ellipse",{rx:190,ry:92,fill:"none",stroke:"#5a5a5a","stroke-width":12},g);
+    lbl(330,256,540,110,"Dilated renal pelvis"); if(gr>=2) lbl(320+pyr[1][0]*0.72,250+pyr[1][1]*0.62,110,110,"Dilated calyces, connected"); if(gr===4) lbl(320-170,250+40,110,380,"Cortical thinning"); return; }
+  SV("ellipse",{rx:100,ry:36,fill:"#d6d6d6"},g);
+  if(k==="ncalc"){ lbl(320+pyr[2][0],250+pyr[2][1],540,110,"Echogenic medullary pyramids"); lbl(320+pyr[6][0],250+pyr[6][1]+40,110,400,"Acoustic shadowing"); lbl(320+180,250,560,330,"Cortex less echogenic than pyramids"); }
+}
+/* ---------- CT urography coronal ---------- */
+function drawCTU(k){
+  SV("rect",{x:0,y:0,width:640,height:460,fill:"#262626"},svg);
+  head("CT urography, coronal, excretory phase","Left kidney, collecting system opacified");
+  var g=SV("g",{transform:"translate(320,250)"},svg);
+  SV("path",{d:"M0 -170 C120 -170 130 -60 60 -30 C40 -15 40 15 60 30 C130 60 120 170 0 170 C-150 170 -150 -170 0 -170 Z",fill:"#8e8e8e",stroke:"#b0b0b0"},g);
+  /* pelvis and ureter */
+  SV("path",{d:"M40 -10 Q80 0 70 40 L110 200",stroke:"#fff","stroke-width":12,fill:"none","stroke-linecap":"round"},g);
+  SV("path",{d:"M-10 -30 Q30 -40 50 0 Q30 40 -10 30 Z",fill:"#fff"},g);
+  var cal=[[-90,-120],[-110,-60],[-115,0],[-110,60],[-90,120]];
+  cal.forEach(function(c,i){ SV("path",{d:"M-6 0 L"+(c[0]*0.55)+" "+(c[1]*0.6),stroke:"#fff","stroke-width":9,fill:"none"},g);
+    var cx=c[0]*0.7, cy=c[1]*0.72;
+    if(k==="papnec"&&(i===1||i===3)){ SV("circle",{cx:cx,cy:cy,r:14,fill:"#fff"},g); SV("circle",{cx:cx-2,cy:cy,r:8,fill:"#7a7a7a"},g); }
+    else if(k==="papnec"&&i===2){ SV("path",{d:"M"+(cx+8)+" "+(cy-14)+" Q"+(cx-18)+" "+cy+" "+(cx+8)+" "+(cy+14)+" Z",fill:"#fff"},g); }
+    else { SV("path",{d:"M"+(cx+10)+" "+(cy-12)+" L"+(cx-6)+" "+(cy-16)+" Q"+(cx+2)+" "+cy+" "+(cx-6)+" "+(cy+16)+" L"+(cx+10)+" "+(cy+12)+" Z",fill:"#fff"},g); }
+    if(k==="msk"){ for(var r=0;r<6;r++){ var a=Math.atan2(c[1],c[0])+(r-2.5)*0.12; SV("line",{x1:cx-4,y1:cy,x2:cx-4+Math.cos(a)*30,y2:cy+Math.sin(a)*30,stroke:"#f4f4f4","stroke-width":2.2},g); }
+      SV("circle",{cx:cx-22,cy:cy+4,r:3.6,fill:"#fff"},g); SV("circle",{cx:cx-18,cy:cy-8,r:2.8,fill:"#fff"},g); }
+  });
+  if(k==="papnec"){ SV("path",{d:"M85 60 l10 -6 l6 10 l-10 6 z",fill:"#5a5a5a",stroke:"#fff"},g); lbl(320+cal[1][0]*0.7,250+cal[1][1]*0.72,110,110,"Ring sign"); lbl(320+cal[2][0]*0.7,250+cal[2][1]*0.72,110,330,"Clubbed calyx"); lbl(320+90,250+57,540,330,"Sloughed papilla in ureter"); }
+  if(k==="msk"){ lbl(320+cal[0][0]*0.7-20,250+cal[0][1]*0.72-14,110,110,"Paintbrush striations"); lbl(320+cal[3][0]*0.7-22,250+cal[3][1]*0.72+4,110,380,"Medullary calcifications"); }
+}
+function update(){
+  var k=fs.value, f=F[k]; svg.innerHTML="";
+  C.g.el.style.display=f.grade?"":"none"; if(f.grade) C.g.el.querySelector("label").textContent=f.grade==="Class"?"EPN class":"Hydronephrosis grade";
+  if(f.mod==="CT") drawCT(k); else if(f.mod==="US") drawUS(k); else drawCTU(k);
+  document.getElementById("vt").textContent=f.mod==="CT"?"CT axial":f.mod==="US"?"Ultrasound sagittal":"CT urography coronal";
+  var t=document.getElementById("info"); t.innerHTML="";
+  [["Finding",f.n],["Key sign",f.sign],["DDx",f.ddx]].forEach(function(r){ t.appendChild(Sim.h("tr",{},[Sim.h("th",{text:r[0]}),Sim.h("td",{text:LAB?r[1]:"ซ่อนอยู่ ลองบรรยายภาพก่อนแล้วเปิดป้าย"})])); });
+  var a=document.getElementById("act"); a.innerHTML=LAB?"<b>Next step:</b> "+f.next:"<b>ฝึกบรรยาย:</b> modality, ตำแหน่ง, ขนาดไต, ความผิดปกติ, density หรือ echogenicity แล้วให้ diagnosis และ DDx"; a.className="act"+(LAB?" bad":"");
+}
+Sim.mount({code:"MX-10", title:"Kidney Imaging Pattern Atlas", lead:"ภาพ schematic ของ finding ทางรังสีที่พบบ่อยในข้อสอบ OSCE: hydronephrosis, EPN, XGP, papillary necrosis, MSK, nephrocalcinosis, infarction, RVT, cortical necrosis, AML และ RCC ปิดป้ายเพื่อฝึกบรรยายภาพก่อนดูเฉลย",
+  scenarios:S, order:ORDER, captureMs:500,
+  onChange:function(k,s){ fs.value=s.f; if(s.g) C.g.set(s.g); LAB=true; labB.setState(true); update(); },
+  refs:["Craig WD, Wagner BJ, Travis MD. Pyelonephritis: radiologic-pathologic review. Radiographics 2008, 28(1): 255-277",
+        "Huang JJ, Tseng CC. Emphysematous pyelonephritis: clinicoradiological classification, management, prognosis, and pathogenesis. Arch Intern Med 2000, 160(6): 797-805",
+        "Jung DC, Kim SH, Jung SI, Hwang SI, Kim SH. Renal papillary necrosis: review and comparison of findings at multi-detector row CT and intravenous urography. Radiographics 2006, 26(6): 1827-1836",
+        "Dyer RB, Chen MY, Zagoria RJ. Abnormal calcifications in the urinary tract. Radiographics 1998, 18(6): 1405-1424",
+        "Hazanov N, Somin M, Attali M, et al. Acute renal embolism: forty-four cases of renal infarction in patients with atrial fibrillation. Medicine 2004, 83(5): 292-299",
+        "Flum AS, Hamoui N, Said MA, et al. Update on the diagnosis and management of renal angiomyolipoma. J Urol 2016, 195(4 Pt 1): 834-846",
+        "Onen A. Grading of hydronephrosis: an ongoing challenge. Front Pediatr 2020, 8: 458"],
+  note:"ภาพวาดเชิงสัญลักษณ์เพื่อการสอน ไม่ใช่ภาพรังสีจริง ความหนาแน่นใน CT: อากาศดำสนิท ไขมันเทาเข้ม เนื้อเยื่อเทากลาง contrast และ calcification ขาว"
+});
+})();
+</script>
+</body>
+</html>

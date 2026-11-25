@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[AKI-07] Drug and Crystal Nephrotoxicity Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1fr 1.1fr}}
+.sel{display:grid;grid-template-columns:minmax(80px,140px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.legend{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12px;color:var(--muted);margin-top:8px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.sites{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.sites span{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:3px 10px;color:var(--faint)}
+.sites span.on{border-color:var(--ink);color:#fff;background:var(--ink)}
+table.card2{width:100%;border-collapse:collapse;margin-top:12px;font-size:13.5px}
+table.card2 th{text-align:left;font-weight:500;color:var(--muted);width:30%;padding:7px 8px 7px 0;vertical-align:top;border-top:1px solid var(--line)}
+table.card2 td{padding:7px 0;border-top:1px solid var(--line)}
+.meter{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;margin-top:12px;font-size:13px}
+.meter .bar{height:9px;border-radius:5px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--teal),var(--gold),var(--red))}
+.tools{margin-top:10px}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .legend{display:none}
+body.present .card{padding:14px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .svgwrap svg{max-height:400px}
+body.present table.card2{font-size:12px}
+body.present table.card2 th,body.present table.card2 td{padding:4px 0}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>ตำแหน่งที่ยาทำร้ายไต</h2>
+      <div class="svgwrap" id="map"></div>
+      <div class="legend"><span><i style="background:#FFDE59"></i>segment ที่บาดเจ็บ</span><span><i style="background:#B4232A"></i>glomerulus/TMA</span><span><i style="background:#A8842C"></i>crystal</span><span><i style="background:rgba(91,75,255,.25)"></i>interstitial inflammation</span></div>
+      <p class="hint no-present">เลือกยาจากรายการ ภาพจะเน้น segment, glomerulus, interstitium หรือ crystal ที่เกี่ยวข้อง แตะ segment บนภาพเพื่อดูยาทั้งหมดที่ทำร้าย segment นั้น</p>
+    </div>
+    <div class="card">
+      <h2>ยาและความเสี่ยง</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="sites" id="sites"></div>
+      <div class="tools" id="tools"></div>
+      <div class="meter"><span>Risk</span><span class="bar"><i id="rbar" style="width:30%"></i></span><span id="rtxt" class="mono">-</span></div>
+      <table class="card2" id="dcard"></table>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/nephron.js"></script>
+<script>
+(function(){
+"use strict";
+/* sites: hemo, glom, tma, pt, distal, cd, crystal, ain */
+var D={
+  nsaid:{n:"NSAID",seg:[],site:["hemo","ain","glom"],cr:[],mech:"ยับยั้ง PG ทำให้ afferent หดใน PG-dependent state, AIN, MCD/MN",on:"วันถึงสัปดาห์ (hemodynamic) หรือหลายเดือน (AIN, nephrotic)",clue:"FENa ต่ำ K สูง หรือ sterile pyuria, nephrotic",prev:"เลี่ยงใน CKD, HF, cirrhosis, volume depletion, ร่วม ACEi + diuretic",mgmt:"หยุดยา AIN พิจารณา steroid"},
+  acei:{n:"ACEi/ARB/ARNI",seg:[],site:["hemo"],cr:[],mech:"Efferent dilation ลด PGC",on:"ภายในวัน",clue:"Cr ขึ้นหลังเริ่มยาหรือเมื่อขาดน้ำ K สูง",prev:"Sick day rule ตรวจ Cr/K 1–2 สัปดาห์หลังเริ่มยา",mgmt:"Hold ชั่วคราวเมื่อ volume ลด กลับมาให้เมื่อหาย Cr ขึ้น < 30% ยอมรับได้"},
+  cni:{n:"Tacrolimus/cyclosporine",seg:["PT"],site:["hemo","tma","pt"],cr:[],mech:"Afferent vasoconstriction, TMA, isometric vacuolization ของ PT, chronic arteriolar hyalinosis",on:"Acute ตาม trough สูง chronic หลายปี",clue:"K สูง Mg ต่ำ urate สูง HT",prev:"Trough monitoring ระวัง CYP3A4 inhibitor",mgmt:"ลดขนาดยา หา drug interaction biopsy ถ้าสงสัย TMA หรือ rejection"},
+  amg:{n:"Aminoglycoside",seg:["PT"],site:["pt"],cr:[],mech:"เข้าเซลล์ PT ผ่าน megalin สะสมใน lysosome",on:"5–7 วันหลังเริ่ม non-oliguric",clue:"Mg ต่ำ K ต่ำ glycosuria Fanconi-like",prev:"Once-daily dosing ระยะสั้น ตรวจ level",mgmt:"หยุดยา ทดแทน Mg และ K ฟื้นช้าหลายสัปดาห์"},
+  vanco:{n:"Vancomycin",seg:["PT"],site:["pt","ain"],cr:[],mech:"Oxidative stress ที่ PT, vancomycin-uromodulin cast, AIN",on:"4–8 วัน สัมพันธ์กับ trough/AUC สูง",clue:"เสี่ยงขึ้นเมื่อให้ร่วม piperacillin-tazobactam",prev:"AUC-guided dosing 400–600 mg h/L",mgmt:"ปรับ dose ตาม level หรือเปลี่ยนยา"},
+  ampho:{n:"Amphotericin B",seg:["PT","CCD","OMCD"],site:["hemo","distal"],cr:[],mech:"สร้าง pore ใน membrane, afferent vasoconstriction",on:"สะสมตามขนาดรวม",clue:"dRTA, K ต่ำ, Mg ต่ำ, NDI",prev:"ใช้ liposomal, saline loading ก่อนให้",mgmt:"ทดแทน K และ Mg เปลี่ยนเป็น azole หรือ echinocandin เมื่อทำได้"},
+  tdf:{n:"Tenofovir (TDF)",seg:["PT"],site:["pt"],cr:[],mech:"เข้าทาง OAT1/3 สะสมทำลาย mitochondria ของ PT",on:"หลายเดือนถึงปี",clue:"Fanconi: glycosuria normoglycemia, phosphaturia, hypouricemia, proteinuria ท่อไต",prev:"ตรวจ eGFR, urine glucose, P ทุก 6–12 เดือน",mgmt:"เปลี่ยนเป็น TAF หรือยาอื่น ทดแทน phosphate"},
+  cis:{n:"Cisplatin",seg:["PT","TAL","DCT"],site:["pt","distal"],cr:[],mech:"เข้าทาง OCT2 ทำลาย S3 segment",on:"3–5 วันหลังให้",clue:"Mg wasting เด่น K ต่ำ",prev:"Hydration + Mg supplementation ก่อนให้",mgmt:"ปรับ dose ตาม GFR ทดแทน Mg"},
+  ifo:{n:"Ifosfamide",seg:["PT"],site:["pt"],cr:[],mech:"Chloroacetaldehyde ทำลาย PT",on:"ระหว่างหรือหลังให้ยา",clue:"Fanconi, hypophosphatemic rickets ในเด็ก, NDI",prev:"ระวังเมื่อเคยได้ cisplatin",mgmt:"ทดแทน P, HCO3, K"},
+  mtx:{n:"High-dose methotrexate",seg:["DCT","CCD","OMCD"],site:["crystal","pt"],cr:["CCD","OMCD","DCT"],mech:"ตกผลึกใน urine ที่ pH เป็นกรด และทำลาย PT โดยตรง",on:"24–48 ชม. หลังให้",clue:"MTX level สูงค้าง Cr ขึ้นเร็ว",prev:"Hydration + alkalinization ให้ urine pH ≥ 7 leucovorin rescue หลีกเลี่ยง PPI, NSAID, TMP-SMX",mgmt:"Glucarpidase เมื่อ level สูงมากและไตแย่ leucovorin ขนาดสูง"},
+  acy:{n:"IV acyclovir",seg:["CCD","OMCD","IMCD"],site:["crystal"],cr:["OMCD","IMCD"],mech:"ตกผลึกเป็นเข็มใน collecting duct เมื่อให้เร็วและ volume ต่ำ",on:"24–48 ชม.",clue:"Needle-shaped birefringent crystals",prev:"Hydration ให้ช้า ๆ ใน 1–2 ชม. ปรับ dose ตาม GFR",mgmt:"หยุดหรือลดยา hydration"},
+  sulfa:{n:"Sulfadiazine/TMP-SMX",seg:["CCD","OMCD","IMCD"],site:["crystal","ain"],cr:["OMCD","IMCD"],mech:"Acetyl-sulfadiazine ตกผลึกใน urine กรด TMP บล็อก ENaC และ Cr secretion",on:"7–10 วัน (crystal)",clue:"Shock of wheat/shell-like crystal hematuria K สูง Cr ขึ้นปลอม",prev:"Hydration > 3 L/วัน alkalinization",mgmt:"หยุดยา alkalinize urine"},
+  contrast:{n:"Iodinated contrast",seg:["PT","OMCD"],site:["hemo","pt"],cr:[],mech:"Medullary vasoconstriction และพิษต่อ PT โดยตรง",on:"24–72 ชม. peak 3–5 วัน",clue:"FENa ต่ำได้ ไม่ค่อยต้อง KRT",prev:"Isotonic fluid ใน eGFR < 30 ไม่ให้ NAC หรือ bicarbonate ใช้ contrast น้อยที่สุด",mgmt:"ประคับประคอง ไม่ควรเลื่อนการตรวจที่จำเป็นเพราะกลัว CA-AKI"},
+  ppi:{n:"PPI",seg:[],site:["ain"],cr:[],mech:"Hypersensitivity AIN",on:"สัปดาห์ถึงเดือน",clue:"sterile pyuria, WBC casts, มักไม่มีไข้ผื่น",prev:"หยุด PPI ที่ไม่มีข้อบ่งชี้",mgmt:"หยุดยา steroid ถ้าไม่ดีขึ้นใน 3–5 วัน หรือ biopsy ยืนยัน"},
+  ici:{n:"Immune checkpoint inhibitor",seg:[],site:["ain","glom"],cr:[],mech:"เสีย tolerance ต่อ T cell เกิด AIN (บางรายร่วมกับ PPI)",on:"3–10 สัปดาห์หรือหลายเดือน",clue:"Cr ขึ้นช้า pyuria อาจมี extrarenal irAE",prev:"ตรวจ Cr ก่อนทุกรอบ หยุด PPI/NSAID ที่ไม่จำเป็น",mgmt:"Hold ICI prednisone 0.5–1 mg/kg/วัน ดื้อ steroid พิจารณา infliximab/MMF"},
+  li:{n:"Lithium",seg:["CCD","OMCD","IMCD"],site:["cd","ain"],cr:[],mech:"เข้าทาง ENaC ใน principal cell ลด AQP2",on:"หลายปี (NDI, chronic TIN, microcysts)",clue:"Polyuria Uosm ต่ำ hypernatremia",prev:"ตรวจ level, Cr, Na เลี่ยง thiazide, ACEi, NSAID",mgmt:"Amiloride ใน NDI เปลี่ยนยาถ้า eGFR ลดต่อเนื่อง"},
+  bisph:{n:"Zoledronate/pamidronate",seg:["PT"],site:["pt","glom"],cr:[],mech:"Zoledronate: toxic ATN  pamidronate: collapsing FSGS",on:"หลายรอบที่ให้ยา",clue:"Pamidronate: nephrotic-range proteinuria",prev:"ปรับขนาดตาม CrCl ให้ช้า ตรวจ Cr ก่อนทุกครั้ง",mgmt:"หยุดยา ใช้ denosumab (ระวัง hypocalcemia)"},
+  vegf:{n:"Anti-VEGF (bevacizumab, TKI)",seg:[],site:["tma","glom"],cr:[],mech:"ลด VEGF ที่ podocyte สร้าง ทำให้ endothelium เสียหาย TMA จำกัดที่ไต",on:"สัปดาห์ถึงเดือน",clue:"HT, proteinuria, TMA ที่ไตอาจไม่มี schistocyte",prev:"ตรวจ BP และ UPCR ทุกรอบ",mgmt:"ควบคุม BP (ACEi), hold ยาเมื่อ proteinuria > 2–3 g/วันหรือ TMA"},
+  colistin:{n:"Colistin/polymyxin B",seg:["PT"],site:["pt"],cr:[],mech:"เพิ่ม membrane permeability ของ PT",on:"ภายใน 1 สัปดาห์",clue:"ATN dose-dependent",prev:"Dose ตาม CrCl หลีกเลี่ยง nephrotoxin อื่นพร้อมกัน",mgmt:"ปรับ dose หรือเปลี่ยนยา"}
+};
+var SITE={hemo:"Hemodynamic",glom:"Glomerular",tma:"TMA",pt:"Proximal tubule",distal:"Distal tubule",cd:"Collecting duct",crystal:"Crystal",ain:"AIN"};
+var RF={vol:"Volume depletion",ckd:"CKD (eGFR < 60)",old:"อายุ > 65",multi:"Nephrotoxin อื่นร่วม",sep:"Sepsis/ICU"};
+var S={
+  pt:{name:"PT: aminoglycoside", d:"amg", rf:["multi","sep"],
+    rows:[["ยา","gentamicin 8 วัน ร่วมกับ vancomycin"],["ผล","non-oliguric AKI วันที่ 7 Mg ต่ำ K ต่ำ"],["กลไก","megalin uptake สะสมใน lysosome ของ PT"]],
+    take:["PT เป็นเป้าหลักของยาที่ขับผ่านการ secrete หรือ endocytosis (megalin, OAT, OCT2)","Aminoglycoside AKI มักเริ่มหลัง 5–7 วัน และเป็น non-oliguric","Once-daily dosing และระยะสั้นลดพิษต่อไต"]},
+  vanco:{name:"Vancomycin + pip-tazo", d:"vanco", rf:["multi","sep"],
+    rows:[["ยา","vancomycin trough 25 + piperacillin-tazobactam"],["ผล","Cr ขึ้นวันที่ 5"],["ป้องกัน","AUC-guided dosing"]],
+    take:["Vancomycin ร่วม piperacillin-tazobactam เพิ่ม AKI ตามการวัด Cr (ส่วนหนึ่งอาจลด Cr secretion)","ใช้ AUC 400–600 แทนการไล่ trough สูง","ทบทวน combination เมื่อมีทางเลือกที่ไม่เป็นพิษต่อไต"]},
+  tdf:{name:"TDF Fanconi", d:"tdf", rf:[],
+    rows:[["ผู้ป่วย","HIV ได้ TDF 5 ปี กระดูกบาง"],["Lab","glucose ในปัสสาวะแต่ blood glucose ปกติ P ต่ำ urate ต่ำ"],["กลไก","OAT1 uptake สะสมทำลาย mitochondria ของ PT"]],
+    take:["Fanconi syndrome: glycosuria ที่ normoglycemia, phosphaturia, aminoaciduria, hypouricemia, low-grade tubular proteinuria","เปลี่ยน TDF เป็น TAF ลด tubular toxicity","ตรวจ urine glucose และ phosphate ในผู้ป่วยที่ใช้ TDF นาน"]},
+  mtx:{name:"Methotrexate crystal", d:"mtx", rf:[],
+    rows:[["ผู้ป่วย","osteosarcoma ได้ HD-MTX urine pH 6.0"],["ผล","Cr ขึ้นใน 24 ชม. MTX level ค้างสูง"],["รักษา","glucarpidase + leucovorin"]],
+    take:["MTX ละลายน้อยใน urine กรด ต้อง alkalinize ให้ pH ≥ 7 และ hydration ก่อนให้","AKI ทำให้ MTX ค้างนาน เกิด myelosuppression และ mucositis","Glucarpidase ลด MTX ในเลือดเร็ว HD ไม่ใช่ทางเลือกแรก"]},
+  sulfa:{name:"Sulfadiazine crystal", d:"sulfa", rf:["vol"],
+    rows:[["ผู้ป่วย","toxoplasmosis ได้ sulfadiazine ขนาดสูง ดื่มน้ำน้อย"],["Urine","shock of wheat crystals hematuria"],["รักษา","หยุดยา hydration alkalinize"]],
+    take:["Crystal nephropathy: sulfonamide, acyclovir, MTX, indinavir, triamterene, oxalate","ปัจจัยร่วม: volume ต่ำ ขนาดสูง urine pH ที่ไม่เหมาะ CKD","Urine microscopy ดู crystal ช่วยวินิจฉัยเร็ว"]},
+  contrast:{name:"Contrast", d:"contrast", rf:["ckd","old"],
+    rows:[["ผู้ป่วย","eGFR 25 ต้อง CT contrast"],["ป้องกัน","isotonic saline ก่อนและหลัง ใช้ contrast น้อยที่สุด"],["ผล","Cr ขึ้นเล็กน้อยวันที่ 3 แล้วลง"]],
+    take:["CA-AKI ที่ต้อง KRT พบน้อย ความเสี่ยงสูงเมื่อ eGFR < 30","Isotonic fluid ใช้ในกลุ่มเสี่ยงสูง NAC และ bicarbonate ไม่ช่วย","ไม่ควรงดการตรวจที่จำเป็นเพราะกลัว contrast"]},
+  ici:{name:"ICI-AIN", d:"ici", rf:[],
+    rows:[["ผู้ป่วย","melanoma ได้ pembrolizumab + PPI"],["ผล","Cr ขึ้นช้า sterile pyuria เดือนที่ 3"],["รักษา","hold ICI, prednisone"]],
+    take:["AIN เป็นรูปแบบหลักของ ICI nephrotoxicity มักร่วมกับ PPI","Steroid ตอบสนองดี ส่วนใหญ่ rechallenge ได้หลังหายด้วยการติดตามใกล้ชิด","ดู AKI-08 สำหรับ AIN timeline"]},
+  vegf:{name:"Anti-VEGF TMA", d:"vegf", rf:[],
+    rows:[["ผู้ป่วย","colorectal cancer ได้ bevacizumab"],["ผล","BP สูง UPCR 3 g/g Cr ขึ้น"],["Biopsy","glomerular TMA จำกัดที่ไต"]],
+    take:["Anti-VEGF ทำให้ TMA จำกัดที่ไตได้ ไม่มี hemolysis ในเลือด","ติดตาม BP และ proteinuria ทุกรอบที่ให้ยา","ACEi/ARB คุม BP และ proteinuria"]}
+};
+var ORDER=["pt","vanco","tdf","mtx","sulfa","contrast","ici","vegf"];
+var box=document.getElementById("ctls");
+var ds=Sim.h("select",{id:"drug"},Object.keys(D).map(function(k){ return Sim.h("option",{value:k,text:D[k].n}); })); ds.addEventListener("change",update);
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"drug",text:"ยา"}),ds]));
+var T={}, tb=document.getElementById("tools");
+Object.keys(RF).forEach(function(k){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:RF[k]}); b.addEventListener("click",function(){ b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); tb.appendChild(b); T[k]=b; });
+function on(k){ return T[k].getAttribute("aria-pressed")==="true"; }
+var M=Nephron.map(document.getElementById("map"),{onSelect:function(seg){ segInfo(seg); }});
+var NS="http://www.w3.org/2000/svg", ov=document.createElementNS(NS,"g"); M.svg.appendChild(ov);
+function el(t,a){ var e=document.createElementNS(NS,t); for(var k in a) e.setAttribute(k,a[k]); ov.appendChild(e); return e; }
+var MID={PT:[196,160],tDL:[215,350],tAL:[240,486],TAL:[265,270],DCT:[322,110],CNT:[396,97],CCD:[422,165],OMCD:[426,315],IMCD:[430,472]};
+function overlay(d){
+  while(ov.firstChild) ov.removeChild(ov.firstChild);
+  if(d.site.indexOf("ain")>=0){ el("ellipse",{cx:300,cy:300,rx:200,ry:230,fill:"rgba(91,75,255,0.10)",stroke:"rgba(91,75,255,0.45)","stroke-dasharray":"6 5"});
+    for(var i=0;i<14;i++){ var a=i*2.4, r=60+(i*37)%150; el("circle",{cx:300+Math.cos(a)*r,cy:300+Math.sin(a)*r*1.1,r:4.5,fill:"#5B4BFF",opacity:0.7}); }
+    var t=el("text",{x:470,y:552,"text-anchor":"end","font-size":12,"font-weight":600,fill:"#5B4BFF","font-family":"IBM Plex Sans Thai, sans-serif"}); t.textContent="Interstitial infiltrate"; }
+  if(d.site.indexOf("glom")>=0||d.site.indexOf("tma")>=0){ el("circle",{cx:90,cy:96,r:38,fill:"none",stroke:"#B4232A","stroke-width":4});
+    var g=el("text",{x:90,y:48,"text-anchor":"middle","font-size":11.5,"font-weight":600,fill:"#B4232A","font-family":"IBM Plex Sans Thai, sans-serif"}); g.textContent=d.site.indexOf("tma")>=0?"TMA":"Podocyte/glomerular"; }
+  if(d.site.indexOf("hemo")>=0){ el("path",{d:"M20 70 L52 86",stroke:"#B4232A","stroke-width":5,"stroke-linecap":"round"}); el("path",{d:"M44 76 L54 87 L40 90",stroke:"#B4232A","stroke-width":3,fill:"none"});
+    var h=el("text",{x:12,y:62,"font-size":11,"font-weight":600,fill:"#B4232A","font-family":"IBM Plex Sans Thai, sans-serif"}); h.textContent="Hemodynamic"; }
+  (d.cr||[]).forEach(function(s,j){ var m=MID[s]; for(var q=0;q<3;q++){ var x=m[0]-24+q*9, y=m[1]-10+q*12; el("path",{d:"M"+x+" "+(y-6)+" L"+(x+5)+" "+y+" L"+x+" "+(y+6)+" L"+(x-5)+" "+y+" Z",fill:"#A8842C",stroke:"#fff","stroke-width":1}); } });
+  if(d.cr&&d.cr.length){ var c=el("text",{x:470,y:534,"text-anchor":"end","font-size":12,"font-weight":600,fill:"#A8842C","font-family":"IBM Plex Sans Thai, sans-serif"}); c.textContent="Intratubular crystals"; }
+}
+function segInfo(seg){
+  var list=Object.keys(D).filter(function(k){ return D[k].seg.indexOf(seg)>=0; }).map(function(k){ return D[k].n; });
+  var a=document.getElementById("act"); a.className="act";
+  a.innerHTML="<b>"+seg+":</b> "+(list.length?list.join(", "):"ไม่มียาในรายการที่เด่นที่ segment นี้");
+}
+function update(){
+  var k=ds.value, d=D[k];
+  M.highlight(d.seg,"#FFDE59"); overlay(d);
+  var st=document.getElementById("sites"); st.innerHTML="";
+  Object.keys(SITE).forEach(function(s){ st.appendChild(Sim.h("span",{class:d.site.indexOf(s)>=0?"on":"",text:SITE[s]})); });
+  var tbl=document.getElementById("dcard"); tbl.innerHTML="";
+  [["กลไก",d.mech],["เวลาเกิด",d.on],["Clue",d.clue],["ป้องกัน",d.prev],["รักษา",d.mgmt]].forEach(function(r){ tbl.appendChild(Sim.h("tr",{},[Sim.h("th",{text:r[0]}),Sim.h("td",{text:r[1]})])); });
+  var n=Object.keys(RF).filter(on).length, base={hemo:1,glom:0.6,tma:0.6,pt:1.2,distal:0.8,cd:0.6,crystal:1,ain:0.5};
+  var b=d.site.reduce(function(a,s){ return Math.max(a,base[s]); },0.5);
+  var r=Math.min(1,0.12+b*0.18+n*0.16+(on("vol")&&(d.site.indexOf("crystal")>=0||d.site.indexOf("hemo")>=0)?0.15:0));
+  document.getElementById("rbar").style.width=Math.round(r*100)+"%";
+  document.getElementById("rtxt").textContent=r<0.35?"low":r<0.65?"moderate":"high";
+  var a=document.getElementById("act"), m;
+  if(d.site.indexOf("crystal")>=0) m="ส่ง urine microscopy ดู crystal หยุดหรือลดยา hydration และปรับ urine pH ตามชนิดยา";
+  else if(d.site.indexOf("ain")>=0&&d.site.length<=2) m="หยุดยาที่สงสัย ดู urine WBC/WBC casts ถ้า Cr ไม่ลดใน 3–5 วันหรือรุนแรง biopsy แล้วพิจารณา steroid";
+  else if(d.site.indexOf("tma")>=0) m="ตรวจ BP, UPCR, LDH, haptoglobin, smear ถ้าสงสัย TMA จำกัดที่ไตพิจารณา biopsy hold ยา";
+  else if(d.site.indexOf("pt")>=0) m="ปรับ dose ตาม GFR และ drug level หลีกเลี่ยง nephrotoxin อื่นพร้อมกัน ตรวจ Mg, K, P, urine glucose";
+  else m="Hold ยาเมื่อ volume ลด แก้ volume แล้วประเมิน Cr ใหม่";
+  if(r>=0.65) m+=" ความเสี่ยงสูง: พิจารณายาทางเลือกที่ไม่เป็นพิษต่อไต และติดตาม Cr ทุก 24–48 ชม. (nephrotoxin stewardship)";
+  a.innerHTML="<b>Next step:</b> "+m; a.className="act"+(r>=0.65?" bad":"");
+}
+Sim.mount({code:"AKI-07", title:"Drug and Crystal Nephrotoxicity Map", lead:"เลือกยาเพื่อดูตำแหน่งที่ทำร้ายไตบน nephron (hemodynamic, glomerulus/TMA, proximal tubule, distal, crystal, interstitium) พร้อม clue ทาง lab, การป้องกัน และการจัดการ ปัจจัยเสี่ยงที่เปิดจะเพิ่มระดับความเสี่ยง",
+  scenarios:S, order:ORDER, captureMs:600,
+  onChange:function(k,s){ ds.value=s.d; Object.keys(T).forEach(function(x){ T[x].setAttribute("aria-pressed",s.rf.indexOf(x)>=0?"true":"false"); }); update(); },
+  refs:["Perazella MA, Rosner MH. Drug-induced acute kidney injury. Clin J Am Soc Nephrol 2022, 17(8): 1220-1233",
+        "Perazella MA. Pharmacology behind common drug nephrotoxicities. Clin J Am Soc Nephrol 2018, 13(12): 1897-1908",
+        "Rybak MJ, Le J, Lodise TP, et al. Therapeutic monitoring of vancomycin for serious MRSA infections: a revised consensus guideline. Am J Health Syst Pharm 2020, 77(11): 835-864",
+        "Ramsey LB, Balis FM, O'Brien MM, et al. Consensus guideline for use of glucarpidase in patients with high-dose methotrexate induced acute kidney injury and delayed methotrexate clearance. Oncologist 2018, 23(1): 52-61",
+        "Davenport MS, Perazella MA, Yee J, et al. Use of intravenous iodinated contrast media in patients with kidney disease: consensus statements from the ACR and NKF. Radiology 2020, 294(3): 660-668",
+        "Seethapathy H, Zhao S, Chute DF, et al. The incidence, causes, and risk factors of acute kidney injury in patients receiving immune checkpoint inhibitors. Clin J Am Soc Nephrol 2019, 14(12): 1692-1700",
+        "Izzedine H, Perazella MA. Anticancer drug-induced acute kidney injury. Kidney Int Rep 2017, 2(4): 504-514"],
+  note:"ระดับความเสี่ยงเป็นคะแนนเพื่อการสอนจากตำแหน่งที่ยาออกฤทธิ์และจำนวนปัจจัยเสี่ยงที่เลือก ไม่ใช่ risk model ที่ validate แล้ว"
+});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[GN-01] Glomerular Filtration Barrier and Proteinuria</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.bench{grid-template-columns:1.35fr 1fr}
+@media (max-width:900px){.bench{grid-template-columns:1fr}}
+.readout{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:520px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.pat{margin-top:14px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.pat b{font-weight:600}
+.pat .tag{display:inline-block;font:600 12px var(--mono);letter-spacing:.04em;color:#fff;background:var(--ink);border-radius:6px;padding:2px 8px;margin-bottom:6px}
+.pat .tag.flag{background:var(--red)}
+.pat .tag.ok{background:var(--teal)}
+.act{margin-top:10px;padding:12px 14px;border-radius:12px;border:1px solid var(--line);font-size:14px}
+.act b{font-weight:600}
+.svgwrap + .svgwrap{margin-top:10px}
+body.present .bench{grid-template-columns:1.25fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:14px 18px}
+body.present #loop{max-height:280px;width:auto!important;margin:0 auto}
+body.present #bars{max-height:150px;width:auto!important;margin:0 auto}
+body.present .tools{display:none}
+body.present .ctls{grid-template-columns:1fr 1fr;column-gap:22px}
+body.present .readout .ro{padding:6px 10px}
+body.present .ctls .ctl{padding:2px 0}
+body.present .act{display:none}
+body.present .pat{margin-top:8px;padding:8px 12px;font-size:13px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Capillary wall และโมเลกุลที่ผ่าน barrier</h2>
+      <div class="svgwrap"><svg id="loop" aria-label="Filtration barrier with molecules crossing"></svg></div>
+      <div class="tools no-present" id="tools"></div>
+      <div class="svgwrap"><svg id="bars" viewBox="0 0 600 214" role="img" aria-label="Filtered load versus urinary excretion, log scale"></svg></div>
+      <p class="hint no-present">Effacement = foot process effacement (podocytopathy) Non-selective shunt = podocyte detachment หรือ GBM เสีย PT = proximal tubule ภาพบน: โมเลกุลเล็ก (β2M, FLC) ผ่าน barrier ได้เกือบทั้งหมดแล้วถูก proximal tubule ดูดกลับ albumin ถูกกั้นที่ slit diaphragm ด้วยขนาดและประจุ IgG ถูกกั้นตั้งแต่ GBM ภาพล่าง: ปริมาณที่กรอง (กรอบ) เทียบกับที่ออกในปัสสาวะ (แท่งทึบ) แกน log</p>
+    </div>
+    <div class="card">
+      <h2>Barrier, tubule และ plasma</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roUP"><b>-</b><span>UPCR (g/g)</span></div>
+        <div class="ro" id="roACR"><b>-</b><span>UACR (mg/g)</span></div>
+        <div class="ro" id="roFr"><b>-</b><span>uACR/uPCR</span></div>
+        <div class="ro" id="roDip"><b>-</b><span>Dipstick protein</span></div>
+        <div class="ro" id="roSI"><b>-</b><span>Selectivity index</span></div>
+        <div class="ro" id="roB2"><b>-</b><span>Urine β2M (mg/d)</span></div>
+        <div class="ro" id="roFLC"><b>-</b><span>Urine FLC (g/d)</span></div>
+        <div class="ro" id="roAlbF"><b>-</b><span>Albumin กรอง (g/d)</span></div>
+      </div>
+      <div class="pat" id="pat"></div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/patho.js"></script>
+<script>
+(function(){
+"use strict";
+/* Teaching model
+   theta (sieving): albumin 4e-5 x 250^effacement, transferrin 3.2e-5 x 200^eff, IgG 3e-6 x 4^eff, plus non-selective shunt 3e-3 x shunt^1.5 (IgG 0.8x)
+   beta2-microglobulin 0.7, free light chain 0.12 (kappa monomer and lambda dimer averaged)
+   Proximal reabsorption (megalin/cubilin, shared and saturable): fraction = min(0.999, e_i x tubular function x 40/(40 + total filtered g/d))
+   Urine creatinine assumed 1 g/d so UPCR (g/g) = protein g/d. Tamm-Horsfall 0.04 g/d. Dipstick reads albumin concentration in 1.5 L/d. */
+var PROT = {alb:{name:"Albumin", e:1.0}, tf:{name:"Transferrin", e:0.98}, igg:{name:"IgG", e:0.9}, b2m:{name:"β2M", e:1.07}, flc:{name:"FLC", e:1.07}};
+function model(p){
+  var G = p.gfr * 1.44, e = p.eff / 100, sh = p.shunt / 100, tub = p.tub / 100, om = 3e-3 * Math.pow(sh, 1.5);
+  var P = {alb:p.alb, tf:2.5, igg:10, b2m:0.002, flc:p.flc / 1000};
+  var th = {alb:4e-5 * Math.pow(250, e) + om, tf:3.2e-5 * Math.pow(200, e) + om, igg:3e-6 * Math.pow(4, e) + 0.8 * om, b2m:0.7, flc:0.12};
+  var F = {}, U = {}, R = {}, Ft = 0, k;
+  for(k in P){ F[k] = G * P[k] * th[k]; Ft += F[k]; }
+  var sat = 40 / (40 + Ft);
+  for(k in P){ R[k] = Math.min(0.999, PROT[k].e * tub * sat); U[k] = F[k] * (1 - R[k]); }
+  var UP = U.alb + U.tf + U.igg + U.b2m + U.flc + 0.04;
+  return {P:P, th:th, F:F, U:U, R:R, UP:UP, UACR:U.alb * 1000, frac:U.alb / UP, SI:(U.igg / P.igg) / (U.tf / P.tf), dipC:U.alb / 1.5, b2m:U.b2m * 1000, Ft:Ft, sat:sat};
+}
+function dipGrade(c){ return c < 0.15 ? "Neg" : c < 0.3 ? "Trace" : c < 1 ? "1+" : c < 3 ? "2+" : c < 20 ? "3+" : "4+"; }
+function classify(m){
+  if(m.UP < 0.15 && m.UACR < 30) return {k:"normal", t:"Normal", cls:"ok"};
+  if(m.U.flc > 0.5 * m.UP && m.UP > 0.3) return {k:"overflow", t:"Overflow proteinuria (light chain)", cls:"flag"};
+  if(m.frac < 0.4 && m.b2m > 1) return {k:"tubular", t:"Tubular proteinuria", cls:"flag"};
+  if(m.UP < 0.5 && m.UACR < 300) return {k:"a2", t:"Moderately increased albuminuria (A2)", cls:""};
+  var neph = m.UP >= 3.5, sel = m.SI < 0.1 ? "selective" : m.SI > 0.2 ? "non-selective" : "intermediate selectivity";
+  return {k:neph ? (m.SI < 0.1 ? "nephsel" : "nephns") : "glom", t:"Glomerular proteinuria, " + sel + (neph ? ", nephrotic range" : ""), cls:"flag"};
+}
+var NEXT = {
+  normal:"ไม่ต้อง work-up proteinuria เพิ่ม",
+  a2:"ยืนยัน UACR ซ้ำ (2 ใน 3 ครั้งในช่วง 3–6 เดือน) ตัดสาเหตุชั่วคราว เช่น ไข้ ออกกำลังกายหนัก UTI ถ้าเป็นเบาหวานร่วมกับ hypertension ให้เริ่ม ACEi/ARB (ความดันปกติพิจารณาให้ได้) ร่วม SGLT2i ใน T2DM แล้วติดตาม UACR",
+  tubular:"ส่ง urine β2M หรือ α1-microglobulin หา Fanconi (glycosuria ที่ glucose ปกติ, phosphaturia, uricosuria, hypokalemia, low HCO3) ทบทวนยา (tenofovir, ifosfamide, aminoglycoside) ชายอายุน้อยที่มี hypercalciuria และ nephrocalcinosis นึกถึง Dent disease",
+  overflow:"Dipstick ไม่เห็น light chain จึงห้ามใช้คัดกรอง ส่ง serum FLC (κ/λ ratio), SPEP และ serum + urine immunofixation ถ้ามี AKI และ FLC สูงมากให้คิด cast nephropathy ต้องลด FLC อย่างรวดเร็ว",
+  nephsel:"ผู้ใหญ่ทำ kidney biopsy (MCD, early FSGS, MN) ในเด็กที่ไม่มี atypical feature เริ่ม steroid ได้ก่อน selective proteinuria สัมพันธ์กับการตอบสนองต่อ steroid ให้ดูแล edema, lipid และความเสี่ยง VTE ร่วมด้วย",
+  nephns:"Non-selective nephrotic: ทำ kidney biopsy หา secondary cause (HIV, HBV/HCV, obesity, ยา, paraprotein) และเริ่ม RAASi เมื่อความดันพอ",
+  glom:"Glomerular proteinuria ต่ำกว่า nephrotic range: ดู urine sediment (dysmorphic RBC, RBC cast), serology และพิจารณา biopsy เมื่อ proteinuria > 0.5–1 g/d, มี hematuria หรือ GFR ลดลง"
+};
+var S = {
+  normal:{name:"ปกติ", p:{eff:0, shunt:0, tub:100, gfr:100, alb:42, flc:15},
+    rows:[["Barrier","Slit diaphragm สมบูรณ์ GBM ปกติ"],["Urine","Protein < 150 mg/d ส่วนมากเป็น Tamm-Horsfall albumin < 30 mg/d"],["Tubule","ดูดกลับ β2M และ FLC ที่กรองได้เกือบทั้งหมด"]],
+    take:["Barrier กั้นตามขนาดและประจุ โมเลกุลยิ่งใหญ่และเป็นประจุลบยิ่งผ่านยาก","โปรตีนขนาดเล็กผ่าน barrier ได้มากแต่ proximal tubule ดูดกลับเกือบหมด","Albumin ที่กรองผ่านมาได้เพียงเล็กน้อยถูกดูดกลับเกือบหมดด้วย megalin และ cubilin"]},
+  a2:{name:"Albuminuria A2 (early DKD)", p:{eff:30, shunt:8, tub:100, gfr:95, alb:42, flc:18},
+    rows:[["Barrier","Podocyte injury เริ่มต้น glomerular hyperfiltration"],["Urine","UACR 30–300 mg/g dipstick มัก negative หรือ trace"],["Clinical","Marker ของความเสี่ยง CKD progression และ CV"]],
+    take:["UACR 30–300 mg/g คือ A2 dipstick ทั่วไปมักตรวจไม่พบ","ต้องยืนยันซ้ำเพราะ albuminuria แปรผันได้มาก","ลด albuminuria ด้วย RAASi และ SGLT2i ชะลอ CKD"]},
+  mcd:{name:"Minimal change disease", p:{eff:92, shunt:0, tub:95, gfr:100, alb:18, flc:15},
+    rows:[["Barrier","Foot process effacement กระจายทั่ว GBM ปกติ"],["Urine","Albumin เป็นส่วนใหญ่ IgG น้อย = selective"],["LM/IF","ปกติ EM เห็น effacement"]],
+    take:["Effacement ทำให้ albumin หลุดมากแต่ IgG ยังถูกกั้น selectivity index < 0.1","Selective proteinuria สัมพันธ์กับการตอบสนองต่อ steroid","Albumin ที่กรองได้มากเกิน capacity ของ tubule จึงออกในปัสสาวะ"]},
+  fsgs:{name:"FSGS (non-selective)", p:{eff:75, shunt:60, tub:70, gfr:55, alb:26, flc:25},
+    rows:[["Barrier","Podocyte loss และ detachment เกิดช่องทางที่ไม่เลือกขนาด"],["Urine","Albumin และ IgG ออกพร้อมกัน = non-selective"],["Tubule","Protein overload ทำให้ tubulointerstitial injury"]],
+    take:["Podocyte detachment เปิด shunt ที่โปรตีนใหญ่ผ่านได้ selectivity index > 0.2","Non-selective proteinuria บ่งถึง structural damage และตอบสนอง steroid น้อยกว่า","Proteinuria ปริมาณมากเองทำร้าย tubule ต่อ"]},
+  tubular:{name:"Tubular proteinuria", p:{eff:0, shunt:0, tub:25, gfr:80, alb:42, flc:20},
+    rows:[["Barrier","ปกติ"],["Tubule","Megalin/cubilin เสีย (Dent, Fanconi, tenofovir, AIN)"],["Urine","β2M, α1-microglobulin, RBP สูง albumin fraction < 40%"]],
+    take:["Tubular proteinuria มักไม่เกิน 1–2 g/d และ albumin เป็นส่วนน้อย","uACR/uPCR < 0.4 ชี้ว่าโปรตีนส่วนใหญ่ไม่ใช่ albumin","β2M หรือ α1-microglobulin ในปัสสาวะยืนยัน tubular origin"]},
+  overflow:{name:"Overflow: light chain", p:{eff:0, shunt:0, tub:85, gfr:45, alb:38, flc:1800},
+    rows:[["Plasma","Monoclonal FLC สูงมาก (multiple myeloma)"],["Barrier","ปกติ FLC ขนาดเล็กผ่านได้"],["Urine","UPCR สูงแต่ dipstick negative เพราะ dipstick จับ albumin"]],
+    take:["Filtered FLC เกิน capacity ของ proximal tubule จึงล้นออกมา","UPCR สูงร่วมกับ dipstick negative หรือ UACR ต่ำ ต้องนึกถึง light chain","FLC ที่ส่งไป distal nephron จับ uromodulin เป็น cast"]}
+};
+
+/* ---------- controls ---------- */
+var box = document.getElementById("ctls"), C = {};
+function add(k, o){ o.onInput = update; C[k] = Sim.slider(o); box.appendChild(C[k].el); }
+add("eff", {id:"sEff", label:"Effacement", min:0, max:100, step:1, value:0, unit:"%"});
+add("shunt", {id:"sSh", label:"Non-selective shunt", min:0, max:100, step:1, value:0, unit:"%"});
+add("tub", {id:"sTub", label:"PT reabsorption", min:5, max:100, step:1, value:100, unit:"%"});
+add("gfr", {id:"sGfr", label:"GFR", min:10, max:140, step:1, value:100, unit:"mL/min"});
+add("alb", {id:"sAlb", label:"Serum albumin", min:10, max:50, step:1, value:42, unit:"g/L"});
+add("flc", {id:"sFlc", label:"Serum FLC", min:0, max:3.4, step:0.02, value:Math.log10(15), unit:"mg/L", fmt:function(v){ return Math.round(Math.pow(10, v)); }});
+function P(){ return {eff:C.eff.get(), shunt:C.shunt.get(), tub:C.tub.get(), gfr:C.gfr.get(), alb:C.alb.get(), flc:Math.pow(10, C.flc.get())}; }
+
+/* ---------- loop + particles ---------- */
+var loopSvg = document.getElementById("loop"), L = Patho.loop(loopSvg, {labels:true}), layer = null, M = null;
+var KINDS = [
+  {k:"b2m", name:"β2M 12 kDa", r:3, col:"#19C8E6"},
+  {k:"flc", name:"FLC 25 kDa", r:4.2, col:"#A8842C"},
+  {k:"alb", name:"Albumin 66 kDa", r:5.6, col:"#5B4BFF"},
+  {k:"igg", name:"IgG 150 kDa", r:8, col:"#B4232A"}
+];
+var parts = [], last = 0, running = false, spawnAcc = {};
+function visP(th){ return Math.max(0.02, Math.min(0.97, (Math.log10(th) + 5) / 5)); }
+function rate(k){ // particles per second, roughly log of plasma concentration
+  var c = M.P[k] * 1000; return Math.max(0.15, Math.min(2.6, 0.55 * Math.log10(c + 1) - (k === "igg" ? 0.4 : 0)));
+}
+function legend(){
+  var g = Sim.svg("g", {}, layer);
+  Sim.svg("rect", {x:462, y:6, width:164, height:76, rx:8, fill:"#FFFFFF", opacity:0.88}, g);
+  KINDS.forEach(function(K, i){ Sim.svg("circle", {cx:476, cy:20 + i * 17, r:Math.min(K.r, 6), fill:K.col}, g); Sim.svg("text", {x:488, y:24 + i * 17, "font-family":"IBM Plex Sans Thai, sans-serif", "font-size":11.5, fill:"#0B0B1F", text:K.name}, g); });
+}
+function redrawLoop(){
+  var p = P();
+  L.update({effacement:p.eff / 100 * 0.92, gbmBreak:false, highlight:null});
+  layer = Sim.svg("g", {}, loopSvg);
+  legend();
+  // shunt gaps drawn as small dark breaks in the slit layer
+  var g = L.geom;
+  if(p.shunt > 20){ var n = Math.round(p.shunt / 25); for(var i = 0; i < n; i++){ var x = 140 + i * 95; Sim.svg("rect", {x:x, y:g.yFoot[0] - 2, width:10, height:g.yGBM[1] - g.yFoot[0] + 2, fill:"#F4F6FB"}, layer); Sim.svg("rect", {x:x + 2, y:g.yGBM[0] + 4, width:6, height:g.yGBM[1] - g.yGBM[0] - 8, fill:"#C9CCDD"}, layer); } }
+  parts.forEach(function(q){ q.el = null; });
+  parts = [];
+}
+function spawn(K){
+  var g = L.geom, x = g.x0 + 12 + Math.random() * (g.xMes - g.x0 - 30);
+  var pass = Math.random() < visP(M.th[K.k]);
+  var q = {K:K, x:x, y:g.yLumen[1] - 10, vy:-(38 + Math.random() * 22), pass:pass, state:"up", life:0, el:Sim.svg("circle", {cx:x, cy:0, r:K.r, fill:K.col, opacity:0.95}, layer)};
+  // stop level: IgG at endothelium/GBM, albumin at slit, small ones pass
+  q.stop = K.k === "igg" ? g.yGBM[1] + K.r : K.k === "alb" ? g.yGBM[0] + 2 : g.yGBM[1] + K.r;
+  if(pass){ var sl = g.slits.length ? g.slits[Math.floor(Math.random() * g.slits.length)] : x; q.tx = sl; }
+  parts.push(q);
+}
+function tick(ts){
+  if(!running) return;
+  var dt = Math.min(0.05, (ts - (last || ts)) / 1000); last = ts;
+  if(layer && M){
+    KINDS.forEach(function(K){ spawnAcc[K.k] = (spawnAcc[K.k] || 0) + rate(K.k) * dt; while(spawnAcc[K.k] >= 1){ spawnAcc[K.k] -= 1; if(parts.length < 70) spawn(K); } });
+    var g = L.geom;
+    parts.forEach(function(q){
+      q.life += dt;
+      if(q.state === "up"){
+        q.y += q.vy * dt;
+        if(q.pass && q.y < g.yLumen[0] + 30) q.x += (q.tx - q.x) * Math.min(1, dt * 3);
+        if(!q.pass && q.y <= q.stop){ q.state = "bounce"; q.vy = 26; }
+        if(q.pass && q.y < g.yFoot[0] - 6) q.state = "out";
+      } else if(q.state === "bounce"){ q.y += q.vy * dt; q.op = Math.max(0, 1 - (q.y - q.stop) / 90); if(q.op <= 0) q.dead = true; }
+      else if(q.state === "out"){ q.y -= 30 * dt; q.x += (q.K.k === "b2m" ? 8 : 4) * dt; q.op = Math.max(0, (q.y - 4) / 80); if(q.op <= 0) q.dead = true; }
+      if(q.el){ q.el.setAttribute("cx", q.x.toFixed(1)); q.el.setAttribute("cy", q.y.toFixed(1)); if(q.op != null) q.el.setAttribute("opacity", q.op.toFixed(2)); }
+    });
+    parts = parts.filter(function(q){ if(q.dead && q.el) q.el.remove(); return !q.dead; });
+  }
+  requestAnimationFrame(tick);
+}
+function staticParticles(){ // reduced motion / capture: a representative still frame
+  var g = L.geom;
+  KINDS.forEach(function(K, i){
+    var pv = visP(M.th[K.k]), nPass = Math.round(pv * 5), nBlock = 5 - nPass;
+    for(var a = 0; a < nBlock; a++) Sim.svg("circle", {cx:g.x0 + 30 + a * 62 + i * 14, cy:(K.k === "alb" ? g.yGBM[1] + 14 : g.yLumen[0] + 18) + i * 9, r:K.r, fill:K.col}, layer);
+    for(var b = 0; b < nPass; b++){ var x = g.slits.length ? g.slits[(b * 5 + i * 3) % g.slits.length] : g.x0 + 60 + b * 40; Sim.svg("circle", {cx:x, cy:g.yFoot[0] - 18 - b * 7, r:K.r, fill:K.col}, layer); }
+  });
+}
+var tools = document.getElementById("tools"), playing = !(Sim.reduce || Sim.capture);
+tools.appendChild(Sim.toggle("Animate molecules", function(on){ playing = on; restart(); }, playing));
+function restart(){
+  redrawLoop();
+  running = false;
+  if(playing && !Sim.capture){ running = true; last = 0; requestAnimationFrame(tick); } else staticParticles();
+}
+document.addEventListener("visibilitychange", function(){ if(document.hidden) running = false; else if(playing && !running){ running = true; last = 0; requestAnimationFrame(tick); } });
+
+/* ---------- bar chart ---------- */
+var bars = document.getElementById("bars");
+function drawBars(){
+  bars.innerHTML = "";
+  var x0 = 110, x1 = 560, lo = -4, hi = 2, X = function(v){ var l = Math.log10(Math.max(v, 1e-4)); return x0 + (Math.min(hi, l) - lo) / (hi - lo) * (x1 - x0); };
+  var F = "IBM Plex Sans Thai, sans-serif", MO = "Geist Mono, monospace";
+  for(var e = lo; e <= hi; e++){ var xx = X(Math.pow(10, e)); Sim.svg("line", {x1:xx, y1:22, x2:xx, y2:176, stroke:"#E6E7F0"}, bars); Sim.svg("text", {x:xx, y:192, "text-anchor":"middle", "font-family":MO, "font-size":10.5, fill:"#5E6075", text:e < 0 ? (Math.pow(10, e + 3)).toFixed(e < -2 ? 1 : 0).replace(/\.0$/, "") + " mg" : Math.pow(10, e) + " g"}, bars); }
+  Sim.svg("text", {x:x1, y:209, "text-anchor":"end", "font-family":F, "font-size":11, fill:"#5E6075", text:"g per day (log)"}, bars);
+  Sim.svg("rect", {x:x0, y:4, width:12, height:9, fill:"none", stroke:"#0B0B1F", "stroke-width":1.2}, bars);
+  Sim.svg("text", {x:x0 + 17, y:12, "font-family":F, "font-size":11, fill:"#0B0B1F", text:"Filtered"}, bars);
+  Sim.svg("rect", {x:x0 + 80, y:4, width:12, height:9, fill:"#5B4BFF"}, bars);
+  Sim.svg("text", {x:x0 + 97, y:12, "font-family":F, "font-size":11, fill:"#0B0B1F", text:"Urine"}, bars);
+  Sim.svg("text", {x:x1, y:12, "text-anchor":"end", "font-family":F, "font-size":11, fill:"#5E6075", text:"Reabsorbed %"}, bars);
+  [["alb", "Albumin", "#5B4BFF"], ["igg", "IgG", "#B4232A"], ["b2m", "β2M", "#19C8E6"], ["flc", "Light chain", "#A8842C"]].forEach(function(r, i){
+    var y = 30 + i * 37, f = M.F[r[0]], u = M.U[r[0]];
+    Sim.svg("text", {x:8, y:y + 15, "font-family":F, "font-size":12.5, fill:"#0B0B1F", text:r[1]}, bars);
+    Sim.svg("rect", {x:x0, y:y, width:Math.max(1, X(f) - x0), height:22, rx:4, fill:"none", stroke:"#0B0B1F", "stroke-width":1.2}, bars);
+    Sim.svg("rect", {x:x0, y:y + 5, width:Math.max(1, X(u) - x0), height:12, rx:3, fill:r[2]}, bars);
+    Sim.svg("text", {x:x1, y:y + 15, "text-anchor":"end", "font-family":MO, "font-size":11, fill:"#5E6075", text:(M.R[r[0]] * 100).toFixed(M.R[r[0]] > 0.99 ? 1 : 0)}, bars);
+  });
+}
+
+/* ---------- update ---------- */
+function fmtG(v){ return v < 0.1 ? (v * 1000).toFixed(0) + " mg" : v.toFixed(v < 1 ? 2 : 1) + " g"; }
+function update(){
+  var p = P(), oldEff = M ? M._eff : null, oldSh = M ? M._sh : null;
+  M = model(p); M._eff = p.eff; M._sh = p.shunt;
+  if(oldEff !== p.eff || oldSh !== p.shunt || !layer) restart();
+  var c = classify(M);
+  Sim.ro("roUP", M.UP < 0.1 ? M.UP.toFixed(3) : M.UP.toFixed(2), M.UP >= 3.5 ? "flag" : M.UP >= 0.15 ? true : "ok");
+  Sim.ro("roACR", M.UACR < 10 ? M.UACR.toFixed(1) : Math.round(M.UACR), M.UACR >= 300 ? "flag" : M.UACR >= 30 ? true : "ok");
+  Sim.ro("roFr", M.frac.toFixed(2), M.UP > 0.15 && M.frac < 0.4 ? "flag" : null);
+  var dg = dipGrade(M.dipC);
+  Sim.ro("roDip", dg, M.UP > 0.5 && /Neg|Trace/.test(dg) ? "flag" : null);
+  Sim.ro("roSI", M.UP > 0.5 && M.frac >= 0.4 ? M.SI.toFixed(2) : "n/a", M.UP > 0.5 && M.frac >= 0.4 ? (M.SI < 0.1 ? "ok" : M.SI > 0.2 ? "flag" : true) : null);
+  Sim.ro("roB2", M.b2m < 10 ? M.b2m.toFixed(1) : Math.round(M.b2m), M.b2m > 1 ? "flag" : "ok");
+  Sim.ro("roFLC", M.U.flc < 0.1 ? M.U.flc.toFixed(3) : M.U.flc.toFixed(1), M.U.flc > 0.5 ? "flag" : null);
+  Sim.ro("roAlbF", M.F.alb < 1 ? M.F.alb.toFixed(2) : M.F.alb.toFixed(1));
+  var pat = document.getElementById("pat");
+  pat.innerHTML = "";
+  pat.appendChild(Sim.h("span", {class:"tag " + c.cls, text:c.t}));
+  var comp = "Urine protein " + fmtG(M.UP) + "/d: albumin " + Math.round(M.U.alb / M.UP * 100) + "%, IgG " + Math.round(M.U.igg / M.UP * 100) + "%, light chain " + Math.round(M.U.flc / M.UP * 100) + "%, LMW " + Math.round(M.U.b2m / M.UP * 100) + "%";
+  pat.appendChild(Sim.h("div", {text:comp}));
+  if(M.sat < 0.8) pat.appendChild(Sim.h("div", {class:"flag-txt", text:"Filtered protein " + fmtG(M.Ft) + "/d แย่งตัวรับ megalin/cubilin เดียวกัน การดูดกลับทุกชนิดลดลง (tubular overload)"}));
+  document.getElementById("act").innerHTML = "<b>Next step:</b> " + NEXT[c.k];
+  drawBars();
+}
+Sim.mount({code:"GN-01", title:"Glomerular Filtration Barrier and Proteinuria",
+  lead:"ปรับความเสียหายของ podocyte, shunt ที่ไม่เลือกขนาด, การดูดกลับของ proximal tubule และระดับ light chain ในเลือด แล้วดูว่าโปรตีนชนิดไหนหลุดผ่าน barrier และอะไรออกมาในปัสสาวะ",
+  scenarios:S, order:["normal","a2","mcd","fsgs","tubular","overflow"], captureMs:1500,
+  onChange:function(k, s){ Object.keys(s.p).forEach(function(n){ C[n].set(n === "flc" ? Math.log10(s.p[n]) : s.p[n]); }); update(); },
+  refs:["Haraldsson B, Nyström J, Deen WM. Properties of the glomerular barrier and mechanisms of proteinuria. Physiol Rev 2008, 88(2): 451-487",
+        "Comper WD, Vuchkova J, McCarthy KJ. New insights into proteinuria/albuminuria. Front Physiol 2022, 13: 991756",
+        "Christensen EI, Birn H. Megalin and cubilin: multifunctional endocytic receptors. Nat Rev Mol Cell Biol 2002, 3(4): 256-266",
+        "Smith ER, Cai MMX, McMahon LP, et al. The value of simultaneous measurements of urinary albumin and total protein in proteinuric patients. Nephrol Dial Transplant 2012, 27(4): 1534-1541",
+        "Bazzi C, Petrini C, Rizza V, et al. Urinary excretion of IgG and α1-microglobulin predicts clinical course better than extent of proteinuria in membranous nephropathy. Am J Kidney Dis 2001, 38(2): 240-248",
+        "Sanders PW. Mechanisms of light chain injury along the tubular nephron. J Am Soc Nephrol 2012, 23(11): 1777-1781",
+        "KDIGO 2024 Clinical Practice Guideline for the Evaluation and Management of Chronic Kidney Disease. Kidney Int 2024, 105(4S): S117-S314"],
+  note:"Sieving coefficient และ capacity ของ tubule เป็นค่าประมาณเพื่อการสอน (θ albumin ปกติยังเป็นที่ถกเถียง) สมมติ urine creatinine 1 g/d และปัสสาวะ 1.5 L/d Selectivity index คำนวณจาก clearance IgG/transferrin แสดงเมื่อเป็น glomerular proteinuria > 0.5 g/d"
+});
+})();
+</script>
+</body>
+</html>

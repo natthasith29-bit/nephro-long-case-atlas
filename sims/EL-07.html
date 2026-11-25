@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[EL-07] Tubulopathy Genetics on the Nephron</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.bench{grid-template-columns:1.6fr 1fr}
+@media (max-width:900px){.bench{grid-template-columns:1fr}}
+.split{display:grid;grid-template-columns:0.55fr 1.45fr;gap:14px;align-items:start}
+@media (max-width:760px){.split{grid-template-columns:1fr}}
+.sel{display:grid;grid-template-columns:minmax(110px,140px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+table.cmp{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:14px}
+table.cmp th,table.cmp td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:center}
+table.cmp th{font-weight:600;font-size:12.5px}
+table.cmp td:first-child,table.cmp th:first-child{text-align:left;color:var(--muted);font-weight:500}
+table.cmp td.up{color:var(--red);font-weight:600}
+table.cmp td.dn{color:#2f6fa3;font-weight:600}
+table.cmp td.diff{background:#FFF8DC}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+body.present .bench{grid-template-columns:1.5fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:16px 20px}
+body.present table.cmp td,body.present table.cmp th{padding:4px 8px;font-size:12.5px}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+body.present #cell svg{max-height:300px;width:auto!important;margin:0 auto}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>ตำแหน่งของ defect บน nephron</h2>
+      <div class="split"><div id="map"></div><div id="cell"></div></div>
+      <p class="hint no-present">✕ แดง = loss-of-function (หรือยาที่ยับยั้ง) ▲ teal = gain-of-function กด segment บนภาพเพื่อดูเซลล์ของ segment อื่น ตารางขวาเทียบ lab pattern ช่องที่ต่างกันจะเน้นสี</p>
+    </div>
+    <div class="card">
+      <h2>โรคและ lab pattern</h2>
+      <div class="ctls" id="ctls"></div>
+      <table class="cmp" id="cmp" aria-label="Laboratory pattern comparison"></table>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/nephron.js"></script>
+<script>
+(function(){
+"use strict";
+/* labs: BP, K, HCO3, UCa, Mg, Renin, Aldo  values: "↑","↓","N","↑↑","↓↓" */
+var DZ={
+  b1:{name:"Bartter type 1",gene:"SLC12A1 (NKCC2) AR",seg:"TAL",block:["NKCC2"],labs:["N/↓","↓","↑","↑↑","N","↑","↑"],extra:"Antenatal: polyhydramnios, prematurity, nephrocalcinosis",tx:"NSAID (indomethacin), K และ NaCl, MRA/amiloride ถ้าจำเป็น",mimic:"loop"},
+  b3:{name:"Bartter type 3 (classic)",gene:"CLCNKB (ClC-Kb) AR",seg:"TAL",block:["ClCKb","ClCKb_D"],labs:["N/↓","↓","↑","N/↑","N/↓","↑","↑"],extra:"อาการช่วงวัยเด็ก บางรายคล้าย Gitelman (Mg ต่ำ, Ca ไม่สูง)",tx:"K, NaCl, NSAID",mimic:"loop"},
+  b4a:{name:"Bartter type 4a (BSND)",gene:"BSND (barttin) AR",seg:"TAL",block:["ClCKb","ClCKa"],labs:["↓","↓","↑","N/↑","N/↓","↑","↑"],extra:"Sensorineural deafness (barttin ใน inner ear) CKD ได้",tx:"NSAID, K, NaCl, hearing aid",mimic:"loop"},
+  adh1:{name:"ADH1 (CaSR gain)",gene:"CASR gain AD",seg:"TAL",gain:["CaSR"],labs:["N","↓","↑","↑↑","↓","↑","↑"],extra:"Hypocalcemia + PTH ต่ำ + hypercalciuria (ห้ามให้ vitamin D/Ca มากเกิน เกิด nephrocalcinosis)",tx:"ให้ Ca/vitamin D เท่าที่จำเป็นเพื่อคุมอาการ thiazide ลด hypercalciuria",mimic:"none"},
+  git:{name:"Gitelman syndrome",gene:"SLC12A3 (NCC) AR",seg:"DCT",block:["NCC"],labs:["N/↓","↓","↑","↓↓","↓↓","↑","↑"],extra:"อาการช่วงวัยรุ่นหรือผู้ใหญ่ ตะคริว tetany chondrocalcinosis QT ยาว",tx:"Mg และ K เสริม, MRA/amiloride, อาหารเค็ม",mimic:"thz"},
+  gor:{name:"Gordon syndrome (PHA2)",gene:"WNK1/WNK4/KLHL3/CUL3 AD",seg:"DCT",gain:["NCC","WNK"],labs:["↑","↑","↓","↑","N","↓","N/↓"],extra:"HT + hyperK + hyperchloremic acidosis ทั้งที่ GFR ปกติ",tx:"Thiazide ขนาดต่ำ (ตอบสนองดีมาก)",mimic:"none"},
+  lid:{name:"Liddle syndrome",gene:"SCNN1B/SCNN1G gain AD",seg:"CCD",gain:["ENaC"],labs:["↑↑","↓","↑","N","N","↓","↓"],extra:"HT ตั้งแต่อายุน้อย ประวัติครอบครัว",tx:"Amiloride หรือ triamterene (spironolactone ไม่ได้ผล)",mimic:"none"},
+  ame:{name:"Apparent mineralocorticoid excess",gene:"HSD11B2 AR (หรือ liquorice, posaconazole)",seg:"CCD",block:["HSD2"],labs:["↑↑","↓","↑","N/↑","N","↓","↓"],extra:"Cortisol กระตุ้น MR urine cortisol/cortisone สูง",tx:"Spironolactone หรือ eplerenone, หยุด liquorice/posaconazole",mimic:"none"},
+  pha1r:{name:"PHA1 renal (AD)",gene:"NR3C2 (MR) loss AD",seg:"CCD",block:["MR"],labs:["↓","↑","↓","N","N","↑↑","↑↑"],extra:"Salt wasting ในทารก ดีขึ้นตามอายุ",tx:"NaCl เสริม",mimic:"spiro"},
+  pha1s:{name:"PHA1 systemic (AR)",gene:"SCNN1A/B/G loss AR",seg:"CCD",block:["ENaC"],labs:["↓↓","↑↑","↓","N","N","↑↑","↑↑"],extra:"Salt wasting รุนแรงตลอดชีวิต lung และ sweat gland ร่วม",tx:"NaCl ขนาดสูง, K binder",mimic:"amil"},
+  fhhnc:{name:"FHHNC",gene:"CLDN16/CLDN19 AR",seg:"TAL",block:["CLDN"],labs:["N","N","N","↑↑","↓↓","N","N"],extra:"Nephrocalcinosis CKD ก้าวหน้า CLDN19 มีตาผิดปกติ",tx:"Mg เสริม thiazide ลด hypercalciuria (ไม่หยุด CKD)",mimic:"none"},
+  east:{name:"EAST/SeSAME",gene:"KCNJ10 (Kir4.1) AR",seg:"DCT",block:["Kir41"],labs:["N","↓","↑","↓","↓","↑","↑"],extra:"Epilepsy, ataxia, sensorineural deafness + Gitelman-like",tx:"K, Mg, รักษาทางระบบประสาท",mimic:"thz"},
+  dent:{name:"Dent disease",gene:"CLCN5 (ClC-5) หรือ OCRL X-linked",seg:"PT",block:["MEG"],labs:["N","N/↓","N","↑↑","N","N","N"],extra:"LMW proteinuria (β2M), hypercalciuria, nephrocalcinosis, CKD ในชาย",tx:"Thiazide ลด Ca ในปัสสาวะ ระวัง hypovolemia",mimic:"none"},
+  drta:{name:"Distal RTA (genetic)",gene:"ATP6V1B1, ATP6V0A4 (AR) หรือ SLC4A1 (AD/AR)",seg:"OMCD",block:["HATP","AE1"],labs:["N","↓","↓↓","↑","N","N/↑","N/↑"],extra:"Urine pH > 5.5 ขณะ acidosis, nephrocalcinosis, ATP6V1B1 มี deafness",tx:"Alkali (citrate) ขนาดสูง แก้ K",mimic:"none"}
+};
+var MIM={loop:{name:"Loop diuretic",block:["NKCC2"],labs:["N/↓","↓","↑","↑","↓","↑","↑"]},thz:{name:"Thiazide",block:["NCC"],labs:["N/↓","↓","↑","↓","↓","↑","↑"]},spiro:{name:"Spironolactone",block:["MR"],labs:["↓","↑","↓","N","N","↑","↑"]},amil:{name:"Amiloride",block:["ENaC"],labs:["↓","↑","↓","N","N","↑","↑"]}};
+var ROWS=["BP","Serum K","HCO3","Urine Ca","Serum Mg","Renin","Aldosterone"];
+var ORDER=["b1","b4a","adh1","git","gor","lid","ame","pha1r","pha1s","fhhnc","east","dent","drta"];
+var TK={
+  b1:["Bartter = defect ที่ TAL เหมือนได้ loop diuretic ตลอดเวลา","Urine Ca สูง ช่วยแยกจาก Gitelman (Ca ต่ำ)","Antenatal Bartter มี polyhydramnios และ nephrocalcinosis"],
+  b4a:["Barttin จำเป็นต่อ ClC-Ka และ ClC-Kb ทั้งในไตและหู","Bartter + deafness = BSND (หรือ CLCNKA + CLCNKB ร่วม)","เป็น Bartter ที่รุนแรงและเกิด CKD ได้"],
+  adh1:["CaSR gain ที่ TAL ยับยั้ง ROMK และ paracellular Ca/Mg","Hypocalcemia + PTH ต่ำ + Ca ในปัสสาวะสูง","ให้ Ca/vitamin D เต็มที่จะทำให้ nephrocalcinosis"],
+  git:["Gitelman = NCC loss เหมือนได้ thiazide","Hypocalciuria + hypomagnesemia เป็นจุดเด่น","ต้องแยกจาก diuretic abuse (urine diuretic screen) และ vomiting (urine Cl ต่ำ)"],
+  gor:["Gordon = ภาพกลับด้านของ Gitelman (NCC ทำงานมาก)","HT + hyperK + acidosis + GFR ปกติ + renin ต่ำ","ตอบสนองต่อ thiazide ขนาดต่ำอย่างชัดเจน"],
+  lid:["Liddle เลียนแบบ aldosterone excess แต่ renin และ aldosterone ต่ำ","ENaC ไม่ถูกย่อยสลายจาก Nedd4-2","รักษาด้วย ENaC blocker เท่านั้น"],
+  ame:["11β-HSD2 ป้องกัน MR จาก cortisol","Liquorice และ posaconazole ยับยั้ง 11β-HSD2 ทำให้เกิดภาพเดียวกัน","ตอบสนองต่อ MRA ต่างจาก Liddle"],
+  pha1r:["PHA1: aldosterone สูงมากแต่ไตไม่ตอบสนอง","Renal AD (MR) อาการน้อยลงตามอายุ","Systemic AR (ENaC) รุนแรงกว่าและเป็นตลอดชีวิต"],
+  pha1s:["ENaC loss ทำให้ salt wasting และ hyperK รุนแรง","เหมือนได้ amiloride ขนาดสูงตลอดเวลา","มีอาการปอดและต่อมเหงื่อร่วม"],
+  fhhnc:["Claudin-16/19 เป็นช่องทาง paracellular ของ Mg และ Ca ที่ TAL","Hypomagnesemia + hypercalciuria + nephrocalcinosis","CKD ก้าวหน้าแม้รักษา"],
+  east:["Kir4.1 ที่ basolateral DCT รีไซเคิล K ให้ Na/K-ATPase","ภาพไตเหมือน Gitelman ร่วมกับอาการทางสมองและหู","อาการระบบประสาทเด่นตั้งแต่เด็ก"],
+  dent:["Dent: LMW proteinuria + hypercalciuria + nephrocalcinosis ในชาย","β2M หรือ RBP ในปัสสาวะสูงมาก","Lowe syndrome (OCRL) มีต้อกระจกและพัฒนาการช้า"],
+  drta:["dRTA: ขับ H+ ที่ α-intercalated cell ไม่ได้ urine pH > 5.5 ขณะ acidosis","ATP6V1B1 มี deafness SLC4A1 พบใน Southeast Asian ovalocytosis","Alkali ป้องกัน nephrocalcinosis และช่วย growth"]
+};
+var S={};
+ORDER.forEach(function(k){ var d=DZ[k]; S[k]={name:d.name,p:{k:k,cmp:d.mimic&&d.mimic!=="none"?"m:"+d.mimic:(k==="git"?"b1":k==="lid"?"ame":k==="gor"?"git":k==="ame"?"lid":"git")},rows:[["Gene",d.gene],["Segment",Nephron.seg(d.seg).name],["Clue",d.extra]],take:TK[k]}; });
+
+var box=document.getElementById("ctls");
+var dz=Sim.h("select",{id:"sdz"},ORDER.map(function(k){ return Sim.h("option",{value:k,text:DZ[k].name}); }));
+var cmp=Sim.h("select",{id:"scmp"},[Sim.h("option",{value:"",text:"ไม่เทียบ"})].concat(Object.keys(MIM).map(function(k){ return Sim.h("option",{value:"m:"+k,text:"ยา: "+MIM[k].name}); })).concat(ORDER.map(function(k){ return Sim.h("option",{value:k,text:DZ[k].name}); })));
+dz.addEventListener("change",function(){ cur=DZ[dz.value].seg; update(); }); cmp.addEventListener("change",update);
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"sdz",text:"โรค"}),dz]));
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"scmp",text:"เทียบกับ"}),cmp]));
+
+var cur="TAL";
+var map=Nephron.map("map",{selected:cur,onSelect:function(s){ cur=s; drawCell(); }});
+var cell=Nephron.cell("cell",cur,{});
+function drawCell(){ var d=DZ[dz.value]; cell.update(cur,{blocked:d.block||[],gain:d.gain||[]}); }
+function cls(v){ return /↑/.test(v)?"up":/↓/.test(v)?"dn":""; }
+function update(){
+  var d=DZ[dz.value], c=cmp.value, other=null, oname="";
+  if(c.indexOf("m:")===0){ other=MIM[c.slice(2)]; oname=other.name; } else if(c){ other=DZ[c]; oname=other.name; }
+  map.select(cur); map.block(d.block||[]); map.gain(d.gain||[]); map.highlight([d.seg],"#FFDE59");
+  drawCell();
+  var t=document.getElementById("cmp"); t.innerHTML="";
+  t.appendChild(Sim.h("tr",{},[Sim.h("th",{text:""}),Sim.h("th",{text:d.name})].concat(other?[Sim.h("th",{text:oname})]:[])));
+  ROWS.forEach(function(r,i){
+    var a=d.labs[i], b=other?other.labs[i]:null, diff=other&&a!==b;
+    var tr=Sim.h("tr",{},[Sim.h("td",{text:r}),Sim.h("td",{class:cls(a)+(diff?" diff":""),text:a})].concat(other?[Sim.h("td",{class:cls(b)+(diff?" diff":""),text:b})]:[]));
+    t.appendChild(tr);
+  });
+  t.appendChild(Sim.h("tr",{},[Sim.h("td",{text:"Gene"}),Sim.h("td",{text:d.gene,style:"font-size:12px"})].concat(other?[Sim.h("td",{text:other.gene||"ยา",style:"font-size:12px"})]:[])));
+  var act=document.getElementById("act");
+  act.innerHTML="<b>Clue:</b> "+d.extra+"<br><b>Treatment:</b> "+d.tx+(d.mimic&&d.mimic!=="none"?"<br><b>Drug mimic:</b> "+MIM[d.mimic].name:"");
+}
+Sim.mount({code:"EL-07", title:"Tubulopathy Genetics on the Nephron", lead:"เลือกโรคพันธุกรรมของท่อไต ดูว่า transporter ตัวไหนเสียหรือทำงานเกินบน nephron แล้วเทียบ lab pattern กับยาที่เลียนแบบหรือโรคที่ต้องแยก",
+  scenarios:S, order:ORDER, captureMs:1000,
+  onChange:function(k,s){ dz.value=s.p.k; cmp.value=s.p.cmp; cur=DZ[k].seg; update(); },
+  refs:["Seyberth HW, Schlingmann KP. Bartter- and Gitelman-like syndromes: salt-losing tubulopathies with loop or DCT defects. Pediatr Nephrol 2011, 26(10): 1789-1802",
+        "Blanchard A, Bockenhauer D, Bolignano D, et al. Gitelman syndrome: consensus and guidance from a KDIGO Controversies Conference. Kidney Int 2017, 91(1): 24-33",
+        "Konrad M, Nijenhuis T, Ariceta G, et al. Diagnosis and management of Bartter syndrome: executive summary of the consensus and recommendations from the European Rare Kidney Disease Reference Network Working Group for Tubular Disorders. Kidney Int 2021, 99(2): 324-335",
+        "Downie ML, Lopez Garcia SC, Kleta R, Bockenhauer D. Inherited tubulopathies of the kidney: insights from genetics. Clin J Am Soc Nephrol 2021, 16(4): 620-630"],
+  note:"Lab pattern เป็นภาพรวมที่พบบ่อย ผู้ป่วยจริงแปรผันตาม genotype อายุ และการรักษา ลูกศร ↑↑/↓↓ คือเด่นชัดเป็นพิเศษ"
+});
+})();
+</script>
+</body>
+</html>

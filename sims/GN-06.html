@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[GN-06] Membranous Nephropathy and the Anti-PLA2R Trajectory</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.bench{grid-template-columns:1.3fr 1fr}
+@media (max-width:900px){.bench{grid-template-columns:1fr}}
+.sel{display:grid;grid-template-columns:minmax(100px,130px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px;margin:6px 0}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.readout{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:520px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.readout .ro b{font-size:clamp(18px,2vw,24px)}
+.risk{display:flex;gap:6px;margin-top:12px}
+.risk div{flex:1;text-align:center;padding:7px 4px;border-radius:9px;background:var(--canvas);font:500 12.5px var(--body);color:var(--muted)}
+.risk div.on{background:var(--ink);color:#fff}
+.risk div.on.hi{background:var(--red)}
+.vte{margin-top:10px;padding:10px 14px;border-radius:12px;border:1px solid var(--line);font-size:14px}
+.act{margin-top:10px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b,.vte b{font-weight:600}
+.pair{display:grid;grid-template-columns:1fr 1.4fr;gap:12px;align-items:center}
+@media (max-width:560px){.pair{grid-template-columns:1fr}}
+.neg{display:none;padding:14px 16px;border:1px dashed var(--line-strong);border-radius:12px;font-size:14px;color:var(--muted);margin-bottom:6px}
+body.present .bench{grid-template-columns:1.25fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .act,body.present .pair{display:none}
+body.present .card{padding:14px 18px}
+body.present .ctls{grid-template-columns:1fr 1fr;column-gap:22px}
+body.present .readout .ro{padding:6px 10px}
+body.present .vte{margin-top:6px;padding:6px 12px;font-size:13px}
+body.present .sel{margin:2px 0}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Antibody หายก่อน แล้ว proteinuria จึงลดตาม</h2>
+      <div id="chart"></div>
+      <div class="neg" id="neg">Anti-PLA2R ลบ ติดตามด้วย proteinuria และสาเหตุ (HBV DNA หรือการรักษามะเร็ง)</div>
+      <div class="panel-gap"></div>
+      <div id="uchart"></div>
+      <p class="takeaway" id="tk"></p>
+      <details class="more"><summary>ภาพ capillary wall ที่เดือน 12</summary><div class="more-body"><div class="pair">
+        <div class="svgwrap"><svg id="loop" aria-label="Membranous capillary wall"></svg></div>
+        <p class="hint">Proteinuria ลดตามหลัง antibody หลายเดือนเพราะ podocyte ต้องซ่อมและ subepithelial deposit ต้องถูก resorb ภาพแสดงจำนวน deposit ณ เดือนที่ 12</p>
+      </div></div></details>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วยและการรักษา</h2>
+      <div class="sel"><label for="sEt">สาเหตุ</label><select id="sEt">
+        <option value="pla2r">Primary MN, anti-PLA2R</option><option value="thsd7a">Primary MN, THSD7A</option>
+        <option value="hbv">HBV-associated MN</option><option value="cancer">Malignancy-associated (NELL1/THSD7A)</option></select></div>
+      <div class="sel"><label for="sTx">การรักษา</label><select id="sTx">
+        <option value="sup">Supportive (RAASi, SGLT2i) อย่างเดียว</option><option value="rtx">Rituximab</option><option value="cyc">Cyclophosphamide + steroid</option>
+        <option value="cni">Tacrolimus 12 เดือน แล้วหยุด</option><option value="rtxcni">Rituximab + tacrolimus</option><option value="obi">Obinutuzumab</option>
+        <option value="av">Antiviral (entecavir/tenofovir)</option><option value="ca">รักษามะเร็ง</option></select></div>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools"></div>
+      <div class="risk" id="risk"></div>
+      <div class="readout" style="margin-top:12px">
+        <div class="ro" id="roImm"><b>-</b><span>Seronegative เดือนที่</span></div>
+        <div class="ro" id="roR12"><b>-</b><span>Response 12 mo</span></div>
+        <div class="ro" id="roR24"><b>-</b><span>Response 24 mo</span></div>
+        <div class="ro" id="roE"><b>-</b><span id="roEs">eGFR 24 mo</span></div>
+      </div>
+      <div class="vte" id="vte"></div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/patho.js"></script>
+<script>
+(function(){
+"use strict";
+/* Teaching model (months 0-24, dt 0.05)
+   Activity A(t) (antigen-specific antibody, 1 = baseline). Titre = T0 x A (floor 1), seronegative < 14 RU/mL.
+   Spontaneous decay per month (primary MN): 0.12 if T0 < 50, 0.05 if 50-150, 0.01 if > 150. HBV 0.02, cancer 0.
+   Treatment decay rate after a delay: rituximab 0.55 (delay 1 mo), cyclophosphamide 0.8 (0.3), tacrolimus 0.3 while on then rebound to 60% of baseline,
+   rituximab + tacrolimus 0.7 (0.5), obinutuzumab 0.8 (0.5), antiviral 0.25 (HBV only), cancer therapy 0.35 (cancer only). Rituximab resistance cuts rituximab to 0.05.
+   Proteinuria target = 0.25 + (UP0 - 0.25) x [A/(A + 0.15)] x 1.15, approached with tau 3.5 mo, x0.7 while on tacrolimus (haemodynamic).
+   Albumin (g/dL) = 4.4 - 0.32 x UP, eGFR falls 0.35 mL/min per month per g above 3.5 plus 0.1 mL/min per month. */
+var RATE = {sup:0, rtx:0.55, cyc:0.8, cni:0.3, rtxcni:0.7, obi:0.8, av:0.25, ca:0.35};
+var DELAY = {sup:0, rtx:1, cyc:0.3, cni:0.2, rtxcni:0.5, obi:0.5, av:0.5, ca:1};
+function spont(et, T0){ if(et === "hbv") return 0.02; if(et === "cancer") return 0; return T0 < 50 ? 0.12 : T0 <= 150 ? 0.05 : 0.01; }
+function simulate(p, tx){
+  var A = 1, UP = p.up0, E = p.egfr0, dt = 0.05, out = {T:[], U:[], E:[], imm:null, relapse:false, nephMonths:0};
+  var primary = p.et === "pla2r" || p.et === "thsd7a";
+  var r = RATE[tx];
+  if((tx === "av" && p.et !== "hbv") || (tx === "ca" && p.et !== "cancer")) r = 0;
+  if(!primary && (tx === "rtx" || tx === "cyc" || tx === "cni" || tx === "rtxcni" || tx === "obi")) r *= p.et === "hbv" ? 0.3 : 0.15;
+  if(p.rtxRes && (tx === "rtx" || tx === "rtxcni")) r = tx === "rtx" ? 0.05 : 0.3;
+  var s0 = spont(p.et, p.T0);
+  for(var i = 0; i <= 480; i++){
+    var t = i * dt, on = t >= DELAY[tx];
+    var cniOn = (tx === "cni" || tx === "rtxcni") && t < 12;
+    if(i % 5 === 0){ out.T.push([+t.toFixed(2), Math.max(1, p.T0 * A)]); out.U.push([+t.toFixed(2), +UP.toFixed(2)]); out.E.push([+t.toFixed(2), +E.toFixed(1)]); }
+    var k = s0 + (on ? r : 0);
+    if(tx === "cni" && t >= 12){ k = A < 0.6 ? -0.45 : 0; }
+    A = Math.max(0.002, A * Math.exp(-k * dt));
+    if(p.T0 * A < 14 && out.imm === null && primary) out.imm = t;
+    var tgt = 0.25 + (p.up0 - 0.25) * (A / (A + 0.15)) * 1.15;
+    if(cniOn) tgt *= 0.7;
+    UP += (tgt - UP) / 3.5 * dt;
+    if(UP > 3.5) out.nephMonths += dt;
+    E += (-0.35 * Math.max(0, UP - 3.5) - 0.1) * dt;
+    if(t === 6) out.up6 = UP;
+    if(Math.abs(t - 6) < dt / 2) out.up6 = UP;
+    if(Math.abs(t - 12) < dt / 2){ out.up12 = UP; out.A12 = A; }
+    if(Math.abs(t - 24) < dt / 2){ out.up24 = UP; }
+  }
+  out.minUPafter12 = null;
+  if(tx === "cni" && out.up24 > out.up12 * 1.5 && out.up24 > 1) out.relapse = true;
+  out.E24 = E;
+  return out;
+}
+function resp(up, up0){ return up < 0.3 ? "CR" : (up < 3.5 && up <= up0 * 0.5) ? "PR" : "None"; }
+function risk(p){
+  if(p.veryhigh) return 3;
+  var alb = 4.4 - 0.32 * p.up0;
+  if(p.egfr0 < 60 || p.up0 > 8 || (p.up0 > 3.5 && alb < 2.5 && p.et === "pla2r" && p.T0 > 50)) return 2;
+  if(p.up0 > 4) return 1;
+  return 0;
+}
+var RISKN = ["Low", "Moderate", "High", "Very high"];
+
+/* ---------- charts (rule v6: two stacked panels on one month axis, linear scales, end labels, callouts) ---------- */
+var K = Plot.colors, NARROW = window.innerWidth < 600 && !Sim.present, PAD = {padL:48, padR:NARROW ? 78 : 112};
+var ch = Plot.chart(document.getElementById("chart"), {height:Sim.present ? 150 : 140, aria:"Anti-PLA2R titer over 24 months", padL:PAD.padL, padR:PAD.padR, xAxis:false,
+  x:{min:0, max:24, step:3}, y:{min:0, max:150, ticks:3, label:"Anti-PLA2R (RU/mL)", labelPos:"top", color:K.accent},
+  series:[{id:"T", name:"Anti-PLA2R", color:K.accent, data:[], width:2.6, fill:{to:0}, fillColor:"rgba(91,75,255,0.08)", unit:"RU/mL", fmt:function(v){ return v.toFixed(0); }}],
+  legend:false});
+var ch2 = Plot.chart(document.getElementById("uchart"), {height:Sim.present ? 220 : 220, aria:"Proteinuria over 24 months", padL:PAD.padL, padR:PAD.padR,
+  x:{min:0, max:24, step:NARROW ? 6 : 3, label:"Month"}, y:{min:0, max:8, label:"Proteinuria (g/d)", labelPos:"top", color:K.red},
+  series:[{id:"Uu", name:"Supportive only", color:K.muted, dash:[5,4], data:[], width:1.6, endLabel:NARROW ? "No Rx" : "Supportive only", unit:"g/d", fmt:function(v){ return v.toFixed(1); }},
+          {id:"U", name:"Treated", color:K.red, data:[], width:3, endLabel:"This plan", unit:"g/d", fmt:function(v){ return v.toFixed(1); }}],
+  legend:false});
+Plot.link([ch, ch2]);
+function cross(D, thr){ for(var i = 1; i < D.length; i++) if(D[i-1][1] >= thr && D[i][1] < thr) return D[i][0]; return null; }
+
+/* ---------- controls ---------- */
+var box = document.getElementById("ctls"), C = {};
+function add(k, o){ o.onInput = update; C[k] = Sim.slider(o); box.appendChild(C[k].el); }
+add("T0", {id:"sT", label:"Anti-PLA2R baseline", min:0.7, max:3.2, step:0.02, value:2, unit:"RU/mL", fmt:function(v){ return Math.round(Math.pow(10, v)); }});
+add("up0", {id:"sU", label:"Proteinuria baseline", min:1, max:15, step:0.5, value:6, unit:"g/d"});
+add("egfr0", {id:"sE", label:"eGFR baseline", min:15, max:120, step:1, value:85, unit:""});
+var sEt = document.getElementById("sEt"), sTx = document.getElementById("sTx");
+sEt.addEventListener("change", update); sTx.addEventListener("change", update);
+var rtxRes = false, veryhigh = false, bleed = false;
+var tools = document.getElementById("tools");
+var tRes = Sim.toggle("Rituximab resistance / anti-drug Ab", function(on){ rtxRes = on; update(); }, false);
+var tVh = Sim.toggle("Life-threatening NS หรือ eGFR ลดเร็ว", function(on){ veryhigh = on; update(); }, false);
+var tBl = Sim.toggle("Bleeding risk สูง", function(on){ bleed = on; update(); }, false);
+[tRes, tVh, tBl].forEach(function(b){ tools.appendChild(b); });
+function P(){ return {et:sEt.value, tx:sTx.value, T0:Math.round(Math.pow(10, C.T0.get())), up0:C.up0.get(), egfr0:C.egfr0.get(), rtxRes:rtxRes, veryhigh:veryhigh}; }
+var loop = Patho.loop("loop", {labels:false});
+
+function update(){
+  var p = P(), A = simulate(p, p.tx), U = simulate(p, "sup");
+  var isP = p.et === "pla2r";
+  C.T0.el.style.opacity = isP ? 1 : 0.4;
+  document.getElementById("chart").style.display = isP ? "" : "none";
+  document.getElementById("neg").style.display = isP ? "none" : "block";
+  var tmax = 0; A.T.forEach(function(q){ tmax = Math.max(tmax, q[1]); });
+  tmax = tmax > 300 ? Math.ceil(tmax * 1.1 / 100) * 100 : Math.ceil(tmax * 1.15 / 25) * 25;
+  var t35 = p.up0 > 3.5 ? cross(A.U, 3.5) : null, tCR = cross(A.U, 0.3), imm = isP ? A.imm : null;
+  var lag = (imm !== null && t35 !== null && t35 > imm) ? [{x0:imm, x1:t35, color:"rgba(91,75,255,0.09)"}] : [];
+  ch.update({y:{min:0, max:tmax, ticks:2, label:"Anti-PLA2R (RU/mL)", labelPos:"top", color:K.accent},
+    hlines:[{y:14, label:"Negative < 14", color:K.teal, dash:[3,4]}], xbands:lag,
+    callouts:imm !== null && imm > 0.05 ? [{x:imm, y:14, text:"Negative: month " + imm.toFixed(1), color:K.accent, dx:imm > 16 ? -60 : 70, dy:-24}] : []});
+  ch.setSeries("T", isP ? A.T : []);
+  var umax = Math.max(8, Math.ceil(p.up0 + 1));
+  var CO = [];
+  if(t35 !== null) CO.push({x:t35, y:3.5, text:"< 3.5 g: month " + t35.toFixed(1), color:K.red, dx:t35 > 16 ? -60 : 70, dy:-26});
+  if(tCR !== null) CO.push({x:tCR, y:0.3, text:"Complete remission: month " + tCR.toFixed(1), color:K.teal, dx:tCR > 14 ? -80 : 90, dy:-28});
+  if(A.relapse){ var tr = 12; for(var i = 0; i < A.U.length; i++) if(A.U[i][0] > 12 && A.U[i][1] > A.up12 * 1.3){ tr = A.U[i][0]; break; } CO.push({x:tr, y:Plot.valueAt(A.U, tr), text:"Relapse after stopping CNI", color:K.red, dx:-40, dy:-30}); }
+  ch2.update({y:{min:0, max:umax, label:"Proteinuria (g/d)", labelPos:"top", color:K.red}, xbands:lag.length ? [{x0:lag[0].x0, x1:lag[0].x1, color:lag[0].color, label:"Lag"}] : [],
+    bands:[{y0:3.5, y1:umax, color:"rgba(180,35,42,0.06)", label:"Nephrotic", mid:true}, {y0:0, y1:0.3, color:"rgba(31,122,114,0.12)"}],
+    callouts:CO});
+  ch2.setSeries("U", A.U); ch2.setSeries("Uu", p.tx === "sup" ? [] : U.U);
+  /* one-line reading */
+  var tk = "";
+  if(isP && imm === null) tk = "Anti-PLA2R <b>ไม่ลงถึง &lt; 14</b> ภายใน 24 เดือน proteinuria จึงไม่ลดตาม antibody คือตัวขับโรค ต้องเปลี่ยนการรักษาก่อนรอดู proteinuria";
+  else if(isP){
+    tk = "Antibody ลบที่เดือน <b class=\"num\">" + imm.toFixed(1) + "</b> ";
+    var cniTx = p.tx === "cni" || p.tx === "rtxcni";
+    if(t35 !== null && t35 - imm >= 0.5) tk += "แต่ proteinuria ต่ำกว่า 3.5 g ที่เดือน <b class=\"num\">" + t35.toFixed(1) + "</b> ช้ากว่า <b>" + (t35 - imm).toFixed(1) + " เดือน</b> ";
+    else if(t35 !== null && cniTx) tk += "ส่วน proteinuria ลดลงเร็วพอๆ กันหรือเร็วกว่า เพราะ tacrolimus ลด proteinuria ทาง hemodynamic ด้วย ";
+    else if(t35 !== null) tk += "และ proteinuria ต่ำกว่า 3.5 g ที่เดือน <b class=\"num\">" + t35.toFixed(1) + "</b> ";
+    else if(p.up0 <= 3.5) tk += "proteinuria ค่อยๆ ลดตามหลัง ";
+    else tk += "แต่ proteinuria ยังไม่ต่ำกว่า 3.5 g ใน 24 เดือน ";
+    if(A.relapse) tk += "แต่หลังหยุดยาเดือนที่ 12 proteinuria กลับขึ้นและ titer กลับมาบวก remission จาก CNI เดี่ยวจึงไม่คงทน";
+    else if(t35 !== null && t35 > 6 && imm < 6) tk += "ถ้าตัดสินจาก proteinuria ที่ 6 เดือนจะคิดว่ายาล้มเหลวทั้งที่ immunological remission แล้ว";
+    else tk += "เพราะ podocyte และ deposit ต้องใช้เวลาซ่อม";
+  } else {
+    tk = (t35 !== null ? "Proteinuria ต่ำกว่า 3.5 g ที่เดือน <b class=\"num\">" + t35.toFixed(1) + "</b> " : "Proteinuria <b>ไม่ลด</b> ") + (p.et === "hbv" ? (p.tx === "av" ? "เมื่อคุม HBV ได้" : "เพราะยังไม่ได้รักษา HBV") : (p.tx === "ca" ? "เมื่อรักษามะเร็ง" : "เพราะยังไม่ได้รักษาที่สาเหตุ"));
+  }
+  document.getElementById("tk").innerHTML = tk;
+  var rk = risk(p), rdiv = document.getElementById("risk"); rdiv.innerHTML = "";
+  RISKN.forEach(function(n, i){ rdiv.appendChild(Sim.h("div", {class:(i === rk ? "on" : "") + (i === rk && i >= 2 ? " hi" : ""), text:n + " risk"})); });
+  Sim.ro("roImm", !isP ? "n/a" : A.imm === null ? "ไม่ถึง" : A.imm === 0 ? "0" : A.imm.toFixed(1), !isP ? null : A.imm === null ? "flag" : "ok");
+  var r12 = resp(A.up12, p.up0), r24 = resp(A.up24, p.up0);
+  Sim.ro("roR12", r12, r12 === "None" ? "flag" : "ok");
+  Sim.ro("roR24", A.relapse ? "Relapse" : r24, A.relapse || r24 === "None" ? "flag" : "ok");
+  Sim.ro("roE", Math.round(A.E24), A.E24 < p.egfr0 - 15 ? "flag" : "ok");
+  document.getElementById("roEs").textContent = "eGFR 24 mo" + (p.tx === "sup" ? "" : " (supportive " + Math.round(U.E24) + ")");
+  // capillary wall at month 12
+  var dep = Math.max(1, Math.round(10 * Math.min(1, A.A12 * 1.5 + (A.up12 > 3.5 ? 0.3 : 0))));
+  loop.update({deposits:[{site:A.A12 < 0.1 && A.up12 < 1 ? "intramembranous" : "subepi", n:dep}], spikes:A.A12 > 0.1, effacement:Math.min(0.95, A.up12 / 8), title:"Month 12"});
+  // VTE
+  var alb = 4.4 - 0.32 * p.up0, vte = document.getElementById("vte");
+  var vt = alb < 2.0 ? (bleed ? "Albumin " + alb.toFixed(1) + " g/dL เสี่ยง VTE สูงแต่ bleeding risk สูง: พิจารณา aspirin หรือ prophylactic dose และทบทวนบ่อย" : "Albumin " + alb.toFixed(1) + " g/dL เสี่ยง VTE สูง: ให้ therapeutic anticoagulation (warfarin หรือ LMWH) จน albumin > 2.5–3.0")
+    : alb < 3.0 ? "Albumin " + alb.toFixed(1) + " g/dL: ประเมินด้วย VTE และ bleeding risk tool ส่วนมากให้ aspirin หรือ prophylactic anticoagulation ถ้า bleeding risk ต่ำ" : "Albumin " + alb.toFixed(1) + " g/dL: ไม่ต้อง prophylactic anticoagulation";
+  vte.innerHTML = "<b>VTE:</b> " + vt;
+  // next step
+  var n = "";
+  if(p.et === "hbv") n = p.tx === "av" ? "Antiviral คือการรักษาหลัก proteinuria ลดตาม HBV DNA ห้ามให้ rituximab หรือ steroid โดยไม่มี antiviral เพราะ HBV reactivation" : "HBV-associated MN ต้องเริ่ม entecavir หรือ tenofovir ก่อน immunosuppression ทำให้ HBV reactivation";
+  else if(p.et === "cancer") n = p.tx === "ca" ? "รักษามะเร็งแล้ว proteinuria ลดตาม ติดตาม antigen-specific staining เพื่อแยก primary จาก secondary" : "MN ที่ PLA2R ลบ อายุมาก หรือ NELL1/THSD7A ต้องคัดกรองมะเร็งตามอายุและอาการ การรักษามะเร็งช่วย MN มากกว่า immunosuppression";
+  else if(rk === 0 && p.tx !== "sup") n = "Low risk: ให้ supportive care และติดตาม 6 เดือนก่อน immunosuppression เพราะ spontaneous remission พบบ่อยเมื่อ titer ต่ำ";
+  else if(rk === 0) n = "Low risk: supportive care (RAASi เต็มขนาด, คุมความดัน, statin ถ้าจำเป็น) ติดตาม titer และ proteinuria ทุก 3 เดือน";
+  else if(p.tx === "sup") n = RISKN[rk] + " risk: ควรเริ่ม immunosuppression " + (rk === 1 ? "(rituximab หรือ CNI ± rituximab หรือ cyclophosphamide)" : rk === 2 ? "(rituximab หรือ cyclophosphamide + steroid หรือ rituximab + CNI)" : "(cyclophosphamide + steroid)") + " เพราะ titer สูงลดเองช้าและ eGFR ลดตาม nephrotic months";
+  else if(isP && A.imm === null) n = "Titer ไม่ลงหลัง 3–6 เดือน: ตรวจ CD19 count, ระดับ rituximab และ anti-rituximab antibody แล้วเปลี่ยนเป็น obinutuzumab หรือ cyclophosphamide";
+  else if(A.relapse) n = "Relapse หลังหยุด CNI: titer กลับขึ้นนำ proteinuria ให้ rituximab หรือ cyclophosphamide เพราะ CNI เดี่ยว relapse บ่อย";
+  else n = "ตรวจ titer ทุก 3 เดือน titer ที่ลดลงนำ proteinuria หลายเดือน ไม่ต้องเพิ่มยาถ้า seronegative แม้ proteinuria ยังสูง รอได้ถึง 12–24 เดือน ถ้า titer กลับขึ้นให้ re-treat ก่อน proteinuria ขึ้น";
+  if(rk === 3 && p.tx !== "cyc" && p.et === "pla2r") n += " Very high risk ควรใช้ cyclophosphamide + steroid";
+  document.getElementById("act").innerHTML = "<b>Next step:</b> " + n;
+}
+var S = {
+  low:{name:"Low risk, titer ต่ำ", p:{et:"pla2r", tx:"sup", T0:35, up0:3.8, egfr0:96},
+    rows:[["Patient","ชาย 48 ปี proteinuria 3.8 g/d albumin 3.2 eGFR 96"],["Anti-PLA2R","35 RU/mL"],["Risk","Low"],["Plan","Supportive care ติดตาม 6 เดือน"]],
+    take:["Titer ต่ำมีโอกาส spontaneous remission สูง","Low risk ให้ supportive care อย่างน้อย 6 เดือนก่อน immunosuppression","Titer ที่ลดลงทำนาย remission ก่อน proteinuria"]},
+  mod:{name:"Moderate risk, rituximab", p:{et:"pla2r", tx:"rtx", T0:120, up0:5.5, egfr0:82},
+    rows:[["Patient","ชาย 55 ปี proteinuria 5.5 g/d หลัง supportive 6 เดือน ไม่ลด 50%"],["Anti-PLA2R","120 RU/mL"],["Risk","Moderate"],["Plan","Rituximab 1 g x 2"]],
+    take:["Rituximab ทำให้ titer ลดภายใน 3–6 เดือน","Proteinuria ลดตามหลัง titer หลายเดือน ต้องรอก่อนตัดสินว่าล้มเหลว","Immunological remission ตอน 6 เดือนทำนาย clinical remission"]},
+  high:{name:"High risk, cyclophosphamide", p:{et:"pla2r", tx:"cyc", T0:420, up0:11, egfr0:52},
+    rows:[["Patient","ชาย 64 ปี proteinuria 11 g/d eGFR 52 albumin 1.4"],["Anti-PLA2R","420 RU/mL"],["Risk","High"],["Plan","Cyclophosphamide + steroid (modified Ponticelli)"]],
+    take:["Titer สูงมากและ eGFR ลด เป็น high risk","Cyclophosphamide ทำให้ titer ลดเร็วที่สุดแต่มีพิษสะสม","Albumin < 2.0 ต้องให้ anticoagulation ถ้า bleeding risk ต่ำ"]},
+  res:{name:"Rituximab-resistant", p:{et:"pla2r", tx:"rtx", T0:300, up0:9, egfr0:70, res:true},
+    rows:[["Patient","หญิง 50 ปี ได้ rituximab 6 เดือน titer ไม่ลด"],["Anti-PLA2R","300 → 280 RU/mL"],["Check","CD19 กลับเร็ว, anti-rituximab antibody"],["Plan","เปลี่ยนเป็น obinutuzumab หรือ cyclophosphamide"]],
+    take:["Titer ไม่ลดหลัง rituximab 6 เดือนคือ immunological resistance","Massive proteinuria ทำให้ rituximab หลุดออกทางปัสสาวะ","Obinutuzumab หรือ cyclophosphamide เป็นทางเลือกถัดไป"]},
+  cni:{name:"CNI แล้ว relapse", p:{et:"pla2r", tx:"cni", T0:110, up0:5.5, egfr0:88},
+    rows:[["Patient","ชาย 45 ปี ได้ tacrolimus 12 เดือนแล้วหยุด"],["Anti-PLA2R","110 RU/mL"],["Course","Remission ระหว่างใช้ยา relapse หลังหยุด"],["Plan","Rituximab หรือ cyclophosphamide"]],
+    take:["CNI ลด proteinuria เร็วส่วนหนึ่งจาก hemodynamic effect","Relapse หลังหยุด CNI พบบ่อย","Titer ขึ้นก่อน proteinuria เป็นสัญญาณเตือน relapse"]},
+  hbv:{name:"HBV-associated MN", p:{et:"hbv", tx:"av", T0:5, up0:5.5, egfr0:90},
+    rows:[["Patient","ชาย 38 ปี HBsAg บวก HBV DNA สูง nephrotic"],["Anti-PLA2R","ลบ"],["Biopsy","MN ที่มี HBeAg ใน deposit, mesangial deposit"],["Plan","Entecavir หรือ tenofovir"]],
+    take:["PLA2R ลบใน MN ต้องหา secondary cause","HBV-MN รักษาด้วย antiviral proteinuria ลดตาม viral suppression","ห้าม immunosuppression โดยไม่มี antiviral"]}
+};
+Sim.mount({code:"GN-06", title:"Membranous Nephropathy and the Anti-PLA2R Trajectory",
+  lead:"ปรับ titer, proteinuria, eGFR และการรักษา ดูว่า antibody หายก่อน proteinuria อย่างไร ระดับ risk เปลี่ยนการเลือกยาอย่างไร และเมื่อไรต้องให้ anticoagulant",
+  scenarios:S, order:["low","mod","high","res","cni","hbv"], captureMs:1000,
+  onChange:function(k, s){ var q = s.p; sEt.value = q.et; sTx.value = q.tx; C.T0.set(Math.log10(q.T0)); C.up0.set(q.up0); C.egfr0.set(q.egfr0); rtxRes = !!q.res; tRes.setState(rtxRes); veryhigh = false; tVh.setState(false); bleed = false; tBl.setState(false); update(); },
+  refs:["KDIGO 2021 Clinical Practice Guideline for the Management of Glomerular Diseases. Kidney Int 2021, 100(4S): S1-S276",
+        "Fervenza FC, Appel GB, Barbour SJ, et al. Rituximab or cyclosporine in the treatment of membranous nephropathy (MENTOR). N Engl J Med 2019, 381(1): 36-46",
+        "Scolari F, Delbarba E, Santoro D, et al. Rituximab or cyclophosphamide in the treatment of membranous nephropathy: the RI-CYCLO randomized trial. J Am Soc Nephrol 2021, 32(4): 972-982",
+        "Fernández-Juárez G, Rojas-Rivera J, van de Logt AE, et al. The STARMEN trial indicates that alternating treatment with corticosteroids and cyclophosphamide is superior to sequential treatment with tacrolimus and rituximab in primary membranous nephropathy. Kidney Int 2021, 99(4): 986-998",
+        "Ruggenenti P, Debiec H, Ruggiero B, et al. Anti-phospholipase A2 receptor antibody titer predicts post-rituximab outcome of membranous nephropathy. J Am Soc Nephrol 2015, 26(10): 2545-2558",
+        "van de Logt AE, Fresquet M, Wetzels JF, Brenchley P. The anti-PLA2R antibody in membranous nephropathy: what we know and what remains a decade after its discovery. Kidney Int 2019, 96(6): 1292-1302",
+        "Lee T, Biddle AK, Lionaki S, et al. Personalized prophylactic anticoagulation decision analysis in patients with membranous nephropathy. Kidney Int 2014, 85(6): 1412-1420"],
+  note:"Trajectory เป็นโมเดลเชิงคุณภาพเพื่อสอนลำดับเวลา (titer ลดก่อน proteinuria) ไม่ใช่การพยากรณ์รายบุคคล albumin คำนวณจาก proteinuria โดยประมาณ ตัด anti-PLA2R ที่ 14 RU/mL ตาม ELISA ทั่วไป"
+});
+})();
+</script>
+</body>
+</html>

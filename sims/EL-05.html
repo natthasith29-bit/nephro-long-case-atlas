@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[EL-05] Potassium Handling</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(120px,160px) 1fr 100px}
+.sel{display:grid;grid-template-columns:minmax(120px,160px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.bench{grid-template-columns:1.6fr 1fr}
+@media (max-width:900px){.bench{grid-template-columns:1fr}}
+.split{display:grid;grid-template-columns:0.55fr 1.45fr;gap:14px;align-items:start}
+#roMech b,#roShift b{font-size:17px}
+@media (max-width:760px){.split{grid-template-columns:1fr}}
+.grp{font:500 11.5px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin:10px 0 0}
+.readout{grid-template-columns:repeat(3,1fr)}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,1fr)}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+body.present .bench{grid-template-columns:1.5fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .grp{display:none}
+body.present .card{padding:16px 20px}
+body.present .ctls{gap:4px 16px;grid-template-columns:1fr 1fr}
+body.present .ctl{grid-template-columns:86px 1fr 62px;gap:6px;font-size:12px}
+body.present .ctl output{font-size:12px}
+body.present .sel{grid-template-columns:86px minmax(0,1fr);gap:6px;font-size:12px}
+body.present select{font-size:11.5px;padding:3px 6px}
+body.present .ro{padding:8px 12px}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>K handling ตลอด nephron และที่ principal cell</h2>
+      <div class="split">
+        <div id="map"></div>
+        <div id="cell"></div>
+      </div>
+      <p class="hint no-present">ซ้าย: ลูกศรคือ % ของ K ที่กรองถูกดูดกลับ (PT, TAL) และ % ที่ถูก secrete ใน CCD ขวา: principal cell ลูกศรหนาตามการทำงาน ✕ คือถูกยับยั้ง ▲ คือ gain-of-function K secretion ขึ้นกับ distal Na delivery และ flow, aldosterone, ENaC และ Mg</p>
+    </div>
+    <div class="card">
+      <h2>ปัจจัยที่กำหนด K</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roK"><b>-</b><span>Serum K ที่วัด</span></div>
+        <div class="ro" id="roUK"><b>-</b><span>Urine K (mmol/วัน)</span></div>
+        <div class="ro" id="roKC"><b>-</b><span>Urine K/Cr (mmol/mmol)</span></div>
+        <div class="ro" id="roTT"><b>-</b><span>TTKG (ประมาณ)</span></div>
+        <div class="ro" id="roShift"><b>-</b><span>Transcellular shift (mmol/L)</span></div>
+        <div class="ro" id="roMech"><b>-</b><span>กลไกหลัก</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/nephron.js"></script>
+<script>
+(function(){
+"use strict";
+function P(o){ var d={intake:80,gi:0,gfr:90,dist:1,aldo:1,drug:"none",mg:"n",ph:7.40,insulin:"no",beta:"no",pseudo:"no"}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  normal:{name:"ปกติ", p:P({}),
+    rows:[["ภาวะ","intake 80 mmol/วัน GFR ปกติ aldosterone ปกติ"],["ไต","PT และ TAL ดูดกลับราว 90% ของที่กรอง K ในปัสสาวะมาจากการ secrete ที่ CNT/CCD"],["ผล","K ราว 4.2"]],
+    take:["K ในปัสสาวะเกือบทั้งหมดมาจากการ secrete ที่ distal nephron","Secretion ต้องการ Na delivery + flow, aldosterone และ ENaC ที่ทำงาน","ไตปรับ K excretion ได้ช้า (ชั่วโมงถึงวัน) การ shift เข้าเซลล์ปกป้องในระยะสั้น"]},
+  loop:{name:"Loop diuretic hypokalemia", p:P({dist:2.3,aldo:1.8,drug:"loop"}),
+    rows:[["ยา","furosemide ขนาดสูง"],["กลไก","Na และน้ำถึง CCD มากขึ้น + aldosterone สูงจาก volume ลด"],["ผล","urine K สูง K/Cr > 2.5 hypoK"]],
+    take:["HypoK + urine K/Cr สูง = renal K loss","ยา diuretic + secondary hyperaldosteronism เป็นสาเหตุที่พบบ่อยที่สุด","แก้ Mg ร่วม และพิจารณาเพิ่ม K-sparing agent"]},
+  pa:{name:"Primary aldosteronism", p:P({aldo:3,dist:1.1}),
+    rows:[["ภาวะ","aldosterone สูงอิสระจาก renin HT"],["ไต","ENaC และ ROMK ทำงานมาก"],["ผล","hypoK, metabolic alkalosis, renin ต่ำ"]],
+    take:["HT + hypoK (โดยเฉพาะ spontaneous) ให้ตรวจ aldosterone/renin ratio","PA ส่วนใหญ่มี K ปกติ (hypoK พบเพียงราว 1 ใน 3 หรือน้อยกว่า)","MRA (spironolactone, eplerenone) แก้ hypoK ได้"]},
+  hypoaldo:{name:"Type 4 RTA (hyporeninemic)", p:P({aldo:0.3,gfr:40,ph:7.32}),
+    rows:[["ผู้ป่วย","DM CKD G3b + ACEi"],["กลไก","renin/aldosterone ต่ำ secretion ที่ CCD ลด"],["ผล","hyperK + normal AG acidosis urine K ต่ำ"]],
+    take:["HyperK + urine K ต่ำ = ไต secrete K ไม่พอ","Hyporeninemic hypoaldosteronism พบบ่อยใน DM และ CKD","รักษา: low K diet, loop/thiazide, K binder, แก้ acidosis, fludrocortisone ในบางราย"]},
+  tmp:{name:"TMP-SMX", p:P({drug:"tmp",gfr:60}),
+    rows:[["ยา","trimethoprim ขนาดสูง (เช่น PJP)"],["กลไก","trimethoprim บล็อก ENaC เหมือน amiloride"],["ผล","hyperK โดยเฉพาะเมื่อ GFR ลดหรือใช้ ACEi ร่วม"]],
+    take:["Trimethoprim, pentamidine บล็อก ENaC","Trimethoprim ยังยับยั้ง creatinine secretion (Cr ขึ้นโดย GFR ไม่เปลี่ยน)","ตรวจ K ภายใน 3–5 วันหลังเริ่มยาขนาดสูง"]},
+  liddle:{name:"Liddle syndrome", p:P({drug:"liddle",aldo:0.15}),
+    rows:[["ภาวะ","SCNN1B/G gain-of-function ENaC ไม่ถูกย่อยสลาย"],["ผล","HT, hypoK, alkalosis, renin และ aldosterone ต่ำ"],["รักษา","amiloride หรือ triamterene (spironolactone ไม่ได้ผล)"]],
+    take:["Liddle: เลียนแบบ aldosterone excess แต่ aldosterone ต่ำ","ตอบสนองต่อ ENaC blocker ไม่ตอบสนองต่อ MRA","แยกจาก AME (liquorice) ด้วย cortisol/cortisone และการตอบสนองต่อ spironolactone"]},
+  pseudo:{name:"Pseudohyperkalemia", p:P({pseudo:"yes"}),
+    rows:[["ผล lab","K 5.9 แต่ ECG ปกติ ไม่มีเหตุทางไต"],["สาเหตุ","hemolysis, กำมือขณะเจาะ, thrombocytosis, leukocytosis มาก"],["ยืนยัน","เจาะซ้ำไม่รัดสายนาน ใช้ plasma (heparin tube) หรือ blood gas"]],
+    take:["K สูงที่ไม่เข้ากับคลินิกต้องตัด pseudohyperK ก่อน","Plasma K ต่ำกว่า serum K > 0.4 ในเกล็ดเลือดสูง","อย่ารักษา hyperK จากค่าที่ hemolyzed"]},
+  dka:{name:"DKA: K ปกติทั้งที่ขาด K", p:P({ph:7.10,insulin:"def",intake:60,gi:20,dist:2.5,aldo:1.5}),
+    rows:[["ผู้ป่วย","DKA pH 7.10 osmotic diuresis อาเจียน"],["กลไก","ขาด insulin + hyperosmolality ดึง K ออกจากเซลล์ แต่ total body K ลดจากการเสียทางปัสสาวะ"],["ผล","K ปกติหรือสูงตอนแรก ลดลงเร็วเมื่อให้ insulin"]],
+    take:["Serum K ไม่สะท้อน total body K เมื่อมี shift","ให้ insulin แล้ว K ลดลงเร็ว ต้องเติม K ตั้งแต่ K < 5.0–5.3","ถ้า K < 3.5 ให้ K ก่อนเริ่ม insulin (ADA/EASD 2024 hyperglycemic crises consensus)"]}
+};
+var ORDER=["normal","loop","pa","hypoaldo","tmp","liddle","pseudo","dka"];
+var DRUG={none:{name:"ไม่มี",enac:1},loop:{name:"Loop diuretic",enac:1},thz:{name:"Thiazide",enac:1},amil:{name:"Amiloride",enac:0.15,block:["ENaC"]},tmp:{name:"Trimethoprim (high dose)",enac:0.35,block:["ENaC"]},spiro:{name:"Spironolactone",enac:1,mrBlock:true,block:["MR"]},acei:{name:"ACEi/ARB",enac:1,aldoX:0.6},liddle:{name:"Liddle (ENaC gain)",enac:2.6,gain:["ENaC"]}};
+
+var box=document.getElementById("ctls"), C={}, SEL={};
+function sel(k,label,opts){ var s=Sim.h("select",{id:"s"+k},opts.map(function(o){ return Sim.h("option",{value:o[0],text:o[1]}); })); s.addEventListener("change",update); box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"s"+k,text:label}),s])); SEL[k]=s; }
+function sl(k,o,cls){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); if(cls) C[k].el.classList.add(cls); box.appendChild(C[k].el); }
+function grp(t){ box.appendChild(Sim.h("p",{class:"grp",text:t})); }
+grp("Balance");
+sl("intake",{label:"K intake",min:10,max:200,step:5,value:80,unit:"mmol/วัน"});
+sl("gi",{label:"GI loss",min:0,max:120,step:5,value:0,unit:"mmol/วัน"});
+sl("gfr",{label:"eGFR",min:5,max:120,step:5,value:90,unit:"ml/min"});
+grp("Distal nephron");
+sl("dist",{label:"Distal Na delivery/flow",min:0.3,max:3,step:0.1,value:1,fmt:function(v){ return "×"+v.toFixed(1); }});
+sl("aldo",{label:"Aldosterone",min:0.05,max:3,step:0.05,value:1,fmt:function(v){ return "×"+v.toFixed(2); }});
+sel("drug","ยา/ENaC",Object.keys(DRUG).map(function(k){ return [k,DRUG[k].name]; }));
+sel("mg","Mg",[["n","ปกติ"],["l","ต่ำ (ROMK ไม่ถูกยับยั้ง)"]]);
+grp("Transcellular และ lab");
+sl("ph",{label:"Blood pH",min:7.0,max:7.6,step:0.01,value:7.40,fmt:function(v){ return v.toFixed(2); }});
+sel("insulin","Insulin",[["no","ปกติ"],["give","ได้ insulin 10 U + dextrose"],["def","ขาด insulin + hyperglycemia"]]);
+sel("beta","β2-agonist",[["no","ไม่มี"],["yes","Salbutamol nebulized 10–20 mg"]]);
+sel("pseudo","ตัวอย่างเลือด",[["no","ปกติ"],["yes","Hemolysis / เกล็ดเลือดสูง"]]);
+
+var map=Nephron.map("map",{selected:"CCD"});
+var cell=Nephron.cell("cell","CCD",{});
+function params(){ var o={}; for(var k in C) o[k]=C[k].get(); for(var j in SEL) o[j]=SEL[j].value; return o; }
+function update(){
+  var p=params(), d=DRUG[p.drug];
+  var A=p.aldo*(d.aldoX||1)*(d.mrBlock?0.15:1), E=d.enac, Mgf=p.mg==="l"?1.5:1;
+  var D=p.dist*(p.drug==="loop"?1.0:1)*(p.drug==="thz"?1.6:1);
+  var Gf=Math.pow(Math.max(0.08,p.gfr/100),0.4), Aeff=d.gain?1:A;            /* ENaC gain = aldosterone-independent */
+  var cap=Math.pow(D,0.7)*Math.pow(Aeff,0.55)*Math.pow(E,0.8)*Mgf*Gf;
+  var net=Math.max(3,p.intake-p.gi);
+  var Kss=Math.max(1.6,Math.min(8.5,4.2*Math.pow(net/80/cap,0.4)));            /* excretion ∝ K^2.5 (K stimulates its own secretion) */
+  var shift=0;
+  shift+=(7.40-p.ph)*10*0.3*(p.ph<7.40?1:0.6);     /* 0.3 mmol/L per 0.1 pH (mineral acidosis) */
+  if(p.insulin==="give") shift-=0.8; if(p.insulin==="def") shift+=0.9;
+  if(p.beta==="yes") shift-=0.6;
+  var Ktrue=Math.max(1.4,Kss+shift), Kmeas=Ktrue+(p.pseudo==="yes"?1.6:0);
+  var uk=net, kcr=uk/10;
+  var tt=Math.max(1,Math.min(16,7*Math.pow(Aeff,0.55)*Math.pow(E,0.8)*Mgf*(Kss>5?Math.min(1.4,Kss/5):1)));
+  /* map flux for K */
+  var secr=Math.round(uk/(Ktrue*p.gfr*1.44)*100);
+  map.setFlux({PT:65,TAL:25,CCD:-Math.max(1,Math.min(60,secr+10))},{label:"K handling (% of filtered, − = secretion)",color:"#1F7A72"});
+  map.block(d.block||[]); map.gain(d.gain||[]);
+  map.setDelivery(Math.min(1.5,D/1.2));
+  var fl={ENaC:Math.min(1.8,E*Math.pow(A,0.4)*Math.sqrt(D)),ROMK:Math.min(1.8,Math.pow(A,0.4)*Math.sqrt(D)*Mgf),NKA_C:Math.min(1.8,Math.pow(A,0.3))};
+  cell.update("CCD",{blocked:d.block||[],gain:d.gain||[],flows:fl,highlight:p.mg==="l"?["ROMK"]:[]});
+  var mech;
+  if(p.pseudo==="yes") mech="Pseudo-hyperK";
+  else if(Ktrue>=5.5) mech=Math.abs(shift)>0.5&&shift>0?"Shift ออกจากเซลล์":"ไต secrete ไม่พอ";
+  else if(Ktrue<3.5) mech=p.gi>p.intake*0.4?"GI loss":shift<-0.4?"Shift เข้าเซลล์":"Renal loss";
+  else mech="สมดุล";
+  Sim.ro("roK",Kmeas.toFixed(1),Kmeas>=5.5||Kmeas<3.5?"flag":"ok");
+  Sim.ro("roUK",Math.round(uk));
+  Sim.ro("roKC",kcr.toFixed(1),Ktrue<3.5?(kcr>2.5?"flag":"ok"):Ktrue>=5.5?(kcr<2?"flag":false):false);
+  Sim.ro("roTT",tt.toFixed(1),Ktrue>=5.5&&tt<7?"flag":Ktrue<3.5&&tt>4?"flag":false);
+  Sim.ro("roShift",(shift>=0?"+":"")+shift.toFixed(1));
+  Sim.ro("roMech",mech);
+  var act=document.getElementById("act"), m, bad=true;
+  if(p.pseudo==="yes") m="<b>สงสัย pseudohyperkalemia</b> ECG และคลินิกไม่เข้ากัน เจาะซ้ำโดยไม่รัดสายนาน ส่งเป็น plasma หรือ whole blood (blood gas) ก่อนให้การรักษา";
+  else if(Kmeas>=6.5) m="<b>K ≥ 6.5</b> ทำ ECG ให้ calcium gluconate ถ้ามี ECG change, insulin + dextrose, salbutamol แล้วเอา K ออก (binder, loop diuretic, dialysis) หาสาเหตุ: "+mech;
+  else if(Kmeas>=5.5) m="<b>HyperK "+mech+"</b> "+(p.drug==="tmp"||p.drug==="amil"||p.drug==="spiro"?"ทบทวนยาที่บล็อก ENaC/MR ":"")+"ลด K intake, แก้ acidosis, loop/thiazide ถ้า volume พอ, K binder เพื่อให้ใช้ RAASi ต่อได้";
+  else if(Kmeas<3.0) m="<b>HypoK รุนแรง</b> ให้ KCl (IV ≤ 10–20 mmol/h ทาง peripheral) แก้ Mg ร่วม "+(kcr>2.5?"urine K/Cr สูงชี้ renal loss ตรวจ renin/aldosterone และ acid-base":"urine K ต่ำชี้ GI loss หรือ shift");
+  else if(Kmeas<3.5) m="<b>HypoK</b> "+(kcr>2.5?"renal K loss: แยกตาม BP และ acid-base (diuretic, PA, Bartter/Gitelman, Liddle)":"extrarenal loss หรือ shift: GI loss, insulin, β-agonist, periodic paralysis")+" ให้ KCl oral";
+  else { bad=false; m="<b>K อยู่ในเกณฑ์</b> ลองเพิ่ม intake หรือลด distal delivery เพื่อดูว่า aldosterone และ ENaC ปรับ excretion อย่างไร"; }
+  act.innerHTML="<b>Next step:</b> "+m; act.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"EL-05", title:"Potassium Handling", lead:"ปรับ K intake, distal Na delivery, aldosterone, ยาที่บล็อก ENaC/MR, Mg และปัจจัย transcellular แล้วดู serum K, urine K และตำแหน่งที่ไต secrete K",
+  scenarios:S, order:ORDER, captureMs:1200,
+  onChange:function(k,s){ var p=s.p; ["drug","mg","insulin","beta","pseudo"].forEach(function(x){ SEL[x].value=p[x]; }); ["intake","gi","gfr","dist","aldo","ph"].forEach(function(x){ C[x].set(p[x]); }); update(); },
+  refs:["Palmer BF, Clegg DJ. Physiology and pathophysiology of potassium homeostasis. Adv Physiol Educ 2016, 40(4): 480-490",
+        "Welling PA. Roles and regulation of renal K channels. Annu Rev Physiol 2016, 78: 415-435",
+        "Clase CM, Carrero JJ, Ellison DH, et al. Potassium homeostasis and management of dyskalemia in kidney diseases: conclusions from a KDIGO Controversies Conference. Kidney Int 2020, 97(1): 42-61",
+        "Perazella MA. Trimethoprim-induced hyperkalaemia: clinical data, mechanism, prevention and management. Drug Saf 2000, 22(3): 227-236"],
+  note:"Model เพื่อการสอน: steady state ที่ renal K excretion = intake − GI loss โดย excretion แปรตาม K^2.5 (K กระตุ้น secretion เอง) x distal delivery^0.7 x aldosterone^0.55 x ENaC^0.8 x Mg x GFR^0.4 (intake 80 ได้ K 4.2) Liddle ใช้ ENaC ที่ไม่ขึ้นกับ aldosterone shift: 0.3 mmol/L ต่อ pH 0.1, insulin −0.8, salbutamol −0.6 TTKG ไม่แนะนำให้ใช้ตัดสินแล้ว แสดงเพื่อเทียบ urine K/Cr (creatinine excretion สมมติ 10 mmol/วัน)"
+});
+})();
+</script>
+</body>
+</html>

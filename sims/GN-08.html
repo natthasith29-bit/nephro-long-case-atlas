@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[GN-08] IgA Nephropathy: Multi-hit, MEST-C and Treatment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.2fr 1fr}}
+.pair{display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:10px;margin-top:10px;align-items:center}
+@media (max-width:560px){.pair{grid-template-columns:1fr 1fr}}
+.sel{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;font-size:13px;margin:4px 0 10px}
+.sel label{display:flex;flex-direction:column;gap:4px;font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.readout{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:520px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}.sel{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.readout .ro b{font-size:clamp(18px,2vw,24px)}
+.grp{font:600 12px var(--mono);letter-spacing:.06em;color:var(--muted);margin:10px 0 4px}
+.act{margin-top:10px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .act,body.present .grp{display:none}
+body.present .card{padding:14px 18px}
+body.present #hits{max-height:250px;width:auto!important;margin:0 auto}
+body.present .pair{display:none}
+body.present .tools .tog{padding:4px 9px;font-size:12px}
+body.present .readout .ro{padding:6px 10px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Multi-hit pathogenesis และเป้าของยา</h2>
+      <div class="svgwrap"><svg id="hits" viewBox="0 0 640 300" role="img" aria-label="Four-hit model of IgA nephropathy"></svg></div>
+      <div class="pair">
+        <div class="svgwrap"><svg id="lm" aria-label="LM MEST-C"></svg></div>
+        <div class="svgwrap"><svg id="if" aria-label="IF IgA"></svg></div>
+        <div class="svgwrap"><div id="chart"></div></div>
+      </div>
+      <p class="hint no-present">ความหนาของลูกศรคือความแรงของแต่ละ hit ยาที่เปิดอยู่เป็นป้ายสีม่วงทึบ กลุ่มบนลดการสร้าง IgA immune complex กลุ่มล่างลดการบาดเจ็บของ glomerulus ที่ตามมา กราฟคือ eGFR และ proteinuria 10 ปี เส้นประคือ supportive ขั้นต่ำ</p>
+    </div>
+    <div class="card">
+      <h2>MEST-C ผู้ป่วยและการรักษา</h2>
+      <div class="sel">
+        <label>M<select id="sM"><option value="0">M0</option><option value="1">M1</option></select></label>
+        <label>E<select id="sE"><option value="0">E0</option><option value="1">E1</option></select></label>
+        <label>S<select id="sS"><option value="0">S0</option><option value="1">S1</option></select></label>
+        <label>T<select id="sT"><option value="0">T0</option><option value="1">T1</option><option value="2">T2</option></select></label>
+        <label>C<select id="sC"><option value="0">C0</option><option value="1">C1</option><option value="2">C2</option></select></label>
+      </div>
+      <div class="ctls" id="ctls"></div>
+      <div class="grp">ลด IgA immune complex</div>
+      <div class="tools" id="tx1"></div>
+      <div class="grp">ลด glomerular injury</div>
+      <div class="tools" id="tx2"></div>
+      <div class="readout" style="margin-top:10px">
+        <div class="ro" id="roU"><b>-</b><span>Proteinuria 9 mo</span></div>
+        <div class="ro" id="roT"><b>-</b><span>เป้า &lt; 0.5 g/d</span></div>
+        <div class="ro" id="roSl"><b>-</b><span>eGFR slope /yr</span></div>
+        <div class="ro" id="roK"><b>-</b><span>eGFR &lt; 15 ใน</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/patho.js"></script>
+<script>
+(function(){
+"use strict";
+/* Teaching model. Proteinuria on treatment = UP0 x product of factors (floor 0.12 x UP0):
+   RAASi 0.65, sparsentan 0.5 (replaces RAASi), atrasentan 0.64 (add-on to RAASi), SGLT2i 0.85, TRF-budesonide 0.7, systemic GC 0.6, APRIL/BAFF inhibitor 0.55, iptacopan 0.62.
+   eGFR slope (mL/min per year) = -(0.4 + 3 x max(0, UP - 0.2)) - T (1.5 for T1, 3 for T2) - 0.5 S1 - active lesion penalty if E1 or C without an IC-reducing drug (E1 1.2, C1 1.5, C2 5).
+   Haemodynamic drugs (RAASi, ERA, SGLT2i) give an initial eGFR dip of 2-4 mL/min. */
+var TX1 = [["nef","TRF-budesonide"],["gc","Systemic GC (reduced dose)"],["april","APRIL/BAFF inhibitor"]];
+var TX2 = [["ras","RAASi max dose"],["spar","Sparsentan (แทน RAASi)"],["atr","Atrasentan + RAASi"],["sglt","SGLT2i"],["ipt","Iptacopan"]];
+var FAC = {ras:0.65, spar:0.5, atr:0.64, sglt:0.85, nef:0.7, gc:0.6, april:0.55, ipt:0.62};
+function upTx(p, tx){
+  var f = 1;
+  if(tx.spar) f *= FAC.spar; else if(tx.ras) f *= FAC.ras * (tx.atr ? FAC.atr : 1);
+  ["sglt","nef","gc","april","ipt"].forEach(function(k){ if(tx[k]) f *= FAC[k]; });
+  return Math.max(0.12, f) * p.up0;
+}
+function slope(p, tx, up){
+  var ic = tx.nef || tx.gc || tx.april;
+  var s = -(0.4 + 3 * Math.max(0, up - 0.2)) - (p.T === 1 ? 1.5 : p.T === 2 ? 3 : 0) - (p.S ? 0.5 : 0);
+  if(!ic){ s -= (p.E ? 1.2 : 0) + (p.C === 1 ? 1.5 : p.C === 2 ? 5 : 0); }
+  return s;
+}
+function run(p, tx){
+  var up1 = upTx(p, tx), sl = slope(p, tx, up1), dip = (tx.ras || tx.spar ? 2.5 : 0) + (tx.atr ? 1 : 0) + (tx.sglt ? 1.5 : 0);
+  var U = [], E = [], e = p.egfr, years = null;
+  for(var m = 0; m <= 120; m += 2){
+    var t = m / 12, frac = 1 - Math.exp(-m / 3), up = p.up0 + (up1 - p.up0) * frac;
+    var eg = p.egfr - dip * Math.min(1, m / 2) + sl * t; if(p.C === 2 && !(tx.nef || tx.gc || tx.april)) eg -= 4 * Math.min(1, m / 3);
+    eg = Math.max(5, eg);
+    if(years === null && eg < 15) years = t;
+    U.push([t, +up.toFixed(2)]); E.push([t, +eg.toFixed(1)]);
+  }
+  return {up:up1, sl:sl, U:U, E:E, years:years};
+}
+var S = {
+  low:{name:"Low risk", p:{M:0, E:0, S:0, T:0, C:0, up0:0.4, egfr:95, tx:{ras:1}},
+    rows:[["Clinical","ชาย 25 ปี microscopic hematuria proteinuria 0.4 g/d"],["Biopsy","M0 E0 S0 T0 C0"],["Plan","RAASi ติดตาม proteinuria ทุก 3–6 เดือน"]],
+    take:["Proteinuria < 0.5 g/d ร่วม eGFR คงที่ เป็นเป้าการรักษา","แม้ proteinuria ต่ำ ความเสี่ยงตลอดชีวิตยังมีในผู้ป่วยอายุน้อย","ติดตามต่อเนื่องเพราะโรคก้าวหน้าได้"]},
+  mod:{name:"Proteinuria 1.2 g/d", p:{M:1, E:0, S:1, T:0, C:0, up0:1.2, egfr:75, tx:{ras:1, sglt:1}},
+    rows:[["Clinical","หญิง 32 ปี proteinuria 1.2 g/d BP 138/86"],["Biopsy","M1 E0 S1 T0 C0"],["Course","RAASi + SGLT2i แล้วยังไม่ถึงเป้า"],["Plan","เพิ่มยาที่ลด IgA immune complex หรือเปลี่ยนเป็น sparsentan"]],
+    take:["ต้องลดทั้งการสร้าง IgA immune complex และการบาดเจ็บที่ glomerulus","Proteinuria ที่ค้าง > 0.5 g/d บอกว่ายังไม่พอ","ยาลด glomerular injury ใช้ร่วมกันได้ (RAASi หรือ ERA + SGLT2i)"]},
+  high:{name:"High risk T1", p:{M:1, E:1, S:1, T:1, C:0, up0:2.5, egfr:55, tx:{ras:1, sglt:1, nef:1}},
+    rows:[["Clinical","ชาย 40 ปี proteinuria 2.5 g/d eGFR 55"],["Biopsy","M1 E1 S1 T1 C0"],["Plan","RAASi + SGLT2i + TRF-budesonide (หรือ GC ขนาดลด หรือยา anti-APRIL)"]],
+    take:["T1–T2 ทำนาย eGFR ลดเร็วและตอบสนองต่อยาน้อยกว่า","E1 คือ active inflammation ตอบสนองต่อยาที่ลด immune complex","ยิ่งเริ่มยาเร็วยิ่งรักษา nephron ได้มาก"]},
+  cres:{name:"Crescentic IgAN", p:{M:1, E:1, S:0, T:0, C:2, up0:3.2, egfr:30, tx:{gc:1, ras:1}},
+    rows:[["Clinical","ชาย 22 ปี Cr ขึ้นเร็ว gross hematuria"],["Biopsy","Crescent > 50% ของ glomeruli (C2 คือ ≥ 25%) E1"],["Plan","รักษาแบบ RPGN: GC ขนาดสูง ร่วม cyclophosphamide"]],
+    take:["IgAN ที่มี crescent มากและ eGFR ลดเร็วรักษาแบบ rapidly progressive GN","C2 ที่ไม่ได้ immunosuppression ไตเสียเร็ว","ตรวจ ANCA ร่วมเพราะ overlap ได้"]},
+  adv:{name:"T2 advanced", p:{M:1, E:0, S:1, T:2, C:0, up0:2, egfr:25, tx:{ras:1, sglt:1}},
+    rows:[["Clinical","หญิง 50 ปี eGFR 25 proteinuria 2 g/d"],["Biopsy","T2 (IFTA > 50%) ไม่มี E หรือ C"],["Plan","Supportive เต็มที่ ประโยชน์ของ immunosuppression จำกัด"]],
+    take:["T2 และ eGFR ต่ำ ไตส่วนใหญ่เป็น scar","ยาลด glomerular injury ยังมีประโยชน์","ชั่งพิษของ immunosuppression เมื่อไม่มี active lesion"]},
+  spar:{name:"Sparsentan", p:{M:1, E:0, S:1, T:0, C:0, up0:1.8, egfr:65, tx:{spar:1, sglt:1}},
+    rows:[["Clinical","ชาย 35 ปี proteinuria 1.8 g/d"],["Plan","Sparsentan (dual endothelin + angiotensin receptor antagonist) แทน RAASi + SGLT2i"],["Monitor","LFT และ fluid retention ห้ามใช้ร่วม RAASi"]],
+    take:["Sparsentan ลด proteinuria ได้มากกว่า ARB เดี่ยว","ใช้แทน RAASi ไม่ใช้ร่วม","ห้ามใช้ในการตั้งครรภ์"]}
+};
+
+/* ---------- controls ---------- */
+var box = document.getElementById("ctls"), C = {};
+function add(k, o){ o.onInput = update; C[k] = Sim.slider(o); box.appendChild(C[k].el); }
+add("up0", {id:"sU", label:"Proteinuria baseline", min:0.2, max:6, step:0.1, value:1.2, unit:"g/d"});
+add("egfr", {id:"sG", label:"eGFR", min:10, max:120, step:1, value:70, unit:""});
+var SEL = {}; ["M","E","S","T","C"].forEach(function(k){ SEL[k] = document.getElementById("s" + k); SEL[k].addEventListener("change", update); });
+var TX = {}, BT = {};
+function tg(list, id){ list.forEach(function(x){ BT[x[0]] = Sim.toggle(x[1], function(on){ TX[x[0]] = on; if(on && x[0] === "spar"){ TX.ras = false; TX.atr = false; BT.ras.setState(false); BT.atr.setState(false); } if(on && (x[0] === "ras" || x[0] === "atr")){ TX.spar = false; BT.spar.setState(false); } if(on && x[0] === "atr" && !TX.ras){ TX.ras = true; BT.ras.setState(true); } update(); }, false); document.getElementById(id).appendChild(BT[x[0]]); }); }
+tg(TX1, "tx1"); tg(TX2, "tx2");
+function P(){ var p = {up0:C.up0.get(), egfr:C.egfr.get()}; ["M","E","S","T","C"].forEach(function(k){ p[k] = +SEL[k].value; }); return p; }
+
+var lm = Patho.glom("lm", {}), iff = Patho.ifStain("if", {pattern:"mesangial", intensity:3, label:"IgA"});
+var ch = Plot.chart(document.getElementById("chart"), {height:170, aria:"eGFR and proteinuria over 10 years",
+  x:{min:0, max:10, step:2, label:"Year"}, y:{min:0, max:120, label:"eGFR"}, y2:{min:0, max:4, label:"UP g/d"},
+  series:[{id:"Eb", name:"eGFR supportive", color:"#9A9CB2", dash:[5,4], data:[], width:1.5}, {id:"E", name:"eGFR", color:Plot.colors.teal, data:[], width:2.4},
+          {id:"U", name:"Proteinuria", color:Plot.colors.red, data:[], axis:"y2", width:2}],
+  hlines:[{y:0.5, label:"0.5", color:"#B4232A", dash:[3,4], axis:"y2"}], legend:false});
+
+var hits = document.getElementById("hits");
+function drawHits(p, tx){
+  hits.innerHTML = "";
+  var FT = "IBM Plex Sans Thai, sans-serif", MO = "Geist Mono, monospace";
+  var h1 = 0.8 * (tx.nef ? 0.55 : 1) * (tx.april ? 0.45 : 1), h2 = 0.7 * (tx.gc ? 0.6 : 1) * (tx.april ? 0.7 : 1), h3 = h1 * h2 * 1.6, h4 = Math.min(1, h3 * (p.M ? 1.2 : 0.9));
+  var inj = Math.min(1, 0.3 + (p.up0 / 4) * (tx.ras || tx.spar ? 0.7 : 1) * (tx.sglt ? 0.85 : 1) * (tx.spar ? 0.75 : 1) * (tx.atr ? 0.75 : 1) + (p.E ? 0.15 : 0) + p.C * 0.1);
+  var comp = Math.min(1, h4 * (tx.ipt ? 0.4 : 1));
+  function node(x, y, w, t, sub, f){ var hot = f > 0.55; Sim.svg("rect", {x:x - w / 2, y:y - 20, width:w, height:40, rx:10, fill:hot ? "#0B0B1F" : "#FFFFFF", stroke:hot ? "#0B0B1F" : "#D3D5E2", "stroke-width":1.2}, hits);
+    Sim.svg("text", {x:x, y:y - 2, "text-anchor":"middle", "font-family":FT, "font-size":12.5, "font-weight":600, fill:hot ? "#fff" : "#0B0B1F", text:t}, hits);
+    Sim.svg("text", {x:x, y:y + 12, "text-anchor":"middle", "font-family":FT, "font-size":10, fill:hot ? "#C9CAE6" : "#5E6075", text:sub}, hits); }
+  function arr(x1, y1, x2, y2, f){ var a = Math.atan2(y2 - y1, x2 - x1), w = 1.4 + 8 * f, c = f > 0.55 ? "#B4232A" : f > 0.3 ? "#D9731A" : "#9A9CB2";
+    Sim.svg("line", {x1:x1, y1:y1, x2:x2 - Math.cos(a) * 9, y2:y2 - Math.sin(a) * 9, stroke:c, "stroke-width":w, "stroke-linecap":"round"}, hits);
+    Sim.svg("path", {d:"M" + x2 + "," + y2 + " l" + (-Math.cos(a - 0.45) * 12) + "," + (-Math.sin(a - 0.45) * 12) + " l" + (Math.cos(a - 0.45) * 12 - Math.cos(a + 0.45) * 12) + "," + (Math.sin(a - 0.45) * 12 - Math.sin(a + 0.45) * 12) + "Z", fill:c}, hits); }
+  function drug(x, y, t, on){ var w = t.length * 6 + 12; Sim.svg("rect", {x:x - w / 2, y:y - 10, width:w, height:20, rx:10, fill:on ? "#5B4BFF" : "#EFEDFF", stroke:"#5B4BFF"}, hits);
+    Sim.svg("text", {x:x, y:y + 4, "text-anchor":"middle", "font-family":FT, "font-size":10.5, fill:on ? "#fff" : "#5B4BFF", text:t}, hits); }
+  Sim.svg("text", {x:12, y:18, "font-family":MO, "font-size":11, fill:"#9A9CB2", text:"IMMUNE COMPLEX FORMATION"}, hits);
+  Sim.svg("text", {x:12, y:196, "font-family":MO, "font-size":11, fill:"#9A9CB2", text:"GLOMERULAR INJURY"}, hits);
+  node(80, 64, 130, "Hit 1: Gd-IgA1", "mucosal B cells, APRIL", h1);
+  node(240, 64, 130, "Hit 2: anti-glycan", "IgG autoantibody", h2);
+  node(400, 64, 130, "Hit 3: IgA-IgG IC", "circulating complex", h3);
+  node(560, 64, 130, "Hit 4: deposition", "mesangium", h4);
+  arr(145, 64, 175, 64, h1); arr(305, 64, 335, 64, h3); arr(465, 64, 495, 64, h3);
+  node(560, 150, 150, "Mesangial activation", "proliferation, cytokines" + (p.M ? " (M1)" : ""), h4);
+  node(390, 150, 150, "Complement", "alternative + lectin", comp);
+  arr(560, 84, 560, 130, h4); arr(485, 150, 465, 150, comp);
+  node(240, 236, 170, "Podocyte, endothelium", "proteinuria, E/C lesions", inj);
+  node(470, 236, 170, "Tubulointerstitium", "IFTA (T score)", Math.min(1, inj * 0.8 + p.T * 0.15));
+  arr(390, 170, 270, 216, Math.max(comp, h4) * 0.8); arr(355, 236, 385, 236, inj);
+  drug(80, 106, "TRF-budesonide", !!tx.nef); drug(80, 130, "Anti-APRIL / BAFF", !!tx.april); drug(240, 106, "Systemic GC", !!tx.gc);
+  drug(390, 186, "Iptacopan", !!tx.ipt);
+  drug(130, 280, "RAASi", !!tx.ras); drug(215, 280, "Sparsentan", !!tx.spar); drug(305, 280, "Atrasentan", !!tx.atr); drug(385, 280, "SGLT2i", !!tx.sglt);
+}
+function update(){
+  var p = P(), tx = {}; Object.keys(TX).forEach(function(k){ if(TX[k]) tx[k] = true; });
+  var R = run(p, tx), B = run(p, {ras:true});
+  ch.setSeries("E", R.E); ch.setSeries("Eb", B.E); ch.setSeries("U", R.U);
+  ch.update({y:{min:0, max:Math.max(60, Math.ceil(p.egfr / 20) * 20 + 10), label:"eGFR"}, y2:{min:0, max:Math.max(2, Math.ceil(p.up0 + 0.5)), label:"UP g/d"}});
+  drawHits(p, tx);
+  lm.update({hyper:p.M ? 0.8 : 0.2, mesExpand:p.M ? 0.6 : 0.2, endocap:p.E ? 0.7 : 0, sclerosis:p.S ? 0.2 : 0, crescent:p.C ? "cellular" : "none", crescentFrac:p.C === 2 ? 0.55 : 0.3, necrosis:p.C === 2 ? 0.3 : 0, label:"M" + p.M + " E" + p.E + " S" + p.S + " T" + p.T + " C" + p.C});
+  Sim.ro("roU", R.up.toFixed(2), R.up < 0.3 ? "ok" : R.up < 0.5 ? true : "flag");
+  Sim.ro("roT", R.up < 0.3 ? "ideal" : R.up < 0.5 ? "ถึง" : "ไม่ถึง", R.up < 0.5 ? "ok" : "flag");
+  Sim.ro("roSl", R.sl.toFixed(1), R.sl < -3 ? "flag" : R.sl < -1.5 ? true : "ok");
+  Sim.ro("roK", R.years === null ? "> 10 ปี" : R.years.toFixed(1) + " ปี", R.years === null ? "ok" : "flag");
+  var ic = tx.nef || tx.gc || tx.april, hd = tx.ras || tx.spar, n;
+  if(p.C === 2 && p.egfr < 60) n = "Crescentic IgAN ที่ eGFR ลดเร็ว: รักษาแบบ RPGN ด้วย GC ขนาดสูงร่วม cyclophosphamide ตรวจ ANCA และติดตาม Cr ใกล้ชิด";
+  else if(!hd) n = "เริ่ม RAASi ขนาดสูงสุดที่ทนได้ (หรือ sparsentan) และ SGLT2i คุมความดันและลดเกลือ ทุกรายที่ proteinuria ≥ 0.5 g/d";
+  else if(R.up >= 0.5 && !ic) n = "ยังไม่ถึงเป้า < 0.5 g/d: เพิ่มยาที่ลด IgA immune complex (TRF-budesonide, GC ขนาดลด หรือ anti-APRIL) โดยเฉพาะเมื่อมี E1 หรือ C1 และพิจารณา sparsentan หรือ atrasentan";
+  else if(R.up >= 0.5) n = "ใช้ทั้งสองกลุ่มแล้วยังไม่ถึงเป้า: ทบทวน adherence และ T score (scar ตอบสนองน้อย) พิจารณายาตัวใหม่หรือ clinical trial";
+  else n = "ถึงเป้า: ติดตาม proteinuria, eGFR และความดันทุก 3–6 เดือน ระวังพิษ GC ถ้าใช้ systemic steroid";
+  if(p.T === 2) n += " T2 บอกว่าส่วนใหญ่เป็น scar ประโยชน์ของ immunosuppression จำกัด";
+  document.getElementById("act").innerHTML = "<b>Next step:</b> " + n;
+}
+Sim.mount({code:"GN-08", title:"IgA Nephropathy: Multi-hit, MEST-C and Treatment",
+  lead:"เลือก MEST-C, proteinuria และ eGFR แล้วเปิดยาทีละกลุ่ม ดูว่ายาแต่ละตัวออกฤทธิ์ที่ hit ไหน proteinuria ถึงเป้า < 0.5 g/d หรือไม่ และ eGFR ใน 10 ปีเปลี่ยนอย่างไร",
+  scenarios:S, order:["low","mod","high","cres","adv","spar"], captureMs:1000,
+  onChange:function(k, s){ var q = s.p; ["M","E","S","T","C"].forEach(function(n){ SEL[n].value = q[n]; }); C.up0.set(q.up0); C.egfr.set(q.egfr);
+    Object.keys(BT).forEach(function(n){ TX[n] = !!q.tx[n]; BT[n].setState(TX[n]); }); update(); },
+  refs:["KDIGO 2025 Clinical Practice Guideline for the Management of Immunoglobulin A Nephropathy and Immunoglobulin A Vasculitis. Kidney Int 2025, 108(4S): S1-S71",
+        "Trimarchi H, Barratt J, Cattran DC, et al. Oxford classification of IgA nephropathy 2016: an update from the IgA Nephropathy Classification Working Group. Kidney Int 2017, 91(5): 1014-1021",
+        "Suzuki H, Kiryluk K, Novak J, et al. The pathophysiology of IgA nephropathy. J Am Soc Nephrol 2011, 22(10): 1795-1803",
+        "Lafayette R, Kristensen J, Stone A, et al. Efficacy and safety of a targeted-release formulation of budesonide in IgA nephropathy (NefIgArd): 2-year results. Lancet 2023, 402(10405): 859-870",
+        "Lv J, Wong MG, Hladunewich MA, et al. Effect of oral methylprednisolone on decline in kidney function or kidney failure in IgA nephropathy: the TESTING randomized clinical trial. JAMA 2022, 327(19): 1888-1898",
+        "Rovin BH, Barratt J, Heerspink HJL, et al. Efficacy and safety of sparsentan versus irbesartan in IgA nephropathy (PROTECT): 2-year results. Lancet 2023, 402(10417): 2077-2090",
+        "Heerspink HJL, Jardine M, Kohan DE, et al. Atrasentan in patients with IgA nephropathy (ALIGN). N Engl J Med 2025, 392(6): 544-554",
+        "Pitcher D, Braddon F, Hendry B, et al. Long-term outcomes in IgA nephropathy. Clin J Am Soc Nephrol 2023, 18(6): 727-738"],
+  note:"ตัวคูณ proteinuria และ eGFR slope เป็นค่าประมาณเพื่อเทียบทิศทางของยาแต่ละกลุ่ม ไม่ใช่ International IgAN Prediction Tool ซึ่งควรใช้ประเมินความเสี่ยงจริงตอน biopsy"
+});
+})();
+</script>
+</body>
+</html>

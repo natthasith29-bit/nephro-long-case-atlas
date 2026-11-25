@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[PD-01] Peritoneal Membrane: Three-Pore Model</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(120px,160px) 1fr 100px}
+.sel{display:grid;grid-template-columns:minmax(120px,160px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.readout{grid-template-columns:repeat(3,1fr)}
+.kv{display:grid;grid-template-columns:1fr auto;gap:2px 12px;font-size:13.5px;margin-top:12px}
+.kv span:nth-child(odd){color:var(--muted)}
+.kv span:nth-child(even){font-family:var(--mono);text-align:right}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+#mem{max-height:360px}
+.flow{fill:none;stroke-linecap:round}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,1fr)}}
+body.present .bench{grid-template-columns:1.45fr 1fr}
+body.present #mem{max-height:250px}
+body.present .hint{display:none}
+body.present .card{padding:16px 20px}
+body.present .readout{margin-top:8px}
+body.present .ro{padding:8px 12px}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .ctls{gap:2px}
+body.present .card h2{margin-bottom:8px}
+body.present .kv{display:none}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>น้ำผ่าน peritoneal membrane 3 ทาง</h2>
+      <div class="svgwrap"><svg id="mem" viewBox="0 0 660 360" role="img" aria-label="Three-pore model of the peritoneal capillary wall"></svg></div>
+      <div id="chart"></div>
+      <p class="hint no-present">ความหนาของลูกศรคือ flux ณ นาทีที่เลือก ค่าบวก = น้ำเข้าช่องท้อง กราฟคือปริมาณน้ำสะสมแยกตามทาง และ net UF ตลอด dwell เส้นจางคือ Na ในน้ำยา (แกนขวา)</p>
+    </div>
+    <div class="card">
+      <h2>น้ำยาและ membrane</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roUF"><b>-</b><span>Net UF ท้าย dwell (ml)</span></div>
+        <div class="ro" id="roPk"><b>-</b><span>Peak UF (ml @ ชม.)</span></div>
+        <div class="ro" id="roFW"><b>-</b><span>Free water 60 นาที (ml)</span></div>
+        <div class="ro" id="roDip"><b>-</b><span>Na dip ที่ 60 นาที (mmol/L)</span></div>
+        <div class="ro" id="roCr"><b>-</b><span id="crLab">D/P Cr ที่ 4 ชม.</span></div>
+        <div class="ro" id="roNa"><b>-</b><span>Na removal (mmol)</span></div>
+      </div>
+      <div class="kv secondary" id="kv"></div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/pd.js"></script>
+<script>
+(function(){
+"use strict";
+function P(o){ var d={fluid:"g25",fill:2000,dwell:240,cur:60,area:1,aqp:100,L:0.3,alb:3.8,lps:1}; for(var k in o) d[k]=o[k]; return d; }
+var S = {
+  base:{name:"Average transporter 2.5%", p:P({}),
+    rows:[["Prescription","2.5% glucose 2 L dwell 4 ชม. membrane ปกติ"],["น้ำเข้า","ช่วงแรกน้ำมาจาก small pore และ aquaporin พอๆ กัน เมื่อ glucose ถูกดูดกลับ gradient ลดลง UF ช้าลง"],["Net UF","ราว 350 ml ที่ 4 ชม. ใกล้ peak หลังจากนั้นการดูดกลับ (lymphatic + small pore) จะชนะ"]],
+    take:["Small pore เป็นทางหลักของน้ำและ solute ขนาดเล็ก ส่วน aquaporin นำ free water ล้วน","Glucose เป็น crystalloid osmotic agent ที่ถูกดูดกลับเรื่อยๆ UF จึงมี peak แล้วลดลง","Net UF = ultrafiltration ทั้งหมด − fluid absorption (lymphatic และ back-filtration ผ่าน small pore)"]},
+  pet:{name:"4.25% และ sodium sieving", p:P({fluid:"g425",cur:60}),
+    rows:[["Prescription","4.25% (3.86%) glucose 2 L dwell 4 ชม. แบบเดียวกับ PET"],["60 นาทีแรก","free water ผ่าน aquaporin ราว 40–50% ของน้ำที่เข้ามา Na ในน้ำยาจึงลดลง 5–10 mmol/L"],["หลังจากนั้น","Na diffusion จาก plasma ทำให้ Na ในน้ำยากลับขึ้น"]],
+    take:["Na dip ที่ 1 ชม. ของ 4.25% เป็นตัวแทน aquaporin function","Na dip < 5 mmol/L ร่วมกับ UF ต่ำบ่งชี้ว่า osmotic conductance ลดลง","Free water ไม่พา Na ออก ผู้ที่ใช้ short dwell บ่อยจึงเสี่ยง Na และน้ำคั่ง"]},
+  fastLong:{name:"Fast transporter long dwell", p:P({area:1.9,dwell:600,cur:420}),
+    rows:[["Membrane","effective surface area สูง D/P Cr ราว 0.83"],["Prescription","2.5% glucose 2 L dwell กลางคืน 10 ชม. (CAPD)"],["ผล","glucose หมดเร็ว UF peak ราว 3 ชม. แล้วดูดน้ำกลับจน net UF ท้าย dwell ติดลบ"]],
+    take:["Fast transport ทำให้ glucose gradient หายเร็ว ได้ clearance ดีแต่ UF แย่","Long dwell ด้วย glucose ใน fast transporter มักได้ UF ติดลบ","แก้ด้วย dwell สั้นลง (APD) หรือใช้ icodextrin สำหรับ long dwell"]},
+  icoFast:{name:"Icodextrin long dwell", p:P({fluid:"ico",area:1.9,dwell:720,cur:360}),
+    rows:[["Prescription","icodextrin 7.5% 2 L dwell 12 ชม. ใน fast transporter เดิม"],["กลไก","icodextrin โมเลกุลใหญ่ ผ่าน small pore ไม่ได้ ดึงน้ำแบบ colloid ผ่าน small pore ต่อเนื่อง"],["ผล","UF บวกต่อเนื่องจนจบ dwell Na dip ไม่มีเพราะแทบไม่ผ่าน aquaporin"]],
+    take:["Icodextrin ถูกดูดกลับช้าผ่าน lymphatic gradient จึงคงอยู่ทั้ง dwell","น้ำผ่าน small pore จึงพา Na ออกได้มากกว่า glucose ต่อ ml ของ UF","เหมาะกับ long dwell โดยเฉพาะ fast transporter และลด glucose exposure"]},
+  aqpDys:{name:"Aquaporin dysfunction (EPS risk)", p:P({fluid:"g425",area:1.4,aqp:15,lps:0.6,cur:60}),
+    rows:[["ประวัติ","PD มานาน 8 ปี เคย peritonitis หลายครั้ง"],["Membrane","interstitial fibrosis ทำให้ osmotic conductance ลด aquaporin function เหลือน้อย"],["ผล","Na dip แทบไม่มี free water น้อย net UF 4 ชม. ด้วย 4.25% ต่ำกว่า 400 ml"]],
+    take:["UF ต่ำ + Na dip น้อย = intrinsic membrane dysfunction (osmotic conductance ต่ำ)","มักพบใน long vintage และหลัง peritonitis เป็นสัญญาณเตือน EPS","การเพิ่ม glucose ช่วยไม่มากและทำ membrane เสียต่อ ควรวางแผนเปลี่ยน modality"]},
+  lymph:{name:"Fluid absorption สูง", p:P({fluid:"g425",L:2.5,cur:180}),
+    rows:[["Membrane","transport และ aquaporin ปกติ Na dip ปกติ"],["Absorption","lymphatic flow 2.5 ml/min (ปกติราว 0.3)"],["ผล","น้ำเข้าดีแต่ถูกดูดกลับเร็ว net UF 4 ชม. ต่ำกว่า 400 ml"]],
+    take:["UF ต่ำโดย D/P Cr และ Na dip ปกติ ให้นึกถึง fluid absorption สูงหรือ leak","ต้องแยก catheter malfunction, residual volume สูง และ pericatheter leak ก่อน","IPP สูง (fill มาก, ท้องโต) เพิ่ม absorption"]}
+};
+var ORDER=["base","pet","fastLong","icoFast","aqpDys","lymph"];
+
+var box=document.getElementById("ctls"), C={};
+var flSel=Sim.h("select",{id:"sFl"},Object.keys(PD.FLUIDS).filter(function(k){ return k!=="aa"; }).map(function(k){ return Sim.h("option",{value:k,text:PD.FLUIDS[k].name}); }));
+flSel.addEventListener("change",update);
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"sFl",text:"น้ำยา"}),flSel]));
+function sl(k,o){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); box.appendChild(C[k].el); return C[k]; }
+sl("fill",{label:"Fill volume",min:1000,max:3000,step:100,value:2000,unit:"ml"});
+sl("dwell",{label:"Dwell",min:60,max:900,step:30,value:240,fmt:function(v){ return (v/60).toFixed(1)+" ชม."; }});
+sl("cur",{label:"ดู flux ที่นาที",min:0,max:240,step:5,value:60,unit:"min"});
+sl("area",{label:"Surface area",min:0.5,max:2.2,step:0.05,value:1,fmt:function(v){ return "×"+v.toFixed(2); }});
+sl("aqp",{label:"Aquaporin function",min:0,max:150,step:5,value:100,unit:"%"});
+sl("L",{label:"Lymphatic flow",min:0.1,max:3,step:0.1,value:0.3,unit:"ml/min"});
+sl("lps",{label:"Osmotic conductance",min:0.3,max:1.3,step:0.05,value:1,fmt:function(v){ return "×"+v.toFixed(2); }}).el.classList.add("secondary");
+sl("alb",{label:"Serum albumin",min:2,max:4.6,step:0.1,value:3.8,unit:"g/dL"}).el.classList.add("secondary");
+
+/* ---------- membrane SVG ---------- */
+var svg=document.getElementById("mem"), A=Plot.colors;
+var COL={aqp:"#19C8E6",small:"#5B4BFF",large:"#A8842C",lym:"#B4232A"};
+var g=Sim.svg("g",{},svg);
+Sim.svg("rect",{x:0,y:0,width:660,height:92,fill:"#FBEDEE"},g);
+Sim.svg("text",{x:16,y:24,"font-size":13,"font-weight":600,fill:"#7a1d22","font-family":"IBM Plex Sans Thai, sans-serif",text:"Capillary (plasma)"},g);
+var tPl=Sim.svg("text",{x:16,y:44,"font-size":12,fill:"#7a1d22","font-family":"Geist Mono, monospace"},g);
+for(var r=0;r<9;r++) Sim.svg("ellipse",{cx:250+r*44,cy:30+(r%2)*26,rx:15,ry:8,fill:"#E9A1A6",opacity:0.75},g);
+/* endothelium */
+Sim.svg("rect",{x:0,y:92,width:660,height:16,fill:"#E6E7F0"},g);
+/* interstitium + mesothelium */
+Sim.svg("rect",{x:0,y:108,width:660,height:118,fill:"#FAFAFC"},g);
+for(var f=0;f<14;f++) Sim.svg("path",{d:"M"+(f*48+10)+" "+(126+(f%3)*28)+" q20 -10 40 0",stroke:"#D3D5E2","stroke-width":1.4,fill:"none"},g);
+Sim.svg("text",{x:16,y:220,"font-size":11.5,fill:"#9A9CB2","font-family":"IBM Plex Sans Thai, sans-serif",text:"Interstitium"},g);
+Sim.svg("rect",{x:0,y:226,width:660,height:8,fill:"#D3D5E2"},g);
+Sim.svg("rect",{x:0,y:234,width:660,height:126,fill:"#EEF6FB"},g);
+Sim.svg("text",{x:16,y:256,"font-size":13,"font-weight":600,fill:"#0B0B1F","font-family":"IBM Plex Sans Thai, sans-serif",text:"Peritoneal cavity"},g);
+var tDi=Sim.svg("text",{x:16,y:348,"font-size":12,fill:"#0B0B1F","font-family":"Geist Mono, monospace"},g);
+var dots=Sim.svg("g",{},g);
+var PORES=[{k:"aqp",x:170,w:5,name:"Ultrasmall (AQP1)",sub:"r 0.2 nm, free water"},{k:"small",x:320,w:12,name:"Small pore",sub:"r 4.5 nm, water + solutes"},{k:"large",x:470,w:24,name:"Large pore",sub:"r 25 nm, protein"}];
+var arrows={};
+PORES.forEach(function(p){
+  Sim.svg("rect",{x:p.x-p.w/2,y:92,width:p.w,height:16,fill:"#fff",stroke:COL[p.k],"stroke-width":1.5},g);
+  Sim.svg("text",{x:p.x,y:84,"text-anchor":"middle","font-size":12,"font-weight":600,fill:COL[p.k],"font-family":"IBM Plex Sans Thai, sans-serif",text:p.name},g);
+  var path=Sim.svg("path",{class:"flow",d:"M"+p.x+" 112 L"+p.x+" 280",stroke:COL[p.k]},g);
+  var head=Sim.svg("path",{fill:COL[p.k]},g);
+  var lab=Sim.svg("text",{x:p.x+16,y:170,"font-size":13,"font-weight":600,fill:COL[p.k],"font-family":"Geist Mono, monospace"},g);
+  Sim.svg("text",{x:p.x+16,y:188,"font-size":11,fill:"#5E6075","font-family":"IBM Plex Sans Thai, sans-serif",text:p.sub},g);
+  arrows[p.k]={path:path,head:head,lab:lab,x:p.x};
+});
+/* lymphatic */
+(function(){
+  var x=610;
+  Sim.svg("path",{d:"M"+(x-14)+" 108 q14 -10 28 0 v118 q-14 10 -28 0 z",fill:"#fff",stroke:COL.lym,"stroke-width":1.3},g);
+  var path=Sim.svg("path",{class:"flow",d:"M"+x+" 300 L"+x+" 130",stroke:COL.lym},g);
+  var head=Sim.svg("path",{fill:COL.lym},g);
+  var lab=Sim.svg("text",{x:650,y:322,"text-anchor":"end","font-size":13,"font-weight":600,fill:COL.lym,"font-family":"Geist Mono, monospace"},g);
+  Sim.svg("text",{x:x,y:84,"text-anchor":"middle","font-size":12,"font-weight":600,fill:COL.lym,"font-family":"IBM Plex Sans Thai, sans-serif",text:"Lymphatic"},g);
+  arrows.lym={path:path,head:head,lab:lab,x:x,up:true};
+})();
+function setArrow(a,J,fixedUp){
+  var w=Math.max(1.2,Math.min(26,Math.abs(J)*3.2)), down=fixedUp?false:J>=0;
+  var y0=down?112:280, y1=down?280:118;
+  if(a.up){ y0=300; y1=124; }
+  var tip=down?y1+10:y1-10;
+  a.path.setAttribute("d","M"+a.x+" "+y0+" L"+a.x+" "+y1);
+  a.path.setAttribute("stroke-width",w);
+  a.path.setAttribute("stroke-dasharray",Math.abs(J)<0.05?"2 6":"none");
+  var hw=Math.max(7,w*0.9);
+  a.head.setAttribute("d","M"+(a.x-hw)+" "+y1+" L"+(a.x+hw)+" "+y1+" L"+a.x+" "+tip+" z");
+  a.head.setAttribute("opacity",Math.abs(J)<0.05?0.25:1);
+  a.lab.textContent=(a.up?"−":(J>=0?"+":"−"))+Math.abs(J).toFixed(1)+" ml/min";
+}
+function drawDots(glu,ico){
+  while(dots.firstChild) dots.removeChild(dots.firstChild);
+  var n=Math.round(Math.min(60,glu/3.6)), m=Math.round(ico*16);
+  for(var i=0;i<n;i++){ var x=24+((i*97)%540), y=292+((i*53)%40); Sim.svg("circle",{cx:x,cy:y,r:3.2,fill:"#5B4BFF",opacity:0.55},dots); }
+  for(var j=0;j<m;j++){ var xx=40+((j*131)%500), yy=294+((j*37)%34); Sim.svg("path",{d:"M"+xx+" "+yy+" h8 v3 h6 v-3 h8",stroke:"#1F7A72","stroke-width":2.2,fill:"none"},dots); }
+}
+
+/* ---------- chart ---------- */
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?190:240,aria:"Cumulative water by pathway over the dwell",
+  x:{min:0,max:4,label:"Dwell time (h)"}, y:{min:-400,max:1000,label:"ml"}, y2:{min:110,max:145,label:"Na dialysate"},
+  series:[
+    {id:"uf",name:"Net UF",color:A.ink,data:[],width:2.8},
+    {id:"aqp",name:"Aquaporin",color:COL.aqp,data:[],width:2},
+    {id:"small",name:"Small pore",color:COL.small,data:[],width:2},
+    {id:"lym",name:"Absorption",color:COL.lym,data:[],width:1.6,dash:[5,4]},
+    {id:"na",name:"Na",color:A.muted,data:[],width:1.3,axis:"y2",dash:[2,3]}
+  ], legend:true});
+
+function params(){ return {fluid:flSel.value,fill:C.fill.get(),dwell:C.dwell.get(),cur:C.cur.get(),area:C.area.get(),aqp:C.aqp.get(),L:C.L.get(),alb:C.alb.get(),lps:C.lps.get()}; }
+function run(p,dw){ return PD.dwell({fluid:p.fluid,fillMl:p.fill,dwellMin:dw,area:p.area,aqp:p.aqp/100,L:p.L,alb:p.alb,lps:p.lps}); }
+function update(){
+  var p=params();
+  C.cur.input.max=p.dwell; if(p.cur>p.dwell){ C.cur.set(p.dwell); p.cur=p.dwell; }
+  var R=run(p,p.dwell), a=PD.at(R,p.cur), end=PD.at(R,p.dwell), pk=PD.peak(R);
+  var R4=p.dwell>=240?R:run(p,240), a4=PD.at(R4,240);
+  var fl=PD.FLUIDS[p.fluid];
+  setArrow(arrows.aqp,a.jAqp); setArrow(arrows.small,a.jSmall); setArrow(arrows.large,a.jLarge); setArrow(arrows.lym,a.jL,true);
+  tPl.textContent="Na "+R.p.pNa+"  glucose "+R.p.pGlu+"  πonc "+Math.round(6.3*p.alb)+" mmHg";
+  var icoFrac=fl.ico?Math.max(0,(a.V?R.V0/a.V:1)*Math.exp(-(p.L+0.6)*p.cur/((R.V0+a.V)/2))):0;
+  tDi.textContent="t "+a.t+" min  V "+Math.round(a.V)+" ml  Na "+a.na.toFixed(0)+(fl.ico?"  icodextrin":"  glucose "+a.glu.toFixed(0)+" mmol/L");
+  drawDots(a.glu,icoFrac);
+  /* chart */
+  var h=p.dwell/60, ev=Math.max(1,Math.round(p.dwell/150));
+  var o={every:ev,hours:true};
+  var uf=PD.series(R,"uf",o), aq=PD.series(R,"cumAqp",o), sm=PD.series(R,"cumSmall",o), ly=PD.series(R,"cumL",Object.assign({scale:-1},o));
+  var all=[].concat(uf,aq,sm,ly).map(function(d){ return d[1]; });
+  var lo=Math.min.apply(null,all), hi=Math.max.apply(null,all);
+  var st=Plot.niceStep(Math.max(200,hi-lo),5);
+  chart.update({x:{min:0,max:h,label:"Dwell time (h)",step:h>8?2:(h>3?1:0.5)},
+    y:{min:Math.floor(lo/st)*st,max:Math.ceil(hi/st)*st,step:st,label:"ml"},
+    vlines:[{x:p.cur/60,label:"Flux view"}], hlines:[{y:0,color:A.muted,dash:[1,3]}]});
+  chart.setSeries("uf",uf); chart.setSeries("aqp",aq); chart.setSeries("small",sm); chart.setSeries("lym",ly);
+  chart.setSeries("na",PD.series(R,"na",o));
+  /* readout */
+  var is425=p.fluid==="g425";
+  Sim.ro("roUF",Sim.fmt(end.uf,0),end.uf<0?"flag":(is425&&p.dwell===240&&end.uf<400?"flag":"ok"));
+  Sim.ro("roPk",Sim.fmt(pk.uf,0)+" @ "+(pk.t/60).toFixed(1));
+  Sim.ro("roFW",p.dwell>=60?Sim.fmt(PD.at(R,60).fw60,0):"-",is425&&a4.fw60<75?"flag":false);
+  var dip=PD.at(R4,60).naDip;
+  Sim.ro("roDip",Sim.fmt(dip,1),is425?(dip<5?"flag":"ok"):false);
+  Sim.ro("roCr",a4.dpCr.toFixed(2)); document.getElementById("crLab").textContent="D/P Cr 4 ชม. "+PD.category(a4.dpCr);
+  Sim.ro("roNa",Sim.fmt(end.naRemoved,0),end.naRemoved<0?"flag":false);
+  var kv=document.getElementById("kv"); kv.innerHTML="";
+  [["Glucose ดูดซึม (g)",fl.ico?"ราว 0 (icodextrin ดูดกลับทาง lymphatic)":Sim.fmt(end.gluAbsorbedG,0)],
+   ["D/D0 glucose ท้าย dwell",fl.glu?end.dd0.toFixed(2):"-"],
+   ["Free water fraction 60 นาที",p.dwell>=60?Math.round(PD.at(R,60).fwFrac*100)+"%":"-"],
+   ["Net flux ที่นาที "+a.t+" (ml/min)",(a.jNet>=0?"+":"")+a.jNet.toFixed(2)],
+   ["Urea clearance ใน dwell นี้ (L)",end.ureaClearedL.toFixed(2)]].forEach(function(r){ kv.appendChild(Sim.h("span",{text:r[0]})); kv.appendChild(Sim.h("span",{text:r[1]})); });
+  /* next step */
+  var act=document.getElementById("act"), msg, bad=false;
+  if(is425 && a4.uf<400){
+    bad=true;
+    if(a4.dpCr>=0.82) msg="<b>UF insufficiency จาก fast transport</b> ใช้ dwell สั้น (APD) และเปลี่ยน long dwell เป็น icodextrin";
+    else if(dip<5) msg="<b>UF ต่ำร่วมกับ Na dip น้อย</b> ชี้ osmotic conductance ลดลง (aquaporin/fibrosis) ประเมินความเสี่ยง EPS และวางแผนเปลี่ยนเป็น HD";
+    else msg="<b>UF ต่ำโดย transport และ Na dip ปกติ</b> ตรวจ drain ไม่หมดหรือ catheter malfunction, pericatheter leak และ lymphatic absorption สูง ลด fill ถ้า IPP สูง";
+  } else if(end.uf<0){
+    bad=true;
+    msg="<b>Net reabsorption ท้าย dwell</b> UF สูงสุดที่ราว "+(pk.t/60).toFixed(1)+" ชม. ย่น dwell ให้ใกล้จุดนี้ หรือใช้ icodextrin สำหรับ long dwell";
+  } else if(p.fluid==="g425"){
+    msg="<b>UF เพียงพอ</b> แต่ดูด glucose ราว "+Math.round(end.gluAbsorbedG)+" g ต่อ exchange ใช้ 4.25% เท่าที่จำเป็นและคุม Na/น้ำ เพื่อลด glucose exposure";
+  } else if(fl.ico){
+    msg="<b>Icodextrin เหมาะกับ long dwell</b> ใช้วันละ 1 exchange ติดตาม rash และระวังการวัด glucose ด้วย strip ชนิด GDH-PQQ (ค่าสูงลวง)";
+  } else {
+    msg="<b>UF และ clearance สมดุล</b> ปรับ dwell ตาม peak UF ของ transport type ผู้ป่วย และตรวจ PET เมื่อ UF เปลี่ยน";
+  }
+  act.innerHTML="<b>Next step:</b> "+msg; act.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"PD-01", title:"Peritoneal Membrane: Three-Pore Model", lead:"เลือกน้ำยา ปรับ surface area, aquaporin และ fluid absorption แล้วดูว่าน้ำผ่าน pore ไหน Na sieving เกิดอย่างไร และทำไม UF จึงมี peak",
+  scenarios:S, order:ORDER, captureMs:1800,
+  onChange:function(k,s){ var p=s.p; flSel.value=p.fluid; C.dwell.set(p.dwell); C.cur.input.max=p.dwell; ["fill","cur","area","aqp","L","alb","lps"].forEach(function(x){ C[x].set(p[x]); }); update(); },
+  refs:["Rippe B, Stelin G, Haraldsson B. Computer simulations of peritoneal fluid transport in CAPD. Kidney Int 1991, 40(2): 315-325",
+        "Rippe B. A three-pore model of peritoneal transport. Perit Dial Int 1993, 13 Suppl 2: S35-S38",
+        "Devuyst O, Rippe B. Water transport across the peritoneal membrane. Kidney Int 2014, 85(4): 750-758",
+        "Ni J, Verbavatz JM, Rippe A, et al. Aquaporin-1 plays an essential role in water permeability and ultrafiltration during peritoneal dialysis. Kidney Int 2006, 69(9): 1518-1525",
+        "Morelle J, Stachowska-Pietka J, Öberg C, et al. ISPD recommendations for the evaluation of peritoneal membrane dysfunction in adults: classification, measurement, interpretation and rationale for intervention. Perit Dial Int 2021, 41(4): 352-372"],
+  note:"Model เพื่อการสอน (core/pd.js): LpS 0.062 ml/min/mmHg แบ่ง aquaporin 2%, small pore 90%, large pore 8% reflection coefficient ของ glucose ที่ small pore 0.03 MTAC เพิ่มตาม effective surface area ส่วน osmotic conductance เพิ่มเพียงเล็กน้อย lymphatic flow 0.3 ml/min ตัวเลขใกล้เคียงค่าเฉลี่ยทางคลินิกแต่ไม่ใช่ค่าของผู้ป่วยรายใด"
+});
+})();
+</script>
+</body>
+</html>

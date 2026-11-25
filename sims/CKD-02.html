@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[CKD-02] CKD Progression, KFRE and eGFR Slope</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(110px,140px) 1fr 92px}
+.sel{display:grid;grid-template-columns:minmax(110px,140px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:10px}
+body.present .bench{grid-template-columns:1.35fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:14px 18px}
+body.present .ctls{gap:1px}
+body.present .ctl{font-size:13px}
+body.present .tools{margin-top:6px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .ro{padding:7px 12px}
+body.present .ro b{font-size:18px}
+body.present .readout{margin-top:8px}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+body.present .take li{font-size:14px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>eGFR 10 ปี: acute dip และ chronic slope</h2>
+      <div id="chart"></div>
+      <div id="live"></div>
+      <p class="hint no-present">เส้นม่วงคือ eGFR เมื่อได้การรักษาที่เลือก เส้นประคือไม่ได้รักษา เส้นทองคือ KFRE 5 ปี (แกนขวา) ที่คำนวณใหม่ทุกจุดจาก eGFR และ UACR ขณะนั้น การรักษาที่ชะลอโรคทำให้ eGFR ลดลงเล็กน้อยช่วงแรก (hemodynamic dip) แต่เส้นชันน้อยลงจนตัดเส้นประภายใน 1–2 ปี</p>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วยและการรักษา</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roDip"><b>-</b><span>Acute dip เดือนแรก</span></div>
+        <div class="ro" id="roSl"><b>-</b><span>Chronic slope (mL/min/ปี)</span></div>
+        <div class="ro" id="roAc"><b>-</b><span>UACR on treatment (mg/g)</span></div>
+        <div class="ro" id="roK0"><b>-</b><span>KFRE 2 ปี / 5 ปี ตอนนี้</span></div>
+        <div class="ro" id="roE5"><b>-</b><span>eGFR ปีที่ 5</span></div>
+        <div class="ro" id="roT"><b>-</b><span>ถึง eGFR 15 (ปี)</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/calc.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/live.js"></script>
+<script>
+(function(){
+"use strict";
+var CAUSE={dkd:{name:"DKD (type 2 diabetes)",base:1.5,glp:1,fin:0.15},gn:{name:"IgAN / chronic GN",base:1.2,glp:0,fin:0.12},ht:{name:"Hypertensive / non-proteinuric",base:0.8,glp:0,fin:0.08}};
+var RX={raas:{name:"RAASi max dose",acr:0.65,sl:0.15,dip:0.06},sglt:{name:"SGLT2i",acr:0.70,sl:0.30,dip:0.05},fin:{name:"Finerenone",acr:0.70,sl:0,dip:0.03},glp:{name:"GLP-1RA",acr:0.76,sl:0,dip:0},bp:{name:"SBP < 120",acr:0.88,sl:0.08,dip:0.04}};
+function P(o){ var d={cause:"dkd",sex:"M",age:58,egfr:55,acr:1200,sbp:145,rx:[],vol:false}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  dkd0:{name:"DKD A3 ยังไม่ได้ยา", p:P({}),
+    rows:[["ผู้ป่วย","ชาย 58 ปี T2D eGFR 55 UACR 1,200 mg/g SBP 145"],["ไม่รักษา","slope ราว −4 mL/min/ปี ถึง kidney failure ในราว 10 ปี"],["KFRE","5 ปีเกิน 3–5% ควรอยู่ในการดูแลของ nephrologist"]],
+    take:["Albuminuria เป็นตัวพยากรณ์ slope ที่แรงที่สุดรองจาก eGFR ระดับ A3 ชันกว่า A1 หลายเท่า","ความเสี่ยงไตวายใช้ eGFR, UACR, อายุ, เพศ ร่วมกันใน KFRE ไม่ใช่ G stage อย่างเดียว","KFRE 5 ปีเกิน 3–5% ควรส่งต่อ nephrologist"]},
+  dkd4:{name:"DKD ครบ 4 เสา", p:P({rx:["raas","sglt","fin","glp","bp"]}),
+    rows:[["การรักษา","RAASi เต็มขนาด + SGLT2i + finerenone + GLP-1RA + คุม SBP"],["Dip","eGFR ลดลงราว 15–20% ในเดือนแรก เป็น hemodynamic ไม่ใช่ไตเสีย"],["ผล","UACR ลดเหลือราว 1 ใน 5 slope ช้าลงมาก"]],
+    take:["ยาที่ลด intraglomerular pressure ทำให้ eGFR dip ช่วงแรก ถ้าไม่เกิน 30% ให้ใช้ยาต่อ","ประโยชน์ของแต่ละยาบวกกันเพราะกลไกต่างกัน (hemodynamic, MR inflammation, metabolic)","ติดตาม UACR หลังปรับยา การลด albuminuria สัมพันธ์กับผลระยะยาว"]},
+  gn:{name:"IgAN proteinuria 1.3 g", p:P({cause:"gn",age:35,egfr:72,acr:900,sbp:132,rx:["raas","sglt"]}),
+    rows:[["ผู้ป่วย","ชาย 35 ปี IgAN eGFR 72 UACR 900 mg/g (UPCR ราว 1.3)"],["Supportive","RAASi + SGLT2i ยังเหลือ UACR สูง"],["ความหมาย","อายุน้อย slope ที่เหลือยังพาไปถึง kidney failure ในชีวิตนี้"]],
+    take:["ผู้ป่วยอายุน้อยต้องดูผลรวมตลอดชีวิต slope −2 mL/min/ปี ก็พอทำให้ไตวายก่อนอายุ 70","ถ้า proteinuria ยังเกินเป้าหลัง supportive เต็มที่ ต้องพิจารณาการรักษาจำเพาะโรค","eGFR slope ใช้เป็น surrogate ของ kidney failure ได้ เมื่อวัดนานพอ"]},
+  ht:{name:"Non-proteinuric ผู้สูงอายุ", p:P({cause:"ht",age:74,sex:"F",egfr:44,acr:12,sbp:138,rx:["raas"]}),
+    rows:[["ผู้ป่วย","หญิง 74 ปี eGFR 44 UACR 12 mg/g"],["slope","ราว −1 mL/min/ปี ใกล้การเสื่อมตามอายุ"],["KFRE","5 ปีต่ำกว่า 1% แม้ G3b"]],
+    take:["CKD G3 ที่ไม่มี albuminuria ในผู้สูงอายุมักดำเนินโรคช้า ความเสี่ยง CV และเสียชีวิตสูงกว่าไตวาย","การรักษาที่ลด slope ได้ประโยชน์ absolute น้อยกว่ากลุ่ม albuminuria สูง","KFRE ช่วยหลีกเลี่ยงการส่งต่อและเตรียม KRT ที่ไม่จำเป็น"]},
+  dip:{name:"Dip เกิน 30%", p:P({rx:["raas","sglt"],vol:true}),
+    rows:[["ผู้ป่วย","DKD เริ่ม ACEi + SGLT2i ขณะท้องเสียและได้ furosemide"],["ผล","eGFR ลดเกิน 30% ในสัปดาห์แรก"],["ต้องคิดถึง","volume depletion, bilateral renal artery stenosis, NSAID, AKI จากสาเหตุอื่น"]],
+    take:["Dip เกิน 30% ไม่ใช่ hemodynamic ปกติ ต้องหา volume depletion, renal artery stenosis หรือยาร่วม","แก้สาเหตุแล้วกลับมาใช้ยาได้เกือบทุกราย ไม่ควรหยุด RAASi ถาวรโดยไม่หาสาเหตุ","ตรวจ Cr และ K ภายใน 2–4 สัปดาห์หลังเริ่มหรือเพิ่มยา"]},
+  late:{name:"G4 KFRE สูง", p:P({egfr:22,acr:2200,age:62,sbp:150,rx:["raas","sglt"]}),
+    rows:[["ผู้ป่วย","ชาย 62 ปี eGFR 22 UACR 2,200 mg/g"],["KFRE 2 ปี","เกิน 40%"],["ต้องทำ","เริ่มให้ข้อมูล KRT, ประเมิน KT/pre-emptive, ทำ access"]],
+    take:["KFRE 2 ปีเกิน 10% เริ่มเตรียมทางเลือก KRT และ CKM ร่วมกับผู้ป่วย","KFRE 2 ปีเกิน 40% ควรเตรียม vascular access หรือ PD catheter และประเมิน pre-emptive KT","SGLT2i ยังใช้ต่อได้จนเริ่ม dialysis แม้ eGFR ต่ำกว่าเกณฑ์เริ่มยา"]}
+};
+var ORDER=["dkd0","dkd4","gn","ht","dip","late"];
+var box=document.getElementById("ctls"), C={}, ON={}, VOL=false;
+var cs=Sim.h("select",{id:"cause"},Object.keys(CAUSE).map(function(k){ return Sim.h("option",{value:k,text:CAUSE[k].name}); }));
+cs.addEventListener("change",function(){ update(); });
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"cause",text:"สาเหตุ"}),cs]));
+var sx=Sim.h("select",{id:"sex"},[Sim.h("option",{value:"M",text:"ชาย"}),Sim.h("option",{value:"F",text:"หญิง"})]); sx.addEventListener("change",function(){ update(); });
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"sex",text:"เพศ"}),sx]));
+function sl(k,o){ o.id="s"+k; o.onInput=function(){ update(true); }; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("age",{label:"อายุ",min:20,max:90,step:1,value:58,unit:"ปี"});
+sl("egfr",{label:"eGFR ตั้งต้น",min:15,max:100,step:1,value:55,unit:"mL/min"});
+sl("lacr",{label:"UACR",min:0.7,max:3.7,step:0.02,value:Math.log10(1200),unit:"mg/g",fmt:function(v){ return Math.round(Math.pow(10,v)).toLocaleString("en-US"); }});
+sl("sbp",{label:"SBP",min:110,max:180,step:1,value:145,unit:"mmHg"});
+var tb=document.getElementById("tools"), BT={};
+Object.keys(RX).forEach(function(k){ BT[k]=Sim.toggle(RX[k].name,function(on){ ON[k]=on; update(); },false); tb.appendChild(BT[k]); });
+var bVol=Sim.toggle("Volume depletion / RAS",function(on){ VOL=on; update(); },false); tb.appendChild(bVol);
+function v(k){ return C[k].get(); }
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?300:320,aria:"eGFR trajectory over ten years with and without treatment",
+  x:{min:0,max:10,step:1,label:"Years"},y:{min:0,max:110,label:"eGFR (mL/min/1.73 m²)"},y2:{min:0,max:100,step:20,label:"5-year KFRE (%)"},
+  series:[{id:"rx",name:"eGFR on treatment",color:A.accent,data:[],width:2.8},{id:"no",name:"eGFR untreated",color:A.muted,data:[],width:1.6,dash:[5,4]},{id:"k",name:"5-year KFRE",color:A.gold,data:[],width:1.5,axis:"y2"}],
+  hlines:[{y:60,label:"G3a",color:A.muted,dash:[2,3]},{y:30,label:"G4",color:A.gold,dash:[4,3]},{y:15,label:"G5",color:A.red,dash:[4,3]}],legend:true});
+var live=Live.player(chart,{mount:"live"}), LAST=null;
+function model(){
+  var c=CAUSE[cs.value], age=v("age"), e0=v("egfr"), acr=Math.pow(10,v("lacr")), sbp=v("sbp");
+  var sl0=-(c.base+1.3*Math.max(0,Math.log10(acr/30))+0.04*Math.max(0,sbp-120));
+  var fA=1,fS=1,dip=0;
+  Object.keys(RX).forEach(function(k){ if(!ON[k]) return; var r=RX[k];
+    var a=r.acr, s=r.sl;
+    if(k==="glp"){ a=c.glp?0.76:0.92; s=c.glp?0.15:0; }
+    if(k==="fin"){ s=c.fin; }
+    fA*=a; fS*=(1-s); dip+=r.dip*(k==="raas"&&VOL?5:1)+(k==="sglt"&&VOL?0.08:0); });
+  if(ON.bp) sbp=Math.min(sbp,118);
+  dip=Math.min(dip,0.6);
+  var acrRx=acr*fA;
+  var slR=-(c.base+1.3*Math.max(0,Math.log10(acrRx/30))+0.04*Math.max(0,sbp-120))*fS;
+  slR=Math.min(slR,-0.4); var sl0c=Math.min(sl0,-0.4);
+  var rx=[],no=[],kf=[];
+  for(var t=0;t<=10.0001;t+=0.05){ var tt=+t.toFixed(2);
+    var er=Math.max(4,e0*(1-dip*Math.min(1,tt/0.08))+slR*tt), en=Math.max(4,e0+sl0c*tt);
+    rx.push([tt,er]); no.push([tt,en]);
+    if(Math.round(tt*100)%25===0){ var a2=tt<0.08?acr+(acrRx-acr)*tt/0.08:acrRx; kf.push([tt,Calc.kfre({age:age+tt,sex:sx.value,egfr:er,acr:a2}).value]); } }
+  var k0=Calc.kfre({age:age,sex:sx.value,egfr:e0,acr:acr});
+  var tR=Live.cross(rx,15,-1), tN=Live.cross(no,15,-1);
+  return {c:c,age:age,e0:e0,acr:acr,acrRx:acrRx,sl0:sl0c,slR:slR,dip:dip,rx:rx,no:no,kf:kf,k0:k0,tR:tR,tN:tN,e5:Live.valueAt(rx,5)};
+}
+function events(M){
+  var E=[];
+  E.push({t:0,kind:"phys",text:"ตั้งต้น eGFR "+M.e0+" UACR "+Math.round(M.acr)+" mg/g KFRE 2 ปี "+M.k0.risk2.toFixed(1)+"% 5 ปี "+M.k0.risk5.toFixed(1)+"%"});
+  if(M.dip>0) E.push({t:0.08,kind:M.dip>0.3?"warn":"rx",text:"เดือนที่ 1: eGFR dip "+(M.dip*100).toFixed(0)+"% "+(M.dip>0.3?"เกิน 30% หาสาเหตุ":"hemodynamic คาดไว้ ใช้ยาต่อ")});
+  var x=null; for(var i=1;i<M.rx.length;i++){ if(M.rx[i][1]>=M.no[i][1]&&M.rx[i-1][1]<M.no[i-1][1]){ x=M.rx[i][0]; break; } }
+  if(x!==null&&M.dip>0) E.push({t:x,kind:"ok",text:"เส้น treated ตัดเส้น untreated ที่ปีที่ "+x.toFixed(1)+" หลังจากนี้ได้ GFR เพิ่มขึ้นเรื่อยๆ"});
+  var t30=Live.cross(M.rx,30,-1); if(t30!==null&&M.e0>30) E.push({t:t30,kind:"warn",text:"เข้าสู่ G4 ที่ปีที่ "+t30.toFixed(1)});
+  var k10=null,k40=null; M.kf.forEach(function(p){ var r2=Calc.kfre({age:M.age+p[0],sex:sx.value,egfr:Live.valueAt(M.rx,p[0]),acr:M.acrRx}).risk2; if(k10===null&&r2>10) k10=p[0]; if(k40===null&&r2>40) k40=p[0]; });
+  if(k10!==null) E.push({t:Math.max(0.1,k10),kind:"warn",text:"KFRE 2 ปีเกิน 10% เริ่มให้ข้อมูล KRT, KT และ CKM"});
+  if(k40!==null) E.push({t:Math.max(0.15,k40),kind:"warn",text:"KFRE 2 ปีเกิน 40% เตรียม access และประเมิน pre-emptive KT"});
+  if(M.tR!==null) E.push({t:M.tR,kind:"warn",text:"eGFR 15 ที่ปีที่ "+M.tR.toFixed(1)+(M.tN!==null?" (ไม่รักษา "+M.tN.toFixed(1)+")":"")});
+  E.push({t:10,kind:"phys",text:"ปีที่ 10: eGFR "+Live.valueAt(M.rx,10).toFixed(0)+" เทียบไม่รักษา "+Live.valueAt(M.no,10).toFixed(0)});
+  return E.sort(function(a,b){ return a.t-b.t; });
+}
+function onFrame(t,done){
+  var M=LAST;
+  if(t>=0.08||done) Sim.ro("roDip",M.dip>0?"−"+(M.dip*100).toFixed(0)+"%":"0%",M.dip>0.3?"flag":M.dip>0?null:null); else Sim.ro("roDip","…");
+  if(t>=5||done) Sim.ro("roE5",M.e5.toFixed(0),M.e5<30?"flag":"ok"); else Sim.ro("roE5","…");
+  if(done) Sim.ro("roT",M.tR!==null?M.tR.toFixed(1):"> 10",M.tR!==null?"flag":"ok"); else Sim.ro("roT","…");
+  var a=document.getElementById("act");
+  if(done){ a.innerHTML=M.act; a.className=M.actCls; } else { a.innerHTML="<b>กำลังจำลอง</b> ปีที่ "+t.toFixed(1)+" eGFR "+Live.valueAt(M.rx,t).toFixed(0)+" (ไม่รักษา "+Live.valueAt(M.no,t).toFixed(0)+")"; a.className="act"; }
+}
+function update(deb){
+  var M=model();
+  chart.update({y:{min:0,max:Math.max(70,Math.ceil((M.e0+10)/10)*10),label:"eGFR (mL/min/1.73 m²)"}});
+  chart.setSeries("rx",M.rx); chart.setSeries("no",M.no); chart.setSeries("k",M.kf);
+  Sim.ro("roSl",M.slR.toFixed(1)+" vs "+M.sl0.toFixed(1),M.slR<-3?"flag":M.slR>-1.5?"ok":null);
+  Sim.ro("roAc",Math.round(M.acrRx).toLocaleString("en-US"),M.acrRx>300?"flag":M.acrRx<30?"ok":null);
+  Sim.ro("roK0",M.k0.risk2.toFixed(1)+" / "+M.k0.risk5.toFixed(0)+"%",M.k0.risk2>10?"flag":M.k0.risk5<3?"ok":null);
+  var m,bad=true, missing=[];
+  if(cs.value==="dkd"){ ["raas","sglt","fin","glp"].forEach(function(k){ if(!ON[k]) missing.push(RX[k].name); }); }
+  else { ["raas","sglt"].forEach(function(k){ if(!ON[k]) missing.push(RX[k].name); }); if(!ON.fin&&M.acr>=200) missing.push("Finerenone (พิจารณา)"); }
+  if(M.dip>0.3) m="<b>Dip "+(M.dip*100).toFixed(0)+"% เกิน 30%</b> ตรวจ volume status, หยุด diuretic/NSAID ชั่วคราว, หา renal artery stenosis ถ้าไม่ดีขึ้น ลดหรือพัก RAASi ชั่วคราวแล้วเริ่มใหม่เมื่อแก้สาเหตุ";
+  else if(M.k0.risk2>40) m="<b>KFRE 2 ปี "+M.k0.risk2.toFixed(0)+"%</b> เตรียม KRT: ให้ข้อมูล HD, PD, KT, CKM ทำ AVF หรือวางแผน PD catheter ประเมิน pre-emptive KT และ living donor ใช้ SGLT2i และ RAASi ต่อ";
+  else if(missing.length) m="<b>ยังขาด</b> "+missing.join(", ")+" ปรับเพิ่มทีละตัวโดยดู K และ eGFR 2–4 สัปดาห์หลังเริ่มแต่ละยา"+(M.k0.risk5>=3?" และ KFRE 5 ปี "+M.k0.risk5.toFixed(0)+"% ควรอยู่ในการดูแลของ nephrologist":"");
+  else if(M.acrRx>300) m="<b>Residual albuminuria "+Math.round(M.acrRx)+" mg/g</b> ทบทวน adherence, salt intake, BP และหาการรักษาจำเพาะโรคถ้าเป็น GN";
+  else { bad=false; m="<b>ครอบคลุมแล้ว</b> ติดตาม eGFR และ UACR ทุก 3–6 เดือน คำนวณ slope จากค่าหลังเดือนที่ 3 (หลัง dip) ไม่ใช่จาก baseline"; }
+  M.act="<b>Next step:</b> "+m; M.actCls="act"+(bad?" bad":"");
+  LAST=M;
+  live.load({tMin:0,tMax:10,unit:"ปี",ms:8000,debounce:deb===true,num:function(x){ return x.toFixed(1); },events:events(M),onFrame:onFrame,
+    cursorLabel:function(t){ return "eGFR "+Live.valueAt(M.rx,t).toFixed(0); }});
+}
+Sim.mount({code:"CKD-02", title:"CKD Progression, KFRE and eGFR Slope", lead:"ตั้ง eGFR, albuminuria, ความดันและสาเหตุ แล้วเพิ่มยาทีละตัว ดู acute dip เดือนแรก chronic slope ที่ช้าลง และ KFRE ที่เปลี่ยนตลอด 10 ปี",
+  scenarios:S, order:ORDER, captureMs:1000,
+  onChange:function(k,s){ cs.value=s.p.cause; sx.value=s.p.sex; C.age.set(s.p.age); C.egfr.set(s.p.egfr); C.lacr.set(Math.log10(s.p.acr)); C.sbp.set(s.p.sbp);
+    Object.keys(RX).forEach(function(r){ ON[r]=s.p.rx.indexOf(r)>=0; BT[r].setState(ON[r]); }); VOL=!!s.p.vol; bVol.setState(VOL); update(); },
+  refs:["KDIGO 2024 Clinical Practice Guideline for the Evaluation and Management of CKD. Kidney Int 2024, 105(4S): S117-S314",
+        "Tangri N, Grams ME, Levey AS, et al. Multinational assessment of accuracy of equations for predicting risk of kidney failure. JAMA 2016, 315(2): 164-174",
+        "Heerspink HJL, Stefánsson BV, Correa-Rotter R, et al (DAPA-CKD). Dapagliflozin in patients with CKD. N Engl J Med 2020, 383(15): 1436-1446",
+        "EMPA-KIDNEY Collaborative Group. Empagliflozin in patients with CKD. N Engl J Med 2023, 388(2): 117-127",
+        "Agarwal R, Filippatos G, Pitt B, et al (FIDELITY). Cardiovascular and kidney outcomes with finerenone. Eur Heart J 2022, 43(6): 474-484",
+        "Perkovic V, Tuttle KR, Rossing P, et al (FLOW). Effects of semaglutide on CKD in type 2 diabetes. N Engl J Med 2024, 391(2): 109-121",
+        "Heerspink HJL, Agarwal R, Bakris GL, et al (FIND-CKD). Finerenone in CKD without diabetes. N Engl J Med 2026",
+        "Grams ME, Sang Y, Ballew SH, et al. Evaluating glomerular filtration rate slope as a surrogate end point for ESKD. J Am Soc Nephrol 2019, 30(9): 1746-1755"],
+  note:"Model เพื่อการสอน: slope ไม่รักษา = −(ค่าตามสาเหตุ + 1.3 log10(UACR/30) + 0.04 x (SBP − 120)) ยาแต่ละตัวลด UACR แบบคูณ (RAASi 0.65, SGLT2i 0.70, finerenone 0.70, GLP-1RA 0.76 ใน DKD) slope ใหม่คำนวณจาก UACR ที่ลดแล้วคูณผลที่ไม่ผ่าน albuminuria (SGLT2i 30%, RAASi 15%, finerenone และ GLP-1RA 15% ใน DKD) dip เกิดใน 1 เดือน slope ไม่ช้ากว่า −0.4 (อายุ) KFRE 4 ตัวแปร non-North America"
+});
+})();
+</script>
+</body>
+</html>

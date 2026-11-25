@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[PD-06] Incremental PD and Residual Kidney Function</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(120px,160px) 1fr 100px}
+.sel{display:grid;grid-template-columns:minmax(120px,160px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.readout{grid-template-columns:repeat(3,1fr)}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,1fr)}}
+table.lv{width:100%;border-collapse:collapse;font-size:13px;margin-top:12px}
+table.lv th,table.lv td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right}
+table.lv th{font-weight:500;color:var(--muted);font-size:12px}
+table.lv td{font-family:var(--mono);font-variant-numeric:tabular-nums}
+table.lv td:first-child,table.lv th:first-child{text-align:left;font-family:inherit}
+table.lv tr.cur td{background:var(--accent-soft)}
+.lvwrap{overflow-x:auto}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+body.present .bench{grid-template-columns:1.4fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .tools{display:none}
+body.present .card{padding:16px 20px}
+body.present .ctls{gap:2px}
+body.present .ro{padding:8px 12px}
+body.present table.lv td,body.present table.lv th{padding:4px 8px}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Weekly Kt/V จากไตและจากท้องตลอด 4 ปี</h2>
+      <div id="chart"></div>
+      <div class="tools">
+        <button class="tog" type="button" id="tPeri" aria-pressed="false">Peritonitis เดือนที่ 12</button>
+        <button class="tog" type="button" id="tTox" aria-pressed="false">NSAID/contrast เดือนที่ 20</button>
+      </div>
+      <div class="lvwrap"><table class="lv" id="lv" aria-label="Prescription levels"></table></div>
+      <p class="hint no-present">พื้นเขียวคือ renal Kt/V ที่ลดลงตาม RKF พื้นม่วงคือส่วนที่ได้จาก PD เส้นประแนวนอนคือเป้า 1.7 เส้นตั้งคือจุดที่ต้องเพิ่ม prescription ตารางคือ Kt/V ทางท้องของแต่ละขั้น</p>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วยและนโยบาย</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roStart"><b>-</b><span>Kt/V รวมตอนเริ่ม</span></div>
+        <div class="ro" id="roFull"><b>-</b><span>ถึง CAPD 4 exchange (เดือน)</span></div>
+        <div class="ro" id="roAnuric"><b>-</b><span>Kru ที่ 24 เดือน (ml/min)</span></div>
+        <div class="ro" id="roSaved"><b>-</b><span>Exchange ที่ลดได้ใน 4 ปี</span></div>
+        <div class="ro" id="roGlu"><b>-</b><span>Glucose ที่ลดได้ (kg)</span></div>
+        <div class="ro" id="roMin"><b>-</b><span>Kt/V ต่ำสุดที่เกิดขึ้น</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/pd.js"></script>
+<script>
+(function(){
+"use strict";
+function P(o){ var d={policy:"inc",startLv:2,w:60,area:1.0,kru:5,decl:30,fill:2000,peri:false,tox:false}; for(var k in o) d[k]=o[k]; return d; }
+var S = {
+  inc:{name:"Incremental start", p:P({}),
+    rows:[["ผู้ป่วย","60 kg Kru 5 ml/min ปัสสาวะดี เริ่ม PD 2 exchange ต่อวัน"],["RKF","ลดลงราว 30% ต่อปี"],["ผล","Kt/V รวมเกิน 1.7 ด้วย PD เพียงบางส่วน เพิ่มเป็น 3 และ 4 exchange ตาม RKF ที่ลดลง"]],
+    take:["Incremental PD = ให้ PD เพียงพอเมื่อรวมกับ RKF แล้วเพิ่มเมื่อ RKF ลด","ลดภาระ, glucose exposure และอาจลด peritonitis ช่วงแรก","ต้องวัด RKF (24-h urine) ทุก 2–3 เดือนและประเมิน volume ทุกครั้ง"]},
+  peri:{name:"RKF ลดเร็วหลัง peritonitis", p:P({peri:true,tox:true}),
+    rows:[["เหตุการณ์","peritonitis เดือนที่ 12 และได้ NSAID/contrast เดือนที่ 20"],["ผล","RKF ลดลงเป็นขั้น ต้องเพิ่ม prescription เร็วกว่าที่คาด"],["บทเรียน","ตรวจ RKF ซ้ำหลังเหตุการณ์ที่ทำให้ไตเสีย"]],
+    take:["Peritonitis, nephrotoxin และ hypovolemia ทำให้ RKF ลดเร็ว","หลีกเลี่ยง NSAID, aminoglycoside ซ้ำ, contrast ที่ไม่จำเป็น และ volume depletion","หลังเหตุการณ์ดังกล่าวให้วัด RKF ใหม่ก่อนนัดตามปกติ"]},
+  small:{name:"ตัวเล็ก RKF คงที่", p:P({w:48,kru:6,decl:15,startLv:1}),
+    rows:[["ผู้ป่วย","48 kg Kru 6 ml/min RKF ลดช้า"],["Prescription","เริ่ม 1 exchange ค้างคืน"],["ผล","incremental อยู่ได้หลายปี ลด glucose exposure ได้มาก"]],
+    take:["คนตัวเล็กที่มี RKF ดีได้ประโยชน์จาก incremental มากที่สุด","V เล็ก ทำให้ renal Kt/V สูงแม้ Kru ไม่มาก","ยังต้องคุมน้ำและ Na ไม่ใช่ดูแค่ Kt/V"]},
+  big:{name:"ตัวใหญ่ RKF น้อย", p:P({w:88,kru:2,decl:35}),
+    rows:[["ผู้ป่วย","88 kg Kru 2 ml/min"],["ผล","renal Kt/V ช่วยได้น้อย 2 exchange ไม่พอตั้งแต่ต้น"],["แนวทาง","เริ่ม full dose หรือ APD ตั้งแต่แรก"]],
+    take:["Incremental ไม่เหมาะเมื่อ RKF น้อยและ V ใหญ่","ใช้ total Kt/V ตัดสิน ไม่ใช่จำนวน exchange","คนตัวใหญ่ที่ anuric อาจต้อง APD + day dwell หรือ HD"]},
+  protect:{name:"Preserve RKF", p:P({decl:12}),
+    rows:[["การดูแล","หลีกเลี่ยง nephrotoxin คุม BP ไม่ให้ต่ำ ใช้ diuretic เพื่อคง urine volume ใช้ RAASi ถ้าเหมาะสม"],["RKF","ลดลงราว 12% ต่อปี"],["ผล","ต้องเพิ่ม prescription ช้าลงมาก"]],
+    take:["RKF สัมพันธ์กับ survival ใน PD ชัดเจนกว่า peritoneal clearance","RKF ดีช่วยทั้ง middle molecule, Na และน้ำ","ทุกการตัดสินใจทางคลินิกควรถามว่ากระทบ RKF หรือไม่"]},
+  fullDose:{name:"Full dose ตั้งแต่แรก", p:P({policy:"full"}),
+    rows:[["Prescription","CAPD 4 x 2 L ตั้งแต่วันแรก ผู้ป่วยเดียวกับ incremental"],["ผล","Kt/V รวมสูงเกินเป้ามากช่วงแรก"],["ข้อแลก","glucose exposure และภาระสูงขึ้นโดยไม่มีหลักฐานว่า Kt/V ที่สูงเกินเป้าลด mortality"]],
+    take:["Peritoneal clearance ที่สูงขึ้นไม่ได้ลด mortality","Full dose ช่วงแรกเพิ่ม glucose exposure","Incremental ต้องมีระบบติดตาม RKF ที่ดีจึงปลอดภัย"]}
+};
+var ORDER=["inc","peri","small","big","protect","fullDose"];
+
+var box=document.getElementById("ctls"), C={}, SEL={};
+function sel(k,label,opts){ var s=Sim.h("select",{id:"s"+k},opts.map(function(o){ return Sim.h("option",{value:o[0],text:o[1]}); })); s.addEventListener("change",update); box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"s"+k,text:label}),s])); SEL[k]=s; return s; }
+function sl(k,o,cls){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); if(cls) C[k].el.classList.add(cls); box.appendChild(C[k].el); return C[k]; }
+sel("policy","นโยบาย",[["inc","Incremental แล้วเพิ่มตาม Kt/V"],["full","Full dose ตั้งแต่เริ่ม"]]);
+sel("startLv","เริ่มที่",[["1","1 exchange (ค้างคืน)"],["2","2 exchange"],["3","3 exchange"]]);
+sl("kru",{label:"Kru ตอนเริ่ม",min:0.5,max:10,step:0.5,value:5,unit:"ml/min"});
+sl("decl",{label:"RKF ลดลง",min:5,max:60,step:1,value:30,unit:"%/ปี"});
+sl("w",{label:"น้ำหนัก",min:40,max:100,step:1,value:60,unit:"kg"});
+sl("area",{label:"Surface area",min:0.5,max:2.2,step:0.05,value:1.0,fmt:function(v){ return "×"+v.toFixed(2); }},"secondary");
+sl("fill",{label:"Fill volume",min:1500,max:2500,step:100,value:2000,unit:"ml"},"secondary");
+var T={peri:document.getElementById("tPeri"),tox:document.getElementById("tTox")};
+Object.keys(T).forEach(function(k){ T[k].addEventListener("click",function(){ T[k].setAttribute("aria-pressed",T[k].getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); });
+
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?215:280,aria:"Weekly Kt/V from kidney and peritoneum over 48 months",
+  x:{min:0,max:48,step:6,label:"Months on PD"},y:{min:0,max:4,step:0.5,label:"Weekly Kt/V"},y2:{min:0,max:10,step:2,label:"Kru ml/min"},
+  series:[{id:"tot",name:"PD + kidney",color:A.accent,data:[],width:2.4,fill:Plot.alpha("#5B4BFF",0.16)},
+          {id:"ren",name:"Renal",color:A.teal,data:[],width:1.6,fill:Plot.alpha("#1F7A72",0.22)},
+          {id:"kru",name:"Kru",color:A.muted,data:[],width:1.3,dash:[3,3],axis:"y2"}],legend:true});
+
+var cache={key:"",lv:null};
+function levels(p){
+  var key=[p.area,p.fill].join("|"); if(cache.key===key) return cache.lv;
+  var m={area:p.area}, f=p.fill;
+  var L=[
+    {name:"1 exchange ค้างคืน",en:"1 exch",n:1,s:[{start:0,dwellMin:600,fluid:"g25",fillMl:f,label:"Night"}]},
+    {name:"2 exchange",en:"2 exch",n:2,s:[{start:0,dwellMin:360,fluid:"g15",fillMl:f,label:"Day"},{start:360,dwellMin:600,fluid:"g25",fillMl:f,label:"Night"}]},
+    {name:"3 exchange",en:"3 exch",n:3,s:PD.capd({n:3,fillMl:f,dayFluid:"g15",nightFluid:"g25",nightMin:600})},
+    {name:"CAPD 4 exchange",en:"CAPD 4",n:4,s:PD.capd({n:4,fillMl:f,dayFluid:"g15",nightFluid:"g25",nightMin:600})},
+    {name:"CAPD 4 x 2.5 L + icodextrin",en:"4 x 2.5 L + ico",n:4,s:PD.capd({n:4,fillMl:2500,dayFluid:"g15",nightFluid:"ico",nightMin:600})},
+    {name:"APD 5 cycles + 2 day dwells",en:"APD + day dwells",n:7,s:PD.apd({cycles:5,cyclerMin:540,fillMl:2500,cyclerFluid:"g15",day:"wet+mid",dayFluid:"ico",midFluid:"g15"})}
+  ];
+  L.forEach(function(l){ var r=PD.regimen(l.s,m); l.ureaL=r.ureaL; l.glu=r.gluG; l.uf=r.ufMl; });
+  cache={key:key,lv:L}; return L;
+}
+function params(){ var o={}; for(var k in C) o[k]=C[k].get(); o.policy=SEL.policy.value; o.startLv=+SEL.startLv.value; o.peri=T.peri.getAttribute("aria-pressed")==="true"; o.tox=T.tox.getAttribute("aria-pressed")==="true"; return o; }
+function update(){
+  var p=params(), V=0.58*p.w, L=levels(p);
+  SEL.startLv.disabled=p.policy==="full";
+  var k=-Math.log(1-p.decl/100)/12, kru=p.kru, lv=p.policy==="full"?3:p.startLv-1, tot=[], ren=[], kr=[], esc=[], minK=99, fullAt=null, saved=0, gluSaved=0;
+  for(var mo=0;mo<=48;mo++){
+    if(mo>0){ kru*=Math.exp(-k); if(p.peri&&mo===12) kru*=0.8; if(p.tox&&mo===20) kru*=0.75; }
+    var r=kru*1.44*7/V;
+    while(lv<L.length-1 && r+L[lv].ureaL*7/V<1.7){ lv++; esc.push({x:mo,label:L[lv].en}); }
+    var t=r+L[lv].ureaL*7/V;
+    if(t<minK) minK=t;
+    if(fullAt===null && lv>=3) fullAt=mo;
+    if(mo<48){ saved+=(4-Math.min(4,L[lv].n))*30.4; gluSaved+=(L[3].glu-Math.min(L[3].glu,L[lv].glu))*30.4; }
+    tot.push([mo,t]); ren.push([mo,r]); kr.push([mo,kru]);
+  }
+  var mx=Math.max(2.5,Math.ceil(Math.max.apply(null,tot.map(function(d){ return d[1]; }))*2)/2);
+  chart.update({y:{min:0,max:mx,step:0.5,label:"Weekly Kt/V"},hlines:[{y:1.7,label:"1.7",color:A.red,dash:[5,4]}],
+    vlines:esc.slice(0,5).map(function(e){ return {x:e.x,label:e.label}; })});
+  chart.setSeries("tot",tot); chart.setSeries("ren",ren); chart.setSeries("kru",kr);
+  /* table */
+  var tb=document.getElementById("lv"); tb.innerHTML="";
+  tb.appendChild(Sim.h("tr",{},["ขั้น","PD Kt/V","UF (ml/วัน)","Glucose (g/วัน)"].map(function(t){ return Sim.h("th",{text:t}); })));
+  L.forEach(function(l,i){ tb.appendChild(Sim.h("tr",{class:i===lv?"cur":""},[Sim.h("td",{text:l.name}),Sim.h("td",{text:(l.ureaL*7/V).toFixed(2)}),Sim.h("td",{text:Math.round(l.uf)}),Sim.h("td",{text:Math.round(l.glu)})])); });
+  Sim.ro("roStart",tot[0][1].toFixed(2),tot[0][1]<1.7?"flag":"ok");
+  Sim.ro("roFull",p.policy==="full"?"0":(fullAt===null?"> 48":String(fullAt)));
+  Sim.ro("roAnuric",kr[24][1].toFixed(1),kr[24][1]<1?"flag":false);
+  Sim.ro("roSaved",Math.round(saved));
+  Sim.ro("roGlu",(gluSaved/1000).toFixed(1));
+  Sim.ro("roMin",minK.toFixed(2),minK<1.7?"flag":"ok");
+  var act=document.getElementById("act"), m, bad=false;
+  if(minK<1.7){ bad=true; m="<b>ไม่ถึงเป้าแม้เพิ่มเต็มที่</b> เมื่อ RKF หมดคนตัวนี้ต้องใช้ APD ร่วม day dwell หรือพิจารณา HD วางแผนล่วงหน้า"; }
+  else if(p.policy==="inc"&&tot[0][1]<1.7){ bad=true; m="<b>เริ่ม incremental ไม่พอ</b> เริ่มที่ขั้นสูงกว่าหรือ full dose"; }
+  else if(p.policy==="full"&&p.kru>=3) m="<b>RKF ยังดี</b> พิจารณา incremental ได้ ลด glucose และภาระ แต่ต้องวัด RKF ทุก 2–3 เดือน";
+  else m="<b>Incremental เหมาะสม</b> วัด 24-h urine ทุก 2–3 เดือน เพิ่ม dose เมื่อ total Kt/V < 1.7, มีน้ำเกิน, uremic symptoms หรือโภชนาการแย่ ปกป้อง RKF (เลี่ยง nephrotoxin, hypovolemia)";
+  act.innerHTML="<b>Next step:</b> "+m; act.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"PD-06", title:"Incremental PD and Residual Kidney Function", lead:"ตั้ง RKF ตอนเริ่มและอัตราที่ลดลง เลือก incremental หรือ full dose แล้วดูว่าต้องเพิ่ม prescription เมื่อไรเพื่อให้ total Kt/V ไม่ต่ำกว่า 1.7",
+  scenarios:S, order:ORDER, captureMs:1800,
+  onChange:function(k,s){ var p=s.p; SEL.policy.value=p.policy; SEL.startLv.value=String(p.startLv); ["kru","decl","w","area","fill"].forEach(function(x){ C[x].set(p[x]); }); T.peri.setAttribute("aria-pressed",p.peri?"true":"false"); T.tox.setAttribute("aria-pressed",p.tox?"true":"false"); update(); },
+  refs:["Brown EA, Blake PG, Boudville N, et al. International Society for Peritoneal Dialysis practice recommendations: prescribing high-quality goal-directed peritoneal dialysis. Perit Dial Int 2020, 40(3): 244-253",
+        "Bargman JM, Thorpe KE, Churchill DN (CANUSA reanalysis). Relative contribution of residual renal function and peritoneal clearance to adequacy of dialysis. J Am Soc Nephrol 2001, 12(10): 2158-2162",
+        "Paniagua R, Amato D, Vonesh E, et al (ADEMEX). Effects of increased peritoneal clearances on mortality rates in peritoneal dialysis: a prospective randomized controlled trial. J Am Soc Nephrol 2002, 13(5): 1307-1320",
+        "Yan H, Fang W, Lin A, et al. Three versus 4 daily exchanges and residual kidney function decline in incident CAPD patients: a randomized controlled trial. Am J Kidney Dis 2017, 69(4): 506-513",
+        "Sandrini M, Vizzardi V, Valerio F, et al. Incremental peritoneal dialysis: a 10 year single-centre experience. J Nephrol 2016, 29(6): 871-879",
+        "Blake PG, Dong J, Davies SJ. Incremental peritoneal dialysis. Perit Dial Int 2020, 40(3): 320-326"],
+  note:"Model เพื่อการสอน: Kt/V ทางท้องของแต่ละขั้นคำนวณจาก core/pd.js (PD.regimen) RKF ลดแบบ exponential ตามอัตราที่ตั้ง peritonitis ลด Kru 20% และ nephrotoxin ลด 25% ทันที renal Kt/V = Kru x 1.44 x 7 / V โดย V = 0.58 x น้ำหนัก ระบบเพิ่ม prescription อัตโนมัติเมื่อ total Kt/V < 1.7"
+});
+})();
+</script>
+</body>
+</html>

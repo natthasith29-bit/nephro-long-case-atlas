@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[HD-15] Extracorporeal Toxin Removal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(120px,160px) 1fr 104px}
+.sel{display:grid;grid-template-columns:minmax(120px,160px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;width:100%}
+.readout{grid-template-columns:repeat(3,1fr)}
+.tox{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:12px}
+.tox div{background:var(--card);padding:8px 10px;font-size:12px;color:var(--muted)}
+.tox b{display:block;font:500 16px var(--mono);color:var(--ink)}
+.crit{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:13.5px}
+.crit b{font-weight:600}
+body.present .bench{grid-template-columns:1.5fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .crit{display:none}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>ระดับสารในเลือด (central compartment)</h2>
+      <div id="chart"></div>
+      <div class="tox" id="tox"></div>
+      <p class="hint no-present">สารที่ dialyze ได้ดี: โมเลกุลเล็ก, protein binding ต่ำ, Vd เล็ก, endogenous clearance ต่ำ ถ้าสารกระจายเข้าเนื้อเยื่อช้า ระดับจะ rebound หลังหยุดฟอก</p>
+    </div>
+    <div class="card">
+      <h2>ECTR</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="readout">
+        <div class="ro" id="roT0"><b>-</b><span>t½ ไม่มี ECTR (h)</span></div>
+        <div class="ro" id="roT1"><b>-</b><span>เวลาให้ระดับลดครึ่ง ด้วย ECTR (h)</span></div>
+        <div class="ro" id="roFr"><b>-</b><span>ECTR / total clearance</span></div>
+        <div class="ro" id="roRem"><b>-</b><span>Body burden ที่เอาออก (%)</span></div>
+        <div class="ro" id="roReb"><b>-</b><span>Rebound 6 h หลังหยุด (%)</span></div>
+        <div class="ro" id="roTgt"><b>-</b><span>ถึงเป้าเมื่อ (h)</span></div>
+      </div>
+      <div class="crit" id="crit"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script>
+(function(){
+"use strict";
+var TOX={
+  li:{name:"Lithium",unit:"mmol/L",mw:7,pb:0,vd:0.8,fc:0.6,q:0.12,cl:10,c0:4.5,tgt:1.0,thr:4.0,
+      crit:"EXTRIP แนะนำ ECTR: Li > 4.0 ร่วมกับ kidney function บกพร่อง หรือมีซึม ชัก arrhythmia ไม่ว่าระดับเท่าใด แนะนำ (suggest): Li > 5.0, confusion, หรือคาดว่าจะใช้เวลา > 36 ชั่วโมงกว่าจะ < 1.0 ใช้ intermittent HD เป็นหลัก ฟอกต่อจน Li < 1.0 และติดตาม rebound"},
+  meoh:{name:"Methanol",unit:"mg/L",mw:32,pb:0,vd:0.6,fc:0.9,q:1,cl:9.7,c0:800,tgt:200,thr:700,
+      crit:"EXTRIP: ECTR เมื่อ methanol > 700 mg/L ขณะได้ fomepizole (> 600 กับ ethanol, > 500 ถ้าไม่มี ADH blockade) หรือ AG > 24, coma, ชัก, ตามัวใหม่ ใช้ intermittent HD ฟอกจน methanol < 200 mg/L และ acidosis หาย ให้ fomepizole และ folate ต่อ (fomepizole ถูก dialyze ต้องเพิ่มความถี่)"},
+  sal:{name:"Salicylate",unit:"mmol/L",mw:138,pb:0.4,vd:0.3,fc:0.8,q:0.3,cl:15,c0:8,tgt:1.4,thr:7.2,
+      crit:"EXTRIP: ECTR เมื่อ salicylate > 7.2 mmol/L (100 mg/dL), > 6.5 (90 mg/dL) ถ้า kidney function บกพร่อง, altered mental status, hypoxemia ต้องใช้ O2, pH ≤ 7.20 หรือ standard therapy ล้มเหลว ให้ urine alkalinization ระหว่างรอ ใช้ intermittent HD"},
+  met:{name:"Metformin (MALA)",unit:"mg/L",mw:129,pb:0,vd:3,fc:0.15,q:0.03,cl:5,c0:40,tgt:5,thr:null,
+      crit:"EXTRIP (MALA): ECTR เมื่อ lactate > 20 mmol/L, pH ≤ 7.0, shock, ซึมลง หรือ standard therapy ล้มเหลว ช่วยทั้งเอา metformin ออกและแก้ acidosis ใช้ IHD ถ้า hemodynamics ไม่ดีใช้ CRRT ระดับ rebound จาก Vd ใหญ่"},
+  vpa:{name:"Valproate",unit:"mg/L",mw:144,pb:0.35,vd:0.2,fc:0.9,q:0.5,cl:8,c0:1500,tgt:100,thr:1300,
+      crit:"EXTRIP: ECTR เมื่อ VPA > 1,300 mg/L, cerebral edema หรือ shock แนะนำ (suggest) เมื่อ > 900 mg/L, coma, pH ≤ 7.1 ที่ระดับสูง protein binding อิ่มตัว free fraction เพิ่ม จึง dialyze ได้ ฟอกจนอาการดีขึ้นและ VPA 50–100 mg/L"},
+  dig:{name:"Digoxin",unit:"ng/mL",mw:781,pb:0.25,vd:7,fc:0.06,q:0.05,cl:20,c0:6,tgt:2,thr:null,
+      crit:"Digoxin มี Vd ราว 7 L/kg ECTR เอาออกได้น้อยมาก ไม่แนะนำ ใช้ digoxin-specific Fab ถ้ามี arrhythmia, K > 5.0 หรือระดับสูงมาก"}
+};
+function P(o){ var d={tox:"li",mod:"ihd",Qb:350,hours:6,eff:3000,cl:null,c0:null,w:70}; for(var k in o) d[k]=o[k]; return d; }
+var S = {
+  lithium:{name:"Lithium + AKI", p:P({tox:"li"}),
+    rows:[["ผู้ป่วย","chronic lithium, AKI จาก diarrhea Li 4.5 mmol/L สับสน tremor"],["Dialyzability","MW 7, protein binding 0, Vd 0.8 L/kg dialyze ได้ดีมาก"],["Kinetics","เข้าออกเซลล์ช้า จึง rebound หลังหยุด HD ราว 6 ชั่วโมง"]],
+    take:["Lithium เป็นตัวอย่าง dialyzable ที่สุด แต่ rebound ชัด","IHD ดีกว่า CRRT ในการลดระดับเร็ว อาจต่อ CRRT หลัง IHD เพื่อลด rebound","ตรวจ Li ซ้ำ 6 ชั่วโมงหลังหยุด ฟอกซ้ำถ้า rebound > 1.0"],
+    quiz:[{q:"ผู้ป่วย chronic lithium Li 4.3 mmol/L creatinine 3.1 (เดิม 1.0) สับสน หลัง HD 6 ชั่วโมง Li 0.9 อีก 6 ชั่วโมงต่อมา Li 1.8 ข้อใดเหมาะที่สุด",opts:["หยุด ECTR เพราะเคยลดถึงเป้าแล้ว","ฟอกซ้ำ (IHD หรือ CRRT ต่อ) และตรวจ Li ซ้ำ","ให้ furosemide","ให้ activated charcoal"],ans:1,why:"Rebound จากการกระจายออกจาก intracellular ทำให้ระดับกลับขึ้น ต้อง ECTR ซ้ำจนระดับคงที่ต่ำกว่า 1.0 charcoal ไม่จับ lithium"}]},
+  methanol:{name:"Methanol + fomepizole", p:P({tox:"meoh",hours:8}),
+    rows:[["ผู้ป่วย","ดื่มสุราเถื่อน methanol 800 mg/L, AG 28, ตามัว ได้ fomepizole แล้ว"],["Endogenous","fomepizole ยับยั้ง ADH t½ ของ methanol ยาวราว 50 ชั่วโมง"],["ECTR","HD ลด t½ เหลือราว 3 ชั่วโมง"]],
+    take:["Fomepizole หยุดการสร้าง formate แต่ทำให้ methanol ค้างนาน HD จึงลดเวลา ICU ได้มาก","ข้อบ่งชี้ HD ใน methanol: ระดับสูง, AG acidosis รุนแรง, ตามัวหรือ coma","ฟอกจน methanol < 200 mg/L และ acidosis หาย"],
+    quiz:[{q:"ผู้ป่วย methanol poisoning ได้ fomepizole แล้ว methanol 780 mg/L pH 7.18 AG 26 ตามัว ข้อใดเหมาะที่สุด",opts:["ให้ fomepizole อย่างเดียวรอให้ระดับลดเอง","เริ่ม intermittent HD ทันทีและปรับ fomepizole ระหว่างฟอก","ให้ NaHCO3 อย่างเดียว","CRRT effluent 20 ml/kg/h"],ans:1,why:"ระดับ > 700 mg/L ร่วม acidosis และตามัวเป็นข้อบ่งชี้ HD IHD เอาออกเร็วกว่า CRRT ต้องเพิ่ม fomepizole เพราะถูก dialyze"}]},
+  salicylate:{name:"Salicylate", p:P({tox:"sal",hours:6}),
+    rows:[["ผู้ป่วย","salicylate 8 mmol/L (110 mg/dL) สับสน pH 7.32"],["Dialyzability","MW 138 protein binding ลดลงเมื่อระดับสูง Vd เล็ก"],["Endogenous","การขจัดทางตับอิ่มตัว t½ ยาวขึ้นมากในภาวะพิษ"]],
+    take:["Altered mental status ในพิษ salicylate คือ neuroglycopenia และ cerebral edema ข้อบ่งชี้ HD","ให้ NaHCO3 urine alkalinization ระหว่างรอ ระวังการ intubate (hypoventilation ทำ acidemia แย่ลง)","HD แก้ทั้งระดับยาและ acid-base"],
+    quiz:[{q:"ผู้ป่วยกิน aspirin เกินขนาด salicylate 7.6 mmol/L ซึม pH 7.30 ได้ NaHCO3 แล้ว ข้อใดเหมาะที่สุด",opts:["ให้ NaHCO3 ต่ออย่างเดียว","เริ่ม intermittent HD","intubate แล้ว hypoventilate","ให้ multiple-dose charcoal อย่างเดียว"],ans:1,why:"ระดับ > 7.2 mmol/L ร่วมกับ altered mental status เป็นข้อบ่งชี้ ECTR ตาม EXTRIP"}]},
+  mala:{name:"Metformin (MALA)", p:P({tox:"met",hours:8}),
+    rows:[["ผู้ป่วย","metformin กับ AKI lactate 22 mmol/L pH 6.95"],["Dialyzability","MW 129 ไม่จับ protein แต่ Vd ใหญ่ 1–5 L/kg"],["ผล","HD ลดระดับและแก้ acidosis เร็ว แต่ rebound จาก tissue"]],
+    take:["ข้อบ่งชี้ ECTR ใน MALA ใช้ lactate และ pH เพราะระดับ metformin มักไม่มีทันที","IHD แก้ acidosis เร็วที่สุด ถ้า shock ใช้ CRRT","อาจต้องฟอกยาวหรือซ้ำเพราะ redistribution"],
+    quiz:[{q:"ผู้ป่วยใช้ metformin มี AKI lactate 21 mmol/L pH 6.98 MAP 68 ด้วย norepinephrine ขนาดต่ำ ข้อใดเหมาะที่สุด",opts:["ให้ NaHCO3 อย่างเดียว","เริ่ม ECTR (IHD ถ้าทนได้ หรือ CRRT) ทันที","รอระดับ metformin ก่อน","PD"],ans:1,why:"lactate > 20 และ pH ≤ 7.0 เป็นข้อบ่งชี้ ECTR ใน MALA ไม่ต้องรอระดับยา"}]},
+  valproate:{name:"Valproate", p:P({tox:"vpa",hours:6}),
+    rows:[["ผู้ป่วย","VPA 1,500 mg/L coma"],["Protein binding","ที่ระดับรักษาจับ 90% แต่ระดับพิษจับเพียงราว 35% (saturation)"],["ผล","free fraction สูงจึง dialyze ได้"]],
+    take:["Protein binding ไม่คงที่ binding อิ่มตัวที่ระดับสูงทำให้ dialyze ได้ดีขึ้น","ให้ L-carnitine สำหรับ hyperammonemia","ฟอกจนอาการดีขึ้นและระดับ 50–100 mg/L"],
+    quiz:[{q:"ทำไม valproate ซึ่งจับ protein 90% ที่ระดับรักษาจึงเอาออกด้วย HD ได้ในภาวะพิษ",opts:["เพราะ MW ใหญ่","เพราะ protein binding อิ่มตัวที่ระดับสูง free fraction จึงเพิ่ม","เพราะ Vd ใหญ่ขึ้น","เพราะไตขับได้มากขึ้น"],ans:1,why:"ที่ระดับพิษ binding site อิ่มตัว free drug ที่ผ่าน membrane ได้เพิ่มขึ้นมาก"}]},
+  digoxin:{name:"Digoxin (ไม่ dialyze)", p:P({tox:"dig",hours:6}),
+    rows:[["ผู้ป่วย","digoxin 6 ng/mL bradycardia K 5.6"],["Dialyzability","Vd ราว 7 L/kg สารอยู่ในเนื้อเยื่อเกือบทั้งหมด"],["ผล","HD 6 ชั่วโมงเอาออกได้ไม่ถึง 5% ของ body burden"]],
+    take:["Vd ใหญ่ (> 2 L/kg) ทำให้ ECTR ไม่ได้ผลแม้ MW เล็กและ binding ต่ำ","Digoxin ใช้ Fab fragment เป็นหลัก","HD อาจช่วยแก้ hyperkalemia แต่ไม่ลดระดับ digoxin"],
+    quiz:[{q:"ผู้ป่วย ESKD digoxin 5.8 ng/mL complete heart block K 6.0 ข้อใดเหมาะที่สุดในการลดผลของ digoxin",opts:["HD high-flux 6 ชั่วโมง","Digoxin-specific Fab","Hemoperfusion","CRRT dose สูง"],ans:1,why:"digoxin มี Vd ใหญ่ ECTR เอาออกได้น้อย Fab เป็นการรักษาหลัก"}]}
+};
+var ORDER=["lithium","methanol","salicylate","mala","valproate","digoxin"];
+
+var box=document.getElementById("ctls"), C={};
+var tSel=Sim.h("select",{id:"sTox"},Object.keys(TOX).map(function(k){ return Sim.h("option",{value:k,text:TOX[k].name}); }));
+var mSel=Sim.h("select",{id:"sMod"},[["none","ไม่มี ECTR"],["ihd","Intermittent HD"],["crrt","CRRT"]].map(function(x){ return Sim.h("option",{value:x[0],text:x[1]}); }));
+tSel.addEventListener("change",function(){ var t=TOX[tSel.value]; C.cl.set(t.cl); C.c0.set(t.c0); setC0Range(); update(); });
+mSel.addEventListener("change",update);
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"sTox",text:"สาร"}),tSel]));
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"sMod",text:"Modality"}),mSel]));
+function sl(k,o){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); box.appendChild(C[k].el); return C[k]; }
+sl("Qb",{label:"Qb (IHD)",min:150,max:450,step:10,value:350,unit:"ml/min"});
+sl("hours",{label:"ระยะเวลา IHD",min:2,max:12,step:1,value:6,unit:"h"});
+sl("eff",{label:"Effluent (CRRT)",min:1000,max:6000,step:250,value:3000,unit:"ml/h"});
+sl("cl",{label:"Endogenous CL",min:0,max:100,step:1,value:10,unit:"ml/min"});
+sl("c0",{label:"ระดับเริ่มต้น",min:0.5,max:10,step:0.1,value:4.5,unit:"",fmt:function(v){return v.toFixed(1);}});
+function setC0Range(){ var t=TOX[tSel.value], i=C.c0.input; i.max=t.c0*2.2; i.min=t.c0*0.2; i.step=t.c0>100?10:0.1; C.c0.set(t.c0); }
+
+var A=Plot.colors, chart=Plot.chart(document.getElementById("chart"),{height:280,aria:"Toxin concentration over time",
+  x:{min:0,max:36,step:6,label:"Time (h)"}, y:{min:0,label:"Level"},
+  series:[{id:"no",name:"No ECTR",color:A.muted,data:[],dash:[5,4],width:1.6},{id:"ec",name:"ECTR",color:A.accent,data:[],width:2.6}],legend:true});
+
+function ectrK(t,p){
+  var qbw=p.Qb*0.86, koa=1200*0.7*Math.pow(t.mw/60,-0.55)*(t.mw>15000?0.1:1);
+  var k=qbw*(1-Math.exp(-koa/qbw));
+  return k*(1-t.pb);
+}
+function sim(t,p,mode){
+  var W=p.w, Vc=t.vd*W*t.fc, Vp=t.vd*W*(1-t.fc), Q=t.q; // L, L/min
+  var Cc=p.c0, Cp=p.c0, dt=1, out=[], removed=0, burden=p.c0*(Vc+Vp);
+  var kIHD=ectrK(t,p)/1000, kCR=p.eff/60/1000*(1-t.pb), kEndo=p.cl/1000;
+  var stopAt=p.hours*60, post=null, cEnd=null, tgtAt=null;
+  for(var m=0;m<=36*60;m+=dt){
+    var kE=0; if(mode==="ihd" && m<stopAt) kE=kIHD; if(mode==="crrt") kE=kCR;
+    if(m%10===0) out.push([m/60,Cc]);
+    if(tgtAt===null && Cc<=t.tgt) tgtAt=m/60;
+    if(mode==="ihd" && m===stopAt) cEnd=Cc;
+    if(mode==="ihd" && m===stopAt+360) post=Cc;
+    var flux=Q*(Cp-Cc);
+    removed+=kE*Cc*dt;
+    Cc+=(flux-(kEndo+kE)*Cc)*dt/Vc;
+    Cp+=(-flux)*dt/Vp;
+  }
+  return {data:out, removed:removed/burden, reb:(cEnd&&post)?(post-cEnd)/cEnd:null, tgtAt:tgtAt, kE:(mode==="ihd"?kIHD:mode==="crrt"?kCR:0)*1000};
+}
+function params(){ return {tox:tSel.value,mod:mSel.value,Qb:C.Qb.get(),hours:C.hours.get(),eff:C.eff.get(),cl:C.cl.get(),c0:C.c0.get(),w:70}; }
+function update(){
+  var p=params(), t=TOX[p.tox];
+  C.c0.el.querySelector("output").textContent=(t.c0>100?C.c0.get().toFixed(0):C.c0.get().toFixed(1))+" "+t.unit;
+  C.Qb.el.style.opacity=C.hours.el.style.opacity=p.mod==="ihd"?1:0.4; C.eff.el.style.opacity=p.mod==="crrt"?1:0.4;
+  var a=sim(t,p,"none"), b=sim(t,p,p.mod==="none"?"none":p.mod);
+  var V=t.vd*70, t0=0.693*V/(p.cl/1000)/60, t1=null;
+  if(b.kE){ for(var i=0;i<b.data.length;i++){ if(b.data[i][1]<=p.c0/2){ t1=b.data[i][0]; break; } } if(t1===null) t1=99; }
+  var hl=[{y:t.tgt,label:"Target "+t.tgt,color:A.teal,dash:[4,4]}]; if(t.thr) hl.push({y:t.thr,label:"EXTRIP "+t.thr,color:A.red,dash:[6,4]});
+  chart.update({y:{min:0,max:Math.max(p.c0*1.05,t.thr||0)*1.1,label:t.name+" ("+t.unit+")"},hlines:hl,xbands:p.mod==="ihd"?[{x0:0,x1:p.hours,label:"IHD",color:Plot.alpha(A.accent,0.08)}]:(p.mod==="crrt"?[{x0:0,x1:36,label:"CRRT",color:Plot.alpha(A.accent,0.05)}]:[])});
+  chart.setSeries("no",a.data); chart.setSeries("ec",b.data);
+  var tox=document.getElementById("tox"); tox.innerHTML="";
+  [["MW (Da)",t.mw],["Protein binding",Math.round(t.pb*100)+"%"],["Vd (L/kg)",t.vd],["Endogenous CL",p.cl+" ml/min"]].forEach(function(x){ tox.appendChild(Sim.h("div",{},[Sim.h("b",{text:String(x[1])}),x[0]])); });
+  Sim.ro("roT0",t0>200?"> 200":Sim.fmt(t0,1));
+  Sim.ro("roT1",t1===null?"-":(t1>36?"> 36":Sim.fmt(t1,1)),t1===null?false:(t1<t0/3?"ok":"flag"));
+  var fr=b.kE/(b.kE+p.cl);
+  Sim.ro("roFr",b.kE?Sim.fmt(fr*100,0)+"%":"-",b.kE?(fr>=0.3?"ok":"flag"):false);
+  Sim.ro("roRem",Sim.fmt(b.removed*100,0),b.kE?(b.removed<0.1?"flag":"ok"):false);
+  Sim.ro("roReb",b.reb===null?"-":Sim.fmt(b.reb*100,0),b.reb!==null&&b.reb>0.3?"flag":false);
+  Sim.ro("roTgt",b.tgtAt===null?"> 36":Sim.fmt(b.tgtAt,1),b.tgtAt===null?"flag":"ok");
+  var cr=document.getElementById("crit"); cr.innerHTML=""; cr.appendChild(Sim.h("b",{text:t.name+": "})); cr.appendChild(document.createTextNode(t.crit));
+}
+Sim.mount({code:"HD-15", title:"Extracorporeal Toxin Removal", lead:"เลือกสาร modality และพารามิเตอร์ แล้วดูว่า ECTR เปลี่ยน half-life, body burden ที่เอาออก และ rebound อย่างไร",
+  scenarios:S, order:ORDER, captureMs:2000,
+  onChange:function(k,s){ var p=s.p, t=TOX[p.tox]; tSel.value=p.tox; mSel.value=p.mod; C.Qb.set(p.Qb); C.hours.set(p.hours); C.eff.set(p.eff); C.cl.set(p.cl===null?t.cl:p.cl); setC0Range(); C.c0.set(p.c0===null?t.c0:p.c0); update(); },
+  refs:["Decker BS, Goldfarb DS, Dargan PI, et al (EXTRIP). Extracorporeal treatment for lithium poisoning: systematic review and recommendations from the EXTRIP Workgroup. Clin J Am Soc Nephrol 2015, 10(5): 875-887",
+        "Roberts DM, Yates C, Megarbane B, et al (EXTRIP). Recommendations for the role of extracorporeal treatments in the management of acute methanol poisoning. Crit Care Med 2015, 43(2): 461-472",
+        "Juurlink DN, Gosselin S, Kielstein JT, et al (EXTRIP). Extracorporeal treatment for salicylate poisoning: systematic review and recommendations from the EXTRIP Workgroup. Ann Emerg Med 2015, 66(2): 165-181",
+        "Calello DP, Liu KD, Wiegand TJ, et al (EXTRIP). Extracorporeal treatment for metformin poisoning: systematic review and recommendations from the EXTRIP Workgroup. Crit Care Med 2015, 43(8): 1716-1730",
+        "Ghannoum M, Laliberté M, Nolin TD, et al (EXTRIP). Extracorporeal treatment for valproic acid poisoning: systematic review and recommendations from the EXTRIP Workgroup. Clin Toxicol 2015, 53(5): 454-465",
+        "Mowry JB, Burdmann EA, Anseeuw K, et al (EXTRIP). Extracorporeal treatment for digoxin poisoning: systematic review and recommendations from the EXTRIP Workgroup. Clin Toxicol 2016, 54(2): 103-114"],
+  note:"Two-compartment model เพื่อการสอน น้ำหนัก 70 kg, ECTR clearance คิดจาก Qb, MW และ free fraction ค่า Vd, binding และ intercompartment clearance เป็นค่าประมาณจาก EXTRIP"
+});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[CKD-11] Dialysis or Conservative Kidney Management</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(100px,130px) 1fr 100px}
+.sel{display:grid;grid-template-columns:minmax(100px,130px) minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.sel label{font-weight:500}
+select{max-width:100%;min-width:0;width:100%}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:10px}
+body.present .bench{grid-template-columns:1.3fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:14px 18px}
+body.present .ctls{gap:1px}
+body.present .ctl,body.present .sel{font-size:13px}
+body.present .tools{margin-top:6px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .ro{padding:6px 10px}
+body.present .ro b{font-size:18px}
+body.present .readout{margin-top:8px}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+body.present .take li{font-size:14px}
+body.present .svgwrap svg{max-height:150px;width:auto;margin:0 auto}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Survival 3 ปี และเวลาที่ใช้ไป</h2>
+      <div id="chart"></div>
+      <div id="live"></div>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 640 150" role="img" aria-label="Time budget over three years for dialysis and conservative care"></svg></div>
+      <p class="hint no-present">เส้นม่วงคือเริ่ม dialysis เมื่อ eGFR ลงถึง 8 เส้น teal คือ conservative kidney management แถบล่างแบ่งวันที่มีชีวิตใน 3 ปีเป็นวันที่อยู่บ้าน วันในโรงพยาบาล และเวลาที่ใช้กับการฟอก (รวมเดินทาง) ในผู้สูงอายุที่ frail หรือโรคร่วมมาก ส่วนต่างของ survival แคบลงจนเกือบไม่มี</p>
+    </div>
+    <div class="card">
+      <h2>ผู้ป่วย</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roD"><b>-</b><span>วันที่มีชีวิตใน 3 ปี: dialysis</span></div>
+        <div class="ro" id="roC"><b>-</b><span>วันที่มีชีวิตใน 3 ปี: CKM</span></div>
+        <div class="ro" id="roX"><b>-</b><span>ส่วนต่าง (วัน)</span></div>
+        <div class="ro" id="roH"><b>-</b><span>วันที่อยู่บ้าน: ส่วนต่าง</span></div>
+        <div class="ro" id="roS1"><b>-</b><span>1-year survival D / CKM</span></div>
+        <div class="ro" id="roT"><b>-</b><span>ถึง eGFR 8 (เดือน)</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script src="../core/live.js"></script>
+<script>
+(function(){
+"use strict";
+var PRI={life:"ยืดชีวิตให้นานที่สุด",home:"อยู่บ้านกับครอบครัว",symp:"ลดอาการ ไม่อยากเข้าโรงพยาบาล"};
+function P(o){ var d={age:78,cfs:5,cci:6,egfr:10,slope:3,dem:false,nh:false,pri:"life"}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  fit:{name:"68 ปี แข็งแรง", p:P({age:68,cfs:3,cci:3,egfr:11,slope:4}),
+    rows:[["ผู้ป่วย","ชาย 68 ปี DM ทำกิจวัตรได้เอง CFS 3"],["ผล","dialysis เพิ่มวันที่มีชีวิตชัดเจนใน 3 ปี"],["ทำ","เตรียม access หรือ PD และประเมิน KT"]],
+    take:["ผู้ป่วยอายุน้อยกว่าและโรคร่วมน้อย dialysis เพิ่ม survival ชัดเจน","ควรประเมิน kidney transplant ทุกรายที่เหมาะสม","CKM เป็นทางเลือกที่ต้องเสนอ แต่ประโยชน์ของ dialysis ในกลุ่มนี้มากกว่า"]},
+  mid:{name:"78 ปี โรคร่วมปานกลาง", p:P({}),
+    rows:[["ผู้ป่วย","78 ปี CFS 5 CCI 6 eGFR 10"],["ผล","dialysis เพิ่มวันมีชีวิตเพียงไม่กี่สัปดาห์ แต่เวลาอยู่บ้านน้อยลง"],["ตัดสิน","ตามเป้าหมายของผู้ป่วย"]],
+    take:["ในผู้สูงอายุที่ไม่ได้ทำ KT ประโยชน์ด้าน survival ของ dialysis เฉลี่ยเพียงไม่กี่สัปดาห์ถึงเดือน","Dialysis แลกกับเวลาในโรงพยาบาลและการเดินทางฟอก","Shared decision making ต้องอิงเป้าหมายของผู้ป่วย ไม่ใช่ตัวเลข eGFR"]},
+  frail:{name:"85 ปี frail CCI 8", p:P({age:85,cfs:7,cci:8,egfr:9,slope:3}),
+    rows:[["ผู้ป่วย","หญิง 85 ปี CFS 7 HF, PAD, COPD"],["ผล","survival ไม่ต่างหรือแย่กว่าใน dialysis ช่วงแรก"],["CKM","ดูแลอาการ, ยา, ภาวะโลหิตจาง, advance care plan"]],
+    take:["ผู้สูงอายุ ≥ 80 ปีที่โรคร่วมมาก dialysis อาจไม่เพิ่ม survival เลย","ช่วง 90 วันแรกหลังเริ่ม dialysis มี mortality สูงมากในผู้ป่วย frail","CKM ไม่ใช่การไม่รักษา แต่เป็นการดูแลไตเชิงรุกโดยไม่ฟอก"]},
+  dem:{name:"Dementia ใน nursing home", p:P({age:82,cfs:7,cci:7,egfr:9,slope:2.5,dem:true,nh:true,pri:"symp"}),
+    rows:[["ผู้ป่วย","82 ปี dementia ปานกลาง อยู่ nursing home"],["ข้อมูล","การเริ่ม dialysis ใน nursing home ตามด้วย functional decline อย่างรวดเร็ว"],["ทำ","พูดคุยเป้าหมายกับครอบครัว เสนอ CKM และ palliative care"]],
+    take:["ผู้ป่วย nursing home ที่เริ่ม dialysis ส่วนใหญ่สูญเสีย functional status ภายในปีแรก","Dementia ทำให้การฟอกยากและไม่ได้ประโยชน์ survival","Surprise question: ถ้าไม่แปลกใจหากเสียชีวิตใน 12 เดือน ควรเริ่ม advance care planning"]},
+  slow:{name:"Slow progressor", p:P({age:84,cfs:5,cci:6,egfr:13,slope:1,pri:"home"}),
+    rows:[["ผู้ป่วย","84 ปี eGFR 13 ลดปีละ 1"],["ผล","ไม่ถึง eGFR 8 ภายใน 3 ปี เสียชีวิตจากสาเหตุอื่นก่อน"],["ความหมาย","การเตรียม access อาจไม่จำเป็น"]],
+    take:["ผู้สูงอายุหลายรายเสียชีวิตก่อนต้องฟอก (competing risk)","ใช้ slope และ KFRE ประกอบก่อนทำ AVF ในผู้สูงอายุ","CKM ระยะยาวช่วยคุมอาการได้นานกว่าที่คาด"]},
+  home:{name:"เป้าหมายคืออยู่บ้าน", p:P({age:80,cfs:6,cci:7,egfr:9,slope:3,pri:"home"}),
+    rows:[["ผู้ป่วย","80 ปี อยากอยู่บ้านกับหลาน ไม่อยากเดินทางฟอกสัปดาห์ละ 3 ครั้ง"],["ผล","CKM ให้วันอยู่บ้านมากกว่า survival ใกล้เคียง"],["ทางเลือกกลาง","home-based PD แบบ incremental หรือ time-limited trial"]],
+    take:["เป้าหมายของผู้ป่วยเปลี่ยนคำตอบได้ แม้ตัวเลข survival เท่ากัน","Time-limited trial ของ dialysis ช่วยเมื่อผู้ป่วยและครอบครัวยังไม่แน่ใจ","Assisted PD หรือ incremental PD ลดภาระการเดินทางได้"]}
+};
+var ORDER=["fit","mid","frail","dem","slow","home"];
+var box=document.getElementById("ctls"), C={}, ST={dem:false,nh:false};
+function sl(k,o){ o.id="s"+k; o.onInput=function(){ update(true); }; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("age",{label:"อายุ",min:60,max:95,step:1,value:78,unit:"ปี"});
+sl("cfs",{label:"Clinical Frailty",min:1,max:8,step:1,value:5,unit:""});
+sl("cci",{label:"Charlson",min:2,max:12,step:1,value:6,unit:""});
+sl("egfr",{label:"eGFR ตอนนี้",min:6,max:20,step:1,value:10,unit:"mL/min"});
+sl("slope",{label:"eGFR ลดลง",min:0.5,max:8,step:0.5,value:3,unit:"/ปี",fmt:function(v){ return v.toFixed(1); }});
+var ps=Sim.h("select",{id:"pri"},Object.keys(PRI).map(function(k){ return Sim.h("option",{value:k,text:PRI[k]}); })); ps.addEventListener("change",function(){ update(); });
+box.appendChild(Sim.h("div",{class:"sel"},[Sim.h("label",{"for":"pri",text:"เป้าหมายผู้ป่วย"}),ps]));
+var tb=document.getElementById("tools"), BT={};
+[["dem","Dementia"],["nh","Nursing home"]].forEach(function(t){ BT[t[0]]=Sim.toggle(t[1],function(on){ ST[t[0]]=on; update(); },false); tb.appendChild(BT[t[0]]); });
+function v(k){ return C[k].get(); }
+function model(){
+  var age=v("age"), cfs=v("cfs"), cci=v("cci"), e0=v("egfr"), sl=v("slope");
+  var hy=0.10*Math.exp(0.06*(age-75))*(1+0.15*(cfs-3))*(1+0.08*(cci-4))*(ST.dem?1.4:1)*(ST.nh?1.5:1);
+  hy=Sim.clamp(hy,0.04,1.2);
+  var HR=Sim.clamp(0.45+0.02*(age-65)+0.04*Math.max(0,cci-4)+0.05*Math.max(0,cfs-4)+(ST.dem?0.15:0)+(ST.nh?0.2:0),0.4,1.2);
+  var early=1+0.12*Math.max(0,cfs-3)+(age>=80?0.3:0);
+  var tStart=Math.max(0,(e0-8)/sl*12);
+  var sD=1,sC=1,dD=[],dC=[],rD=0,rC=0,s1D=null,s1C=null,hospD=0,hospC=0,dialT=0;
+  for(var m=0;m<=36.0001;m+=0.25){ var mm=+m.toFixed(2);
+    dD.push([mm,sD*100]); dC.push([mm,sC*100]);
+    if(Math.abs(mm-12)<0.01){ s1D=sD; s1C=sC; }
+    var eC=e0-sl*mm/12, hc=hy*(1+(eC<6?0.8*Math.min(1,(6-eC)/3):0));
+    var hd=mm<tStart?hc:hy*HR*((mm-tStart)<3?early:1);
+    var dt=0.25/12;
+    rD+=sD*0.25*30.4; rC+=sC*0.25*30.4;
+    var onD=mm>=tStart;
+    hospD+=sD*dt*365*((onD?0.07:0.03)+0.01*(cfs-3)); hospC+=sC*dt*365*(0.03+0.008*(cfs-3)+(eC<6?0.02:0));
+    if(onD) dialT+=sD*dt*365*(3*5.5/24/7*7/7);
+    sD*=Math.exp(-hd*dt); sC*=Math.exp(-hc*dt);
+  }
+  hospD=Math.max(0,hospD); hospC=Math.max(0,hospC);
+  var homeD=rD-hospD-dialT, homeC=rC-hospC;
+  var medD=Live.cross(dD,50,-1), medC=Live.cross(dC,50,-1);
+  return {age:age,cfs:cfs,cci:cci,e0:e0,sl:sl,hy:hy,HR:HR,tStart:tStart,dD:dD,dC:dC,rD:rD,rC:rC,s1D:s1D,s1C:s1C,hospD:hospD,hospC:hospC,dialT:dialT,homeD:homeD,homeC:homeC,medD:medD,medC:medC};
+}
+var A=Plot.colors;
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?250:270,aria:"Survival over thirty-six months with dialysis versus conservative care",
+  x:{min:0,max:36,step:6,label:"Months"},y:{min:0,max:100,step:20,label:"Alive (%)"},
+  series:[{id:"d",name:"Dialysis when eGFR reaches 8",color:A.accent,data:[],width:2.6},{id:"c",name:"Conservative care",color:A.teal,data:[],width:2.6}],
+  hlines:[{y:50,label:"Median",color:A.muted,dash:[3,3]}],legend:true});
+var live=Live.player(chart,{mount:"live"}), LAST=null;
+var svg=document.getElementById("vis");
+function T(x,y,s,o){ o=o||{}; var a={x:x,y:y,"font-size":o.fs||12,fill:o.c||"#0B0B1F","text-anchor":o.a||"start",text:s}; if(o.w) a["font-weight"]=o.w; if(o.mono) a["font-family"]="Geist Mono, monospace"; return Sim.svg("text",a,svg); }
+function drawBudget(M){
+  svg.innerHTML="";
+  var x0=140, wd=440, sc=wd/1096;
+  function row(y,label,home,hosp,dial){ T(10,y+15,label,{fs:12,w:600});
+    var x=x0; [[home,"#1F7A72","Home"],[hosp,"#B4232A","Hospital"],[dial,"#5B4BFF","Dialysis + travel"]].forEach(function(s){ if(s[0]<=0) return; Sim.svg("rect",{x:x,y:y,width:s[0]*sc,height:22,rx:4,fill:s[1]},svg); if(s[0]*sc>46) T(x+5,y+15,Math.round(s[0])+"d",{fs:10.5,c:"#fff",mono:true}); x+=s[0]*sc+1; });
+    T(x+6,y+15,Math.round(home+hosp+dial)+" days alive",{fs:11,mono:true,c:"#5E6075"}); }
+  row(14,"Dialysis",M.homeD,M.hospD,M.dialT);
+  row(48,"Conservative",M.homeC,M.hospC,0);
+  [["#1F7A72","Days at home"],["#B4232A","Days in hospital"],["#5B4BFF","Dialysis and travel"]].forEach(function(g,i){ Sim.svg("rect",{x:x0+i*150,y:88,width:12,height:10,rx:2,fill:g[0]},svg); T(x0+18+i*150,97,g[1],{fs:11,c:"#5E6075"}); });
+  T(10,130,"Dialysis hazard ratio vs conservative care "+M.HR.toFixed(2)+(M.tStart>0?"   starts at month "+M.tStart.toFixed(0):"   starts now"),{fs:11,mono:true,c:"#5E6075"});
+}
+function onFrame(t,done){
+  var M=LAST;
+  if(done){ Sim.ro("roD",Math.round(M.rD)); Sim.ro("roC",Math.round(M.rC)); var dx=M.rD-M.rC; Sim.ro("roX",(dx>=0?"+":"")+Math.round(dx),dx>90?"ok":dx<0?"flag":null);
+    var dh=M.homeD-M.homeC; Sim.ro("roH",(dh>=0?"+":"")+Math.round(dh),dh<0?"flag":"ok"); }
+  else { ["roD","roC","roX","roH"].forEach(function(id){ Sim.ro(id,"…"); }); }
+  if(t>=12||done) Sim.ro("roS1",Math.round(M.s1D*100)+" / "+Math.round(M.s1C*100)+"%"); else Sim.ro("roS1","…");
+  var a=document.getElementById("act");
+  if(done){ a.innerHTML=M.act; a.className=M.actCls; } else { a.innerHTML="<b>กำลังจำลอง</b> เดือนที่ "+t.toFixed(0)+" มีชีวิต dialysis "+Math.round(Live.valueAt(M.dD,t))+"% CKM "+Math.round(Live.valueAt(M.dC,t))+"%"; a.className="act"; }
+}
+function update(deb){
+  var M=model();
+  chart.update({vlines:M.tStart>0&&M.tStart<36?[{x:M.tStart,label:"Dialysis start"}]:[]});
+  chart.setSeries("d",M.dD); chart.setSeries("c",M.dC);
+  drawBudget(M);
+  Sim.ro("roT",M.tStart>=36?"> 36":M.tStart.toFixed(0),M.tStart>=36?"ok":null);
+  var dx=M.rD-M.rC, dh=M.homeD-M.homeC, pri=ps.value, sq=(1-M.s1C)>0.3;
+  var m,bad=false;
+  if(M.tStart>=30) m="<b>อาจไม่ถึงจุดต้องฟอก</b> eGFR ลดช้า ผู้ป่วยมีโอกาสเสียชีวิตจากสาเหตุอื่นก่อน ชะลอการทำ AVF ดูแลแบบ CKM เชิงรุก ทบทวน slope ทุก 3–6 เดือน";
+  else if(dx>120&&M.age<75) m="<b>Dialysis เพิ่มชีวิตชัดเจน</b> (+"+Math.round(dx)+" วันใน 3 ปี) ให้ข้อมูล HD, PD, KT เตรียม access และประเมิน kidney transplant พร้อมคุยเรื่อง CKM เป็นทางเลือก";
+  else if(dx<30) { bad=true; m="<b>Dialysis แทบไม่เพิ่ม survival</b> ("+(dx>=0?"+":"")+Math.round(dx)+" วัน) แต่วันอยู่บ้าน "+(dh>=0?"+":"")+Math.round(dh)+" วัน เสนอ CKM อย่างชัดเจน: คุมอาการ (คัน, คลื่นไส้, บวม), anemia, ยาที่เหมาะกับไต, advance care planning และ palliative care ร่วม"; }
+  else m="<b>ส่วนต่างปานกลาง</b> survival +"+Math.round(dx)+" วัน แลกกับวันอยู่บ้าน "+(dh>=0?"+":"")+Math.round(dh)+" วัน ตัดสินใจร่วมกันตามเป้าหมาย"+(pri==="home"||pri==="symp"?" ซึ่งผู้ป่วยให้ความสำคัญกับเวลาอยู่บ้านและอาการ: CKM หรือ time-limited trial ของ PD/HD เหมาะกว่า":" ซึ่งผู้ป่วยต้องการยืดชีวิต: dialysis สมเหตุสมผล หรือ time-limited trial");
+  if(sq) m+=" Surprise question เป็นบวก (CKM 1-year mortality "+Math.round((1-M.s1C)*100)+"%) ควรเริ่ม advance care planning";
+  M.act="<b>Next step:</b> "+m; M.actCls="act"+(bad?" bad":"");
+  LAST=M;
+  var E=[{t:0,kind:"phys",text:"ตั้งต้น: อายุ "+M.age+" CFS "+M.cfs+" CCI "+M.cci+" eGFR "+M.e0+" ลดปีละ "+M.sl}];
+  if(M.tStart<36) E.push({t:M.tStart,kind:"rx",text:"เดือนที่ "+M.tStart.toFixed(0)+": eGFR ถึง 8 เริ่ม dialysis (กลุ่ม dialysis)"});
+  if(M.tStart<33) E.push({t:Math.min(36,M.tStart+3),kind:"warn",text:"90 วันแรกหลังเริ่ม dialysis: mortality สูงสุดในผู้ป่วย frail"});
+  var t6=Math.max(0,(M.e0-6)/M.sl*12); if(t6<36) E.push({t:t6,kind:"phys",text:"เดือนที่ "+t6.toFixed(0)+": eGFR ราว 6 ในกลุ่ม CKM อาการ uremia เพิ่ม"});
+  if(M.medD!==null) E.push({t:M.medD,kind:"phys",text:"Median survival dialysis "+M.medD.toFixed(0)+" เดือน"});
+  if(M.medC!==null) E.push({t:M.medC,kind:"phys",text:"Median survival CKM "+M.medC.toFixed(0)+" เดือน"});
+  E.push({t:36,kind:"phys",text:"3 ปี: มีชีวิต dialysis "+Math.round(M.dD[M.dD.length-1][1])+"% CKM "+Math.round(M.dC[M.dC.length-1][1])+"%"});
+  live.load({tMin:0,tMax:36,unit:"เดือน",ms:8000,debounce:deb===true,num:function(x){ return x.toFixed(0); },events:E.sort(function(a,b){ return a.t-b.t; }),onFrame:onFrame,
+    cursorLabel:function(t){ return "D "+Math.round(Live.valueAt(M.dD,t))+"% CKM "+Math.round(Live.valueAt(M.dC,t))+"%"; }});
+}
+Sim.mount({code:"CKD-11", title:"Dialysis or Conservative Kidney Management", lead:"ปรับอายุ, frailty, โรคร่วม, dementia และอัตราที่ไตเสื่อม เทียบ survival 3 ปีกับวันที่อยู่บ้านระหว่างเริ่ม dialysis กับ conservative kidney management เพื่อใช้ประกอบการตัดสินใจร่วมกับผู้ป่วย",
+  scenarios:S, order:ORDER, captureMs:1000,
+  onChange:function(kk,s){ var p=s.p; ["age","cfs","cci","egfr","slope"].forEach(function(x){ C[x].set(p[x]); }); ps.value=p.pri; ["dem","nh"].forEach(function(x){ ST[x]=!!p[x]; BT[x].setState(ST[x]); }); update(); },
+  refs:["KDIGO 2024 Clinical Practice Guideline for the Evaluation and Management of CKD. Kidney Int 2024, 105(4S): S117-S314",
+        "Davison SN, Levin A, Moss AH, et al. Executive summary of the KDIGO Controversies Conference on Supportive Care in CKD. Kidney Int 2015, 88(3): 447-459",
+        "Montez-Rath ME, Thomas IC, Charu V, et al. Effect of starting dialysis versus continuing medical management on survival and home time in older adults with kidney failure: a target trial emulation study. Ann Intern Med 2024, 177(9): 1233-1243",
+        "Verberne WR, Geers AB, Jellema WT, et al. Comparative survival among older adults with advanced kidney disease managed conservatively versus with dialysis. Clin J Am Soc Nephrol 2016, 11(4): 633-640",
+        "Murtagh FEM, Marsh JE, Donohoe P, et al. Dialysis or not? A comparative survival study of patients over 75 years with CKD stage 5. Nephrol Dial Transplant 2007, 22(7): 1955-1962",
+        "Kurella Tamura M, Covinsky KE, Chertow GM, et al. Functional status of elderly adults before and after initiation of dialysis. N Engl J Med 2009, 361(16): 1539-1547",
+        "Moss AH, Ganjoo J, Sharma S, et al. Utility of the surprise question to identify dialysis patients with high mortality. Clin J Am Soc Nephrol 2008, 3(5): 1379-1384"],
+  note:"Model เพื่อการสอน (heuristic ไม่ใช่ prognostic tool): hazard ต่อปีของ CKM = 0.10 x e^(0.06 x (อายุ − 75)) x (1 + 0.15 x (CFS − 3)) x (1 + 0.08 x (CCI − 4)) x dementia 1.4 x nursing home 1.5 และเพิ่มเมื่อ eGFR < 6 HR ของ dialysis เทียบ CKM = 0.45 + 0.02 x (อายุ − 65) + 0.04 x (CCI − 4) + 0.05 x (CFS − 4) + dementia 0.15 + nursing home 0.2 (จำกัด 0.4–1.2) โดย 90 วันแรกหลังเริ่ม dialysis เพิ่ม hazard ตาม frailty วันในโรงพยาบาลและเวลาฟอก (3 x 5.5 ชม./สัปดาห์ รวมเดินทาง) เป็นค่าประมาณเพื่อแสดง trade-off"
+});
+})();
+</script>
+</body>
+</html>

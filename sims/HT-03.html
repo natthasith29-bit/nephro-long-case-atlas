@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[HT-03] BP Measurement, ABPM and HBPM Patterns</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+@media (min-width:901px){.bench{grid-template-columns:1.3fr 1fr}}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:12px}
+.sub{font-size:12.5px;color:var(--muted);margin:14px 0 4px}
+.row2{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px;font-size:13.5px}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint{display:none}
+body.present .card{padding:14px 18px}
+body.present .card h2{margin-bottom:6px}
+body.present .ro{padding:6px 12px}
+body.present .ro b{font-size:19px}
+body.present .ctls{gap:2px}
+body.present .ctl{font-size:13px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .tools{margin-top:4px;gap:5px}
+body.present .act{margin-top:6px;padding:7px 12px;font-size:12.5px}
+body.present .sub{margin:6px 0 2px}
+body.present .row2{margin-top:4px}
+body.present .ctls{grid-template-columns:1fr 1fr;column-gap:18px}
+body.present .ctl{grid-template-columns:minmax(80px,118px) 1fr 82px;gap:6px}
+body.present .st2{display:none}
+body.present .ro b{font-size:17px}
+body.present .tog{padding:3px 8px;font-size:11.5px}
+body.present .svgwrap svg{max-height:168px}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>24-hour ABPM</h2>
+      <div id="chart"></div>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 540 212" role="img" aria-label="Office versus out-of-office blood pressure phenotype grid"></svg></div>
+      <p class="hint no-present">จุดม่วงคือ SBP จุดเขียวคือ DBP ทุก 20 นาทีกลางวันและ 30 นาทีกลางคืน แถบเทาคือช่วงหลับ เส้นประคือเกณฑ์กลางวันและกลางคืน ตาราง 2x2 ด้านล่างจัด phenotype จาก office BP เทียบ out-of-office BP</p>
+    </div>
+    <div class="card">
+      <h2>BP profile และการวัด</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="row2"><label for="thr">เกณฑ์</label><select id="thr"><option value="esh">ESH 2023</option><option value="acc">ACC/AHA 2025</option></select></div>
+      <div class="sub">เทคนิคการวัดในห้องตรวจที่ผิด (กดเปิด/ปิด)</div>
+      <div class="tools" id="tools"></div>
+      <div class="sub st2">สถานะ</div>
+      <div class="tools st2" id="tools2"></div>
+      <div class="readout">
+        <div class="ro" id="roClin"><b>-</b><span>Office BP</span></div>
+        <div class="ro" id="roDay"><b>-</b><span>Daytime mean</span></div>
+        <div class="ro" id="roNight"><b>-</b><span>Night-time mean</span></div>
+        <div class="ro" id="ro24"><b>-</b><span>24-h mean</span></div>
+        <div class="ro" id="roDip"><b>-</b><span>Nocturnal dip</span></div>
+        <div class="ro" id="roPh"><b>-</b><span>Phenotype</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/plot.js"></script>
+<script>
+(function(){
+"use strict";
+function SV(t,a,p){ var b={}; for(var k in a) if(a[k]!==null&&a[k]!==undefined) b[k]=a[k]; return Sim.svg(t,b,p); }
+var TECH={cuff:{name:"Cuff เล็กเกินแขน",d:8},talk:{name:"พูดระหว่างวัด",d:10},arm:{name:"แขนไม่ได้วางพัก",d:10},back:{name:"หลังและเท้าไม่มีที่พัก",d:6},legs:{name:"ไขว่ห้าง",d:5},bladder:{name:"กระเพาะปัสสาวะเต็ม",d:10}};
+var THR={esh:{name:"ESH 2023",off:[140,90],home:[135,85],day:[135,85],night:[120,70],h24:[130,80]},acc:{name:"ACC/AHA 2025",off:[130,80],home:[130,80],day:[130,80],night:[110,65],h24:[125,75]}};
+function P(o){ var d={day:122,dip:14,wc:4,surge:15,sd:9,tx:false,ckd:false,tech:[],thr:"esh"}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  norm:{name:"Normotension dipper", p:P({}),
+    rows:[["Office","ปกติ"],["ABPM","day ปกติ night ลดลงราว 14%"],["Phenotype","normotension, dipper"]],
+    take:["BP ปกติลดลง 10–20% ตอนหลับ (dipper) และขึ้นช่วงตื่นนอน","ABPM ให้ข้อมูลที่ office BP ให้ไม่ได้ ทั้งกลางคืนและความแปรปรวน","Out-of-office BP ทำนาย CV และ kidney outcome ได้ดีกว่า office BP"]},
+  wch:{name:"White-coat HT", p:P({day:126,wc:24,surge:12}),
+    rows:[["Office","สูงทุกครั้งที่มาตรวจ"],["ABPM","ปกติทั้งกลางวันและกลางคืน"],["Phenotype","white-coat HT"]],
+    take:["White-coat HT คือ office สูงแต่ out-of-office ปกติ พบราว 10–30% ของคนที่ office BP สูง","ความเสี่ยงสูงกว่าคนปกติเล็กน้อย ติดตาม ABPM หรือ HBPM เป็นระยะเพราะเปลี่ยนเป็น sustained HT ได้","ถ้าความเสี่ยงต่ำ ใช้ lifestyle ไม่ต้องเริ่มยาจาก office BP อย่างเดียว"]},
+  masked:{name:"Masked HT ใน CKD", p:P({day:142,dip:4,wc:-14,tx:true,ckd:true}),
+    rows:[["Office","คุมได้ตามเกณฑ์"],["ABPM","day และ night สูง non-dipper"],["Phenotype","masked uncontrolled HT"]],
+    take:["Masked HT คือ office ปกติแต่ out-of-office สูง พบบ่อยใน CKD เบาหวาน และผู้ที่ได้ยาอยู่","มีความเสี่ยงใกล้เคียง sustained HT และพลาดได้ถ้าดู office BP อย่างเดียว","ใน CKD ที่มี organ damage หรือ GFR ลดเร็วโดย office BP ปกติ ให้ทำ ABPM"]},
+  sus:{name:"Sustained HT", p:P({day:152,dip:12,wc:6,surge:22}),
+    rows:[["Office","สูง"],["ABPM","day และ 24-h สูง dip ปกติ"],["Phenotype","sustained HT, dipper"]],
+    take:["Sustained HT ยืนยันด้วย out-of-office BP ก่อนเริ่มหรือปรับยาเมื่อทำได้","เป้า office SBP ใน CKD ต่ำกว่า 120 เมื่อวัดแบบ standardized","Morning surge ที่สูงสัมพันธ์กับ stroke ในบางการศึกษา"]},
+  nondip:{name:"Non-dipper CKD", p:P({day:138,dip:3,wc:2,ckd:true}),
+    rows:[["ภาวะ","CKD G3b volume เกิน"],["ABPM","night ลดลงน้อยกว่า 10%"],["Phenotype","sustained HT, non-dipper"]],
+    take:["Non-dipping พบบ่อยใน CKD, เบาหวาน, OSA, autonomic dysfunction และ volume เกิน","Night-time BP ทำนาย outcome ได้ดีที่สุดในบรรดาค่า ABPM","การย้ายยาไปก่อนนอนไม่ลด CV outcome ให้แก้ volume และสาเหตุแทน"]},
+  reverse:{name:"Reverse dipper OSA", p:P({day:134,dip:-8,wc:4,surge:8}),
+    rows:[["ภาวะ","OSA กรนดัง ง่วงกลางวัน"],["ABPM","night สูงกว่า day"],["Phenotype","reverse dipper"]],
+    take:["Reverse dipping บ่งชี้ OSA, autonomic failure หรือ CKD ขั้นสูง","Reverse dipper มีความเสี่ยง CV สูงที่สุดในกลุ่ม dipping pattern","ตรวจ sleep study และรักษา OSA ด้วย CPAP"]},
+  noct:{name:"Isolated nocturnal HT", p:P({day:128,dip:0,wc:2,surge:10}),
+    rows:[["Office","ปกติ"],["ABPM","day ปกติ night สูง"],["Phenotype","isolated nocturnal HT (masked)"]],
+    take:["Isolated nocturnal HT ตรวจพบได้จาก ABPM เท่านั้น HBPM ตอนเช้าเย็นมองไม่เห็น","จัดเป็น masked HT ชนิดหนึ่ง","ประเมินเหมือน non-dipper: OSA, เกลือ, volume, CKD"]},
+  tech:{name:"วัดผิดเทคนิค", p:P({day:124,wc:3,tech:["cuff","talk","bladder"]}),
+    rows:[["ห้องตรวจ","cuff เล็ก พูดระหว่างวัด ปวดปัสสาวะ"],["ผล","office BP สูงขึ้นราว 30 mmHg"],["ABPM","ปกติ"]],
+    take:["เทคนิคผิดแต่ละอย่างเพิ่ม SBP ได้ 5–10 mmHg และรวมกันได้ราว 30 mmHg","Standardized office BP: นั่งพัก 5 นาที หลังพิง เท้าแตะพื้น แขนวางระดับหัวใจ cuff ขนาดพอดี ไม่พูด วัด 2–3 ครั้งแล้วเฉลี่ย","เป้า SBP < 120 ใน CKD ใช้ได้กับการวัดแบบ standardized เท่านั้น"]}
+};
+var ORDER=["norm","wch","masked","sus","nondip","reverse","noct","tech"];
+var box=document.getElementById("ctls"), C={};
+function sl(k,o){ o.id="s"+k; o.onInput=update; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("day",{label:"Daytime SBP",min:100,max:180,step:1,value:122,unit:" mmHg"});
+sl("dip",{label:"Nocturnal dip",min:-15,max:30,step:1,value:14,unit:" %"});
+sl("wc",{label:"Office − daytime",min:-25,max:40,step:1,value:4,unit:" mmHg"});
+sl("surge",{label:"Morning surge",min:0,max:50,step:1,value:15,unit:" mmHg"});
+sl("sd",{label:"Variability (SD)",min:4,max:20,step:1,value:9,unit:" mmHg"});
+var T={}, tb=document.getElementById("tools");
+Object.keys(TECH).forEach(function(k){ var b=Sim.h("button",{class:"tog",type:"button","aria-pressed":"false",text:TECH[k].name+" +"+TECH[k].d}); b.addEventListener("click",function(){ b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")==="true"?"false":"true"); update(); }); tb.appendChild(b); T[k]=b; });
+var TX=Sim.toggle("ได้ยาลด BP อยู่",update,false), CKD=Sim.toggle("CKD",update,false);
+var tb2=document.getElementById("tools2"); tb2.appendChild(TX); tb2.appendChild(CKD);
+function on(k){ return T[k].getAttribute("aria-pressed")==="true"; }
+var thrSel=document.getElementById("thr"); thrSel.addEventListener("change",update);
+function isOn(b){ return b.getAttribute("aria-pressed")==="true"; }
+var A=Plot.colors;
+function clock(x){ var h=Math.floor(x)%24; return (h<10?"0":"")+h+":00"; }
+var chart=Plot.chart(document.getElementById("chart"),{height:Sim.present?180:250,aria:"Twenty-four hour ambulatory systolic and diastolic blood pressure",
+  x:{min:7,max:31,step:3,label:"Clock time",fmt:clock,hoverLabel:function(x){ var h=Math.floor(x)%24, m=Math.round((x-Math.floor(x))*60); return (h<10?"0":"")+h+":"+(m<10?"0":"")+m; }},
+  y:{min:50,max:200,step:Sim.present?50:25,label:"BP (mmHg)"},
+  series:[{id:"ts",name:"Threshold",color:A.red,data:[],width:1.3,dash:[5,4],hover:false},{id:"td",name:"",color:A.red,data:[],width:1.1,dash:[2,4],hover:false},{id:"s",name:"SBP",color:A.accent,data:[],width:1,points:true},{id:"d",name:"DBP",color:A.teal,data:[],width:1,points:true}],
+  xbands:[{x0:22,x1:30,label:"Sleep",color:"rgba(11,11,31,0.06)"}],legend:true});
+function rng(seed){ var s=seed; return function(){ s=(s*16807)%2147483647; return (s-1)/2147483646; }; }
+function gauss(r){ var u=Math.max(1e-6,r()), v=r(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+function prof(x,o){ /* smooth circadian SBP */
+  var night=o.day*(1-o.dip/100);
+  function sig(z){ return 1/(1+Math.exp(-z)); }
+  var fall=sig((x-22.5)*2.2), rise=sig((x-29.6)*2.6);
+  var base=o.day+(night-o.day)*fall*(1-rise);
+  var surge=o.surge*Math.exp(-Math.pow((x-30.4)/0.7,2))*0.9+o.surge*0.25*Math.exp(-Math.pow((x-7.4)/0.6,2));
+  var afternoon=3*Math.sin((x-7)/15*Math.PI)*(x<22?1:0);
+  return base+surge+afternoon;
+}
+function dbpOf(s){ return 0.6*s-2; }
+function opts(){ var o={day:C.day.get(),dip:C.dip.get(),wc:C.wc.get(),surge:C.surge.get(),sd:C.sd.get(),thr:thrSel.value,tx:isOn(TX),ckd:isOn(CKD),tech:[]};
+  Object.keys(TECH).forEach(function(k){ if(on(k)) o.tech.push(k); }); return o; }
+var svg=document.getElementById("vis");
+function tx(x,y,s,o){ o=o||{}; return SV("text",{x:x,y:y,"text-anchor":o.a||"middle","font-family":o.mono?"Geist Mono, monospace":"IBM Plex Sans Thai, sans-serif","font-size":o.fs||12,"font-weight":o.fw||400,fill:o.fill||"#0B0B1F",text:s},svg); }
+function grid(offHigh,outHigh,tx_,th){
+  svg.innerHTML="";
+  var x0=120,y0=24,w=200,h=70;
+  var names=tx_?[["Controlled","Masked uncontrolled"],["White-coat uncontrolled","Sustained uncontrolled"]]:[["Normotension","Masked HT"],["White-coat HT","Sustained HT"]];
+  tx(x0+w,15,"Out-of-office BP (ABPM or HBPM)",{fs:13,fill:"#5E6075"});
+  tx(x0+w/2,y0+h*2+20,"Normal",{fs:12.5,fill:"#5E6075"}); tx(x0+w*1.5,y0+h*2+20,"High",{fs:12.5,fill:"#5E6075"});
+  tx(x0-10,y0+h/2+4,"Office normal",{fs:12.5,fill:"#5E6075",a:"end"}); tx(x0-10,y0+h*1.5+4,"Office high",{fs:12.5,fill:"#5E6075",a:"end"});
+  for(var r=0;r<2;r++) for(var c=0;c<2;c++){
+    var act=(r===(offHigh?1:0))&&(c===(outHigh?1:0)), risk=(c===1);
+    SV("rect",{x:x0+c*w+3,y:y0+r*h+3,width:w-6,height:h-6,rx:12,fill:act?(risk?"#B4232A":"#0B0B1F"):"#F4F5F9",stroke:act?"none":"#E6E7F0"},svg);
+    tx(x0+c*w+w/2,y0+r*h+h/2+1,names[r][c],{fs:15,fw:act?600:500,fill:act?"#fff":"#9A9CB2"});
+    tx(x0+c*w+w/2,y0+r*h+h/2+19,["Low risk","Risk near sustained","Mildly higher risk","High risk"][r*2+c],{fs:12,fill:act?"rgba(255,255,255,.8)":"#B5B7C8"});
+  }
+  tx(x0+w,y0+h*2+40,"Thresholds "+th.name+": office "+th.off.join("/")+", day "+th.day.join("/")+", night "+th.night.join("/")+", 24 h "+th.h24.join("/"),{fs:12,fill:"#5E6075"});
+}
+function update(){
+  var o=opts(), th=THR[o.thr], r=rng(7+Math.round(o.sd)), S1=[],D1=[], dayS=[],dayD=[],nS=[],nD=[],all=[],allD=[];
+  for(var x=7;x<31.01;){ var night=x>=22&&x<30, s=prof(x,o)+gauss(r)*o.sd*(night?0.7:1), d=dbpOf(s)+gauss(r)*o.sd*0.35;
+    S1.push([x,s]); D1.push([x,d]); all.push(s); allD.push(d);
+    if(night){ nS.push(s); nD.push(d); } else if(x>=9&&x<21){ dayS.push(s); dayD.push(d); }
+    x+=night?0.5:1/3; }
+  function mean(a){ return a.reduce(function(p,c){ return p+c; },0)/a.length; }
+  var dS=mean(dayS), dD=mean(dayD), nSm=mean(nS), nDm=mean(nD), hS=mean(all), hD=mean(allD);
+  var techAdd=o.tech.reduce(function(p,k){ return p+TECH[k].d; },0);
+  var oS=o.day+o.wc+techAdd, oD=dbpOf(o.day)+0.45*(o.wc+techAdd);
+  var dip=(dS-nSm)/dS*100;
+  var offH=oS>=th.off[0]||oD>=th.off[1];
+  var dayH=dS>=th.day[0]||dD>=th.day[1], nH=nSm>=th.night[0]||nDm>=th.night[1], h24H=hS>=th.h24[0]||hD>=th.h24[1];
+  var outH=dayH||nH||h24H;
+  chart.setSeries("s",S1); chart.setSeries("d",D1);
+  function thrLine(i){ return [[7,th.day[i]],[22,th.day[i]],[22,th.night[i]],[30,th.night[i]],[30,th.day[i]],[31,th.day[i]]]; }
+  chart.setSeries("ts",thrLine(0)); chart.setSeries("td",thrLine(1));
+  chart.update({marks:[{x:10,y:oS,label:"Office "+oS.toFixed(0),color:A.red}]});
+  grid(offH,outH,o.tx,th);
+  var ph=o.tx?(offH?(outH?"Sustained uncontrolled":"White-coat uncontrolled"):(outH?"Masked uncontrolled":"Controlled")):(offH?(outH?"Sustained HT":"White-coat HT"):(outH?"Masked HT":"Normotension"));
+  var pat=dip>20?"extreme dipper":dip>=10?"dipper":dip>=0?"non-dipper":"reverse dipper";
+  Sim.ro("roClin",oS.toFixed(0)+"/"+oD.toFixed(0),offH?"flag":"ok");
+  Sim.ro("roDay",dS.toFixed(0)+"/"+dD.toFixed(0),dayH?"flag":"ok");
+  Sim.ro("roNight",nSm.toFixed(0)+"/"+nDm.toFixed(0),nH?"flag":"ok");
+  Sim.ro("ro24",hS.toFixed(0)+"/"+hD.toFixed(0),h24H?"flag":"ok");
+  Sim.ro("roDip",dip.toFixed(0)+"% "+pat,dip<10?"flag":dip>20?"flag":"ok");
+  Sim.ro("roPh",ph,outH?"flag":offH?null:"ok");
+  var m, bad=true, a=document.getElementById("act");
+  if(techAdd>=10&&!outH) m="<b>Office BP สูงจากเทคนิค</b> วัดใหม่แบบ standardized: นั่งพัก 5 นาที cuff พอดีแขน แขนวางระดับหัวใจ ไม่พูด ปัสสาวะก่อน เฉลี่ย 2–3 ครั้ง ก่อนตัดสินใจเรื่องยา";
+  else if(!offH&&outH&&!dayH&&nH) m="<b>Isolated nocturnal HT</b> ตรวจ OSA (STOP-BANG, sleep study) ประเมินเกลือและ volume ใน CKD ปรับยาตาม ABPM และนัดทำซ้ำ";
+  else if(!offH&&outH) m="<b>"+(o.tx?"Masked uncontrolled HT":"Masked HT")+"</b> ใช้ out-of-office BP เป็นเป้า "+(o.tx?"เพิ่มหรือปรับยา":"เริ่มการรักษาเหมือน sustained HT")+" ยืนยันด้วย HBPM 7 วัน ประเมิน organ damage (UACR, eGFR, LVH)";
+  else if(offH&&!outH){ bad=false; m="<b>"+(o.tx?"White-coat uncontrolled":"White-coat HT")+"</b> "+(o.tx?"ไม่ต้องเพิ่มยา ใช้ HBPM ติดตาม":"lifestyle ไม่เริ่มยาถ้าความเสี่ยงต่ำ ทำ ABPM หรือ HBPM ซ้ำทุก 1–2 ปี")+" ระวัง orthostatic hypotension ถ้าเพิ่มยาตาม office BP"; }
+  else if(outH&&dip<0) m="<b>Reverse dipper</b> ตรวจ OSA, autonomic dysfunction (orthostatic BP), CKD และ volume เกิน รักษาสาเหตุ ไม่ต้องย้ายยาไปก่อนนอน";
+  else if(outH&&dip<10) m="<b>Sustained HT + non-dipping</b> ปรับยาให้ถึงเป้า แก้ volume (เกลือ, diuretic) ใน CKD และตรวจหา OSA";
+  else if(outH) m="<b>Sustained HT</b> เริ่มหรือเพิ่มยา 2 ตัวในเม็ดเดียว ใน CKD ใช้ RAAS blocker ถ้ามี albuminuria เป้า SBP < 120 (standardized office) หรือ < 130 ตาม out-of-office";
+  else { bad=false; m="<b>BP ปกติทั้งในและนอกห้องตรวจ</b> ตรวจซ้ำตามความเสี่ยง ลองเพิ่ม Office − daytime เพื่อดู white-coat หรือลดเป็นลบเพื่อดู masked HT"; }
+  a.innerHTML="<b>Next step:</b> "+m; a.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"HT-03", title:"BP Measurement, ABPM and HBPM Patterns", lead:"สร้าง ABPM 24 ชั่วโมงเองจาก daytime BP, nocturnal dip, morning surge และความต่างระหว่าง office กับนอกห้องตรวจ เพิ่มความผิดพลาดของการวัด แล้วดูว่า phenotype และ dipping pattern เปลี่ยนอย่างไร",
+  scenarios:S, order:ORDER, captureMs:700,
+  onChange:function(k,s){ ["day","dip","wc","surge","sd"].forEach(function(x){ C[x].set(s.p[x]); }); thrSel.value=s.p.thr; TX.setState(s.p.tx); CKD.setState(s.p.ckd);
+    Object.keys(T).forEach(function(x){ T[x].setAttribute("aria-pressed",s.p.tech.indexOf(x)>=0?"true":"false"); }); update(); },
+  refs:["Mancia G, Kreutz R, Brunström M, et al. 2023 ESH Guidelines for the management of arterial hypertension. J Hypertens 2023, 41(12): 1874-2071",
+        "Jones DW, Ferdinand KC, Taler SJ, et al. 2025 AHA/ACC and multisociety guideline for the prevention, detection, evaluation and management of high blood pressure in adults. Hypertension 2025, 82(10): e212-e316",
+        "Muntner P, Shimbo D, Carey RM, et al. Measurement of blood pressure in humans: a scientific statement from the American Heart Association. Hypertension 2019, 73(5): e35-e66",
+        "Kidney Disease: Improving Global Outcomes (KDIGO) Blood Pressure Work Group. KDIGO 2021 clinical practice guideline for the management of blood pressure in CKD. Kidney Int 2021, 99(3S): S1-S87",
+        "Drawz PE, Alper AB, Anderson AH, et al (CRIC). Masked hypertension and elevated nighttime blood pressure in CKD: prevalence and association with target organ damage. Clin J Am Soc Nephrol 2016, 11(4): 642-652",
+        "Mackenzie IS, Rogers A, Poulter NR, et al (TIME). Cardiovascular outcomes in adults with hypertension with evening versus morning dosing of usual antihypertensives. Lancet 2022, 400(10361): 1417-1425",
+        "Thai Hypertension Society. 2019 Thai guidelines on the treatment of hypertension. Thai Hypertension Society 2019"],
+  note:"Model เพื่อการสอน: SBP รายจุด = profile circadian (daytime mean, ลดตาม nocturnal dip ช่วง 22:00–06:00, morning surge ราว 06:30) + noise แบบสุ่มคงที่ (SD ตามที่ตั้ง กลางคืน 0.7 เท่า) DBP = 0.6 x SBP − 2 daytime mean ใช้ช่วง 09:00–21:00 office BP = daytime mean + office minus daytime + ผลของเทคนิคที่ผิด (cuff เล็ก +8, พูด +10, แขนไม่วาง +10, หลังเท้าไม่พัก +6, ไขว่ห้าง +5, ปวดปัสสาวะ +10 mmHg) out-of-office สูงเมื่อ day, night หรือ 24-h เกินเกณฑ์อย่างใดอย่างหนึ่ง"
+});
+})();
+</script>
+</body>
+</html>

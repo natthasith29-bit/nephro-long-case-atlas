@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[CKD-09] Protein Metabolism and Nutrition in CKD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="../core/core.css">
+<style>
+.ctl{grid-template-columns:minmax(100px,130px) 1fr 118px}
+.readout{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:560px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.act{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--canvas);font-size:14px}
+.act b{font-weight:600}
+.act.bad{background:var(--pink)}
+.tools{margin-top:10px}
+body.present .bench{grid-template-columns:1.25fr 1fr}
+body.present .find .card{display:none}
+body.present .find{grid-template-columns:1fr}
+body.present .hint,body.present .steps,body.present #stepT{display:none}
+body.present .card{padding:14px 18px}
+body.present .ctls{gap:1px}
+body.present .ctl{font-size:13px}
+body.present .tools{margin-top:6px}
+body.present .tog{padding:4px 9px;font-size:12px}
+body.present .ro{padding:6px 10px}
+body.present .ro b{font-size:18px}
+body.present .readout{margin-top:8px}
+body.present .act{margin-top:8px;padding:8px 12px;font-size:13px}
+body.present .take li{font-size:14px}
+body.present .svgwrap svg{max-height:420px;width:auto;margin:0 auto}
+</style>
+</head>
+<body>
+<main class="sim" id="sim">
+  <section class="bench">
+    <div class="card">
+      <h2>Nitrogen flow: อาหาร → amino acid pool → urea</h2>
+      <div class="svgwrap"><svg id="vis" viewBox="0 0 640 400" role="img" aria-label="Nitrogen flow from diet protein to urea"></svg></div>
+      <p class="hint no-present">โปรตีนที่กินเกินความต้องการถูกเผาเป็น urea ทำให้ BUN สูงและเป็นภาระของไต ถ้าพลังงานหรือโปรตีนไม่พอ กล้ามเนื้อถูกสลายแทน BUN ไม่ได้ลดลงตามที่คาด และเกิด protein-energy wasting ketoanalog ให้ carbon skeleton ที่ดึง nitrogen จาก urea กลับไปสร้าง amino acid</p>
+      <h3 id="stepT" class="secondary">Maroni: ประเมิน DPI จาก urine urea nitrogen 24 ชม.</h3>
+      <div id="steps" class="secondary"></div>
+    </div>
+    <div class="card">
+      <h2>อาหารและภาวะผู้ป่วย</h2>
+      <div class="ctls" id="ctls"></div>
+      <div class="tools" id="tools"></div>
+      <div class="readout">
+        <div class="ro" id="roB"><b>-</b><span>BUN steady state (mg/dL)</span></div>
+        <div class="ro" id="roU"><b>-</b><span>UUN (g/วัน)</span></div>
+        <div class="ro" id="roN"><b>-</b><span>N balance (g/วัน)</span></div>
+        <div class="ro" id="roQ"><b>-</b><span>Protein ที่ต้องการ (g/kg)</span></div>
+        <div class="ro" id="roM"><b>-</b><span>DPI จาก Maroni (g/kg)</span></div>
+        <div class="ro" id="roP"><b>-</b><span>PEW risk</span></div>
+      </div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+</main>
+<script src="../core/shell.js"></script>
+<script src="../core/calc.js"></script>
+<script>
+(function(){
+"use strict";
+function P(o){ var d={gfr:20,w:65,dpi:1.2,kcal:30,prot:0.5,ka:false,cat:false,dm:false}; for(var k in o) d[k]=o[k]; return d; }
+var S={
+  usual:{name:"G4 กินโปรตีนสูง", p:P({}),
+    rows:[["ผู้ป่วย","eGFR 20 น้ำหนัก 65 kg กินโปรตีน 1.2 g/kg/วัน"],["ผล","BUN ราว 70 mg/dL nitrogen ส่วนเกินถูกเปลี่ยนเป็น urea"],["Hyperfiltration","โปรตีนสูงเพิ่ม single-nephron GFR"]],
+    take:["โปรตีนที่เกินความต้องการไม่ได้สร้างกล้ามเนื้อเพิ่ม แต่เป็น urea และกรด","CKD G3–G5 ที่ยังไม่ dialysis ควรหลีกเลี่ยงโปรตีน > 1.3 g/kg/วัน","BUN steady state สะท้อน protein intake ต่อ urea clearance"]},
+  lpd:{name:"Low protein 0.6 g/kg", p:P({dpi:0.6}),
+    rows:[["การรักษา","LPD 0.6 g/kg/วัน พลังงาน 30 kcal/kg"],["ผล","BUN ลดราวครึ่งหนึ่ง N balance ใกล้ศูนย์"],["เงื่อนไข","ต้องได้พลังงานพอและมีนักกำหนดอาหารติดตาม"]],
+    take:["LPD 0.55–0.6 g/kg/วัน ใน CKD G3–G5 ที่ metabolic stable ลด BUN และอาการ uremia","พลังงาน 25–35 kcal/kg/วัน จำเป็นเพื่อไม่ให้ร่างกายใช้โปรตีนเป็นพลังงาน","ติดตามด้วย UUN 24 ชม. (Maroni), น้ำหนัก, albumin, SGA"]},
+  vlpd:{name:"VLPD + ketoanalog", p:P({dpi:0.32,ka:true}),
+    rows:[["การรักษา","VLPD 0.3 g/kg/วัน + ketoanalog 1 เม็ดต่อ 5 kg"],["ผล","BUN ต่ำสุด N balance คงที่"],["กลไก","ketoacid รับ amino group จาก nitrogen ส่วนเกินกลายเป็น essential AA"]],
+    take:["VLPD 0.28–0.43 g/kg/วัน ต้องเสริม ketoanalog เพื่อให้ได้ essential amino acid พอ","ช่วยชะลอการเริ่ม dialysis ในผู้ป่วยที่ปฏิบัติได้และติดตามใกล้ชิด","ไม่เหมาะกับผู้ป่วยที่มี PEW หรือรับประทานได้น้อย"]},
+  pew:{name:"LPD แต่พลังงานไม่พอ", p:P({dpi:0.55,kcal:21}),
+    rows:[["ผู้ป่วย","จำกัดโปรตีนเองโดยไม่มีนักกำหนดอาหาร พลังงาน 21 kcal/kg"],["ผล","N balance ติดลบ กล้ามเนื้อสลาย BUN ไม่ลดตามที่หวัง"],["เสี่ยง","PEW, albumin ต่ำ, mortality สูง"]],
+    take:["LPD ที่พลังงานไม่พอทำให้สลายกล้ามเนื้อ เป็นสาเหตุหลักของ PEW","BUN ที่ไม่ลดแม้กินโปรตีนน้อย ชวนคิดถึง catabolism หรือ intake จริงสูงกว่าที่บอก","Maroni DPI จาก UUN ประเมิน intake ได้จริงกว่าการถามประวัติ"]},
+  neph:{name:"Nephrotic proteinuria 8 g", p:P({gfr:45,w:70,dpi:0.8,prot:8}),
+    rows:[["ผู้ป่วย","eGFR 45 proteinuria 8 g/วัน albumin 2.2"],["ความต้องการ","0.8 g/kg + ทดแทนโปรตีนที่เสียทางปัสสาวะ"],["หลีกเลี่ยง","high protein diet เพิ่ม proteinuria"]],
+    take:["Nephrotic syndrome ให้โปรตีน 0.8 g/kg/วันบวกปริมาณที่เสียทางปัสสาวะ","การกินโปรตีนสูงไม่ช่วย albumin แต่เพิ่ม proteinuria","สูตร Maroni บวก proteinuria เมื่อเกิน 5 g/วัน"]},
+  cat:{name:"Acidosis + inflammation", p:P({dpi:0.7,cat:true}),
+    rows:[["ผู้ป่วย","eGFR 20 HCO3 17 CRP สูง กินโปรตีน 0.7 g/kg"],["ผล","catabolism เพิ่มความต้องการ N balance ติดลบ"],["แก้","แก้ acidosis และ inflammation ก่อนจำกัดโปรตีนเพิ่ม"]],
+    take:["Metabolic acidosis กระตุ้น ubiquitin-proteasome สลายกล้ามเนื้อ","Inflammation เพิ่มความต้องการโปรตีนและลด appetite","แก้สาเหตุ catabolic ก่อนเริ่ม LPD"]}
+};
+var ORDER=["usual","lpd","vlpd","pew","neph","cat"];
+var box=document.getElementById("ctls"), C={}, ST={ka:false,cat:false,dm:false};
+function sl(k,o){ o.id="s"+k; o.onInput=function(){ update(); }; C[k]=Sim.slider(o); box.appendChild(C[k].el); }
+sl("gfr",{label:"eGFR",min:8,max:60,step:1,value:20,unit:"mL/min"});
+sl("w",{label:"น้ำหนัก",min:40,max:100,step:1,value:65,unit:"kg"});
+sl("dpi",{label:"Protein intake",min:0.25,max:1.6,step:0.05,value:1.2,unit:"g/kg/วัน",fmt:function(v){ return v.toFixed(2); }});
+sl("kcal",{label:"พลังงาน",min:18,max:40,step:1,value:30,unit:"kcal/kg/วัน"});
+sl("prot",{label:"Proteinuria",min:0,max:12,step:0.5,value:0.5,unit:"g/วัน",fmt:function(v){ return v.toFixed(1); }});
+var tb=document.getElementById("tools"), BT={};
+[["ka","Ketoanalog"],["cat","Acidosis / inflammation"],["dm","Diabetes"]].forEach(function(t){ BT[t[0]]=Sim.toggle(t[1],function(on){ ST[t[0]]=on; update(); },false); tb.appendChild(BT[t[0]]); });
+function v(k){ return C[k].get(); }
+var svg=document.getElementById("vis");
+function T(x,y,s,o){ o=o||{}; var a={x:x,y:y,"font-size":o.fs||12,fill:o.c||"#0B0B1F","text-anchor":o.a||"middle",text:s}; if(o.w) a["font-weight"]=o.w; if(o.mono) a["font-family"]="Geist Mono, monospace"; return Sim.svg("text",a,svg); }
+function nodeR(x,y,w,h,t,sub,col){ Sim.svg("rect",{x:x,y:y,width:w,height:h,rx:14,fill:"#fff",stroke:col||"#D3D5E2","stroke-width":1.6},svg); T(x+w/2,y+24,t,{fs:13,w:600}); (sub||[]).forEach(function(s,i){ T(x+w/2,y+44+i*16,s,{fs:11.5,c:"#5E6075",mono:true}); }); }
+function arr(d,w,col,lab,lx,ly){ Sim.svg("path",{d:d,stroke:col,"stroke-width":w,fill:"none","stroke-linecap":"round","marker-end":"url(#n_"+col.slice(1)+")",opacity:0.85},svg); if(lab) T(lx,ly,lab,{fs:11,c:col,w:600}); }
+function W(g){ return Sim.clamp(1.5+g/2.2,1.5,12); }
+function draw(M){
+  svg.innerHTML="";
+  var defs=Sim.svg("defs",{},svg);
+  ["A8842C","5B4BFF","1F7A72","B4232A","19C8E6"].forEach(function(c){ var m=Sim.svg("marker",{id:"n_"+c,viewBox:"0 0 10 10",refX:6,refY:5,markerWidth:3.2,markerHeight:3.2,orient:"auto"},defs); Sim.svg("path",{d:"M0 0L10 5L0 10z",fill:"#"+c},m); });
+  nodeR(20,30,170,70,"Diet protein",[Math.round(M.dg)+" g/d",(M.dg/6.25).toFixed(1)+" g N/d"],"#A8842C");
+  if(M.ka) nodeR(20,130,170,62,"Ketoanalog",["N-free carbon skeletons"],"#19C8E6");
+  nodeR(240,110,170,74,"Amino acid pool",["need "+M.need.toFixed(2)+" g/kg","energy "+M.kcal+" kcal/kg"]);
+  nodeR(460,30,160,74,"Muscle",[M.nb>=0?"synthesis = breakdown":"net breakdown",(M.nb>=0?"+":"")+M.nb.toFixed(1)+" g N/d"],M.nb<-0.5?"#B4232A":"#1F7A72");
+  nodeR(240,250,170,74,"Liver: urea",["UUN "+M.uun.toFixed(1)+" g/d"],"#5B4BFF");
+  nodeR(460,250,160,74,"Blood and kidney",["BUN "+Math.round(M.bun)+" mg/dL","urea clearance "+M.kurea.toFixed(0)],M.bun>100?"#B4232A":null);
+  arr("M190 70 C220 70 230 130 236 140",W(M.dg/6.25),"#A8842C","",0,0);
+  if(M.ka) arr("M190 160 L234 156",4,"#19C8E6","",0,0);
+  if(M.nb>=0) arr("M410 140 C450 140 470 120 500 108",W(4),"#1F7A72","synthesis",470,150);
+  else arr("M520 106 C510 140 470 150 416 152",W(-M.nb*3+3),"#B4232A","catabolism",500,160);
+  arr("M325 186 L325 244",W(M.uun),"#5B4BFF","excess N to urea",385,220);
+  arr("M410 287 L454 287",W(M.uun),"#5B4BFF","",0,0);
+  if(M.prot>0.5) { arr("M410 128 C560 128 600 200 590 244",W(M.prot/6.25*3),"#B4232A","proteinuria "+M.prot.toFixed(1)+" g/d",560,190); }
+  T(325,370,M.nb<-0.5?"Negative nitrogen balance: muscle is being used as fuel":M.dpiEff>M.need+0.3?"Protein above need is burned to urea and acid":"Intake matches need",{fs:12.5,w:600,c:M.nb<-0.5?"#B4232A":M.dpiEff>M.need+0.3?"#A8842C":"#1F7A72"});
+}
+function update(){
+  var g=v("gfr"), w=v("w"), dpi=v("dpi"), kcal=v("kcal"), prot=v("prot");
+  var need=0.6+0.03*Math.max(0,30-kcal)+(ST.cat?0.25:0)+prot/w;
+  var dpiEff=dpi+(ST.ka?0.3:0);
+  var nb=(dpiEff-need)*w/6.25*0.8; var nbShow=Math.min(nb,0.3);
+  var dg=dpi*w;
+  var uun=Math.max(0.5,(dg-prot)/6.25-0.031*w+(nb<0?-nb:0)-(ST.ka?0.6:0)-(nb>0?0.3*nbShow:0));
+  var kurea=0.55*g*w/70;
+  var bun=uun*1000/1440/kurea*100;
+  var mar=Calc.maroniDPI({uunG:uun,w:w,protG:prot});
+  var pew=(kcal<25?1.5:0)+(nb<-0.5?1.5:0)+(dpiEff<0.55?1:0)+(ST.cat?1:0)+(prot>5?0.5:0);
+  var rl=pew>=2.5?"High":pew>=1?"Moderate":"Low";
+  var M={dg:dg,ka:ST.ka,need:need,kcal:kcal,nb:nbShow,uun:uun,bun:bun,kurea:kurea,prot:prot,dpiEff:dpiEff};
+  draw(M);
+  Sim.ro("roB",Math.round(bun),bun>100?"flag":bun<50?"ok":null);
+  Sim.ro("roU",uun.toFixed(1)); Sim.ro("roN",(nbShow>=0?"+":"")+nbShow.toFixed(1),nb<-0.5?"flag":"ok");
+  Sim.ro("roQ",need.toFixed(2)); Sim.ro("roM",mar.value.toFixed(2),Math.abs(mar.value-dpi)>0.15?"flag":null);
+  Sim.ro("roP",rl,rl==="High"?"flag":rl==="Low"?"ok":null);
+  var st=document.getElementById("steps"); st.innerHTML=""; Calc.renderSteps(st,mar,{title:"Maroni"});
+  var tgt=ST.dm?"0.6–0.8":"0.55–0.6";
+  var m,bad=true;
+  if(nb<-0.5) m="<b>N balance ติดลบ</b> "+(kcal<25?"เพิ่มพลังงานเป็น 25–35 kcal/kg/วัน ":"")+(ST.cat?"แก้ acidosis และหาสาเหตุ inflammation ":"")+"อย่าจำกัดโปรตีนต่ำกว่าความต้องการ ("+need.toFixed(2)+" g/kg) ส่งนักกำหนดอาหาร ประเมิน SGA และ oral nutritional supplement ถ้า intake ไม่พอ";
+  else if(dpi>1.3&&!ST.ka) m="<b>โปรตีน "+dpi.toFixed(2)+" g/kg สูงเกิน</b> ลดเป็นราว 0.8 g/kg/วัน หรือ LPD "+tgt+" g/kg/วันถ้าผู้ป่วยพร้อมและมีนักกำหนดอาหารติดตาม";
+  else if(dpi>0.85&&g<30&&!ST.ka) m="<b>พิจารณา LPD</b> eGFR "+g+" metabolic stable ลดโปรตีนเป็น "+tgt+" g/kg/วัน (หรือ VLPD + ketoanalog) พลังงาน 25–35 kcal/kg/วัน ติดตาม UUN 24 ชม., น้ำหนัก และ albumin";
+  else if(prot>5&&dpi<0.8+prot/w-0.05) m="<b>Nephrotic</b> ให้โปรตีน 0.8 g/kg/วัน + "+prot.toFixed(1)+" g ที่เสียทางปัสสาวะ ("+(0.8+prot/w).toFixed(2)+" g/kg) ไม่ควรให้โปรตีนสูง ลด proteinuria ด้วยการรักษาโรค";
+  else if(bun>100) m="<b>BUN สูง</b> ทบทวน intake จริงด้วย Maroni, หา catabolism (infection, GI bleed, steroid) และประเมินความพร้อมเริ่ม KRT ถ้ามีอาการ uremia";
+  else { bad=false; m="<b>สมดุล</b> intake ตรงความต้องการ N balance ไม่ติดลบ ติดตาม UUN 24 ชม. (Maroni), น้ำหนัก, albumin, SGA ทุก 3–6 เดือน"; }
+  var a=document.getElementById("act"); a.innerHTML="<b>Next step:</b> "+m; a.className="act"+(bad?" bad":"");
+}
+Sim.mount({code:"CKD-09", title:"Protein Metabolism and Nutrition in CKD", lead:"ปรับโปรตีน, พลังงาน, ketoanalog, proteinuria และภาวะ catabolic ดูว่า nitrogen ไปที่ไหน BUN เปลี่ยนอย่างไร และเมื่อไรการจำกัดโปรตีนกลายเป็นการสลายกล้ามเนื้อ",
+  scenarios:S, order:ORDER, captureMs:800,
+  onChange:function(kk,s){ var p=s.p; ["gfr","w","dpi","kcal","prot"].forEach(function(x){ C[x].set(p[x]); }); ["ka","cat","dm"].forEach(function(x){ ST[x]=!!p[x]; BT[x].setState(ST[x]); }); update(); },
+  refs:["Ikizler TA, Burrowes JD, Byham-Gray LD, et al. KDOQI Clinical Practice Guideline for Nutrition in CKD: 2020 update. Am J Kidney Dis 2020, 76(3 Suppl 1): S1-S107",
+        "KDIGO 2024 Clinical Practice Guideline for the Evaluation and Management of CKD. Kidney Int 2024, 105(4S): S117-S314",
+        "KDIGO 2022 Clinical Practice Guideline for Diabetes Management in CKD. Kidney Int 2022, 102(5S): S1-S127",
+        "Maroni BJ, Steinman TI, Mitch WE. A method for estimating nitrogen intake of patients with chronic renal failure. Kidney Int 1985, 27(1): 58-65",
+        "Garneata L, Stancu A, Dragomir D, Stefan G, Mircescu G. Ketoanalogue-supplemented vegetarian very low-protein diet and CKD progression. J Am Soc Nephrol 2016, 27(7): 2164-2176",
+        "Fouque D, Kalantar-Zadeh K, Kopple J, et al. A proposed nomenclature and diagnostic criteria for protein-energy wasting in acute and chronic kidney disease. Kidney Int 2008, 73(4): 391-398",
+        "Kalantar-Zadeh K, Fouque D. Nutritional management of CKD. N Engl J Med 2017, 377(18): 1765-1776"],
+  note:"Model เพื่อการสอน: ความต้องการโปรตีน = 0.6 g/kg + 0.03 ต่อ kcal/kg ที่ต่ำกว่า 30 + 0.25 เมื่อ catabolic + proteinuria/น้ำหนัก ketoanalog เทียบเท่า 0.3 g/kg N balance = (intake − need) x W/6.25 x 0.8 (ค่าบวกจำกัดที่ +0.3) UUN = (protein − proteinuria)/6.25 − 0.031W + N จากการสลายกล้ามเนื้อ urea clearance = 0.55 x eGFR BUN steady state = UUN (mg/min) / urea clearance"
+});
+})();
+</script>
+</body>
+</html>
