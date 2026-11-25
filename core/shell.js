@@ -145,7 +145,7 @@ Sim.mount = function(c){
   var foot = Sim.h("footer",{class:"sim-foot"});
   if(cfg.note) foot.appendChild(Sim.h("p",{text:cfg.note,style:"margin:0 0 6px"}));
   if(refs.length){ var ol = Sim.h("ol",{class:"refs"}); refs.forEach(function(r){ ol.appendChild(Sim.h("li",{text:r})); }); foot.appendChild(Sim.h("div",{},[Sim.h("b",{text:"References"}), ol])); }
-  foot.appendChild(Sim.h("div",{class:"meta",text:"[" + cfg.code + "] Nephrology Simulator Hub | เพื่อการเรียนการสอน ไม่ใช้แทนการตัดสินใจทางคลินิก"}));
+  foot.appendChild(Sim.h("div",{class:"meta",text:"[" + cfg.code + "] Nephrology Simulator Hub | เพื่อการเรียนการสอน ไม่ใช้แทนการตัดสินใจทางคลินิก | Created by Natthasith Trakarnsrisunran"}));
   stage.appendChild(foot);
 
   // presentation mode
