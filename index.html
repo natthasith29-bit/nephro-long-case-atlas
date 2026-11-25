@@ -1850,7 +1850,7 @@ function viewHub(){
         <div class="rv"><span>01</span><b>Pick the complaint</b><p>Choose the patient's leading symptom, sign or abnormal result in Approach.</p></div>
         <div class="rv"><span>02</span><b>Walk the flow</b><p>Follow the decision steps, open each node and note the discriminators and tests.</p></div>
         <div class="rv"><span>03</span><b>Build the presentation</b><p>Structure your case with the 11 parts and borrow the model sentences.</p></div>
-        <div class="rv"><span>04</span><b>Rehearse and practice</b><p>Tick the must-ask list, then test yourself in the Nephro Board Bank.</p></div>
+        <div class="rv"><span>04</span><b>Rehearse and practice</b><p>Tick the must-ask list, then rehearse the full presentation aloud.</p></div>
       </div>
     </div>
   </section>
@@ -1866,7 +1866,7 @@ function viewHub(){
   <section class="hb-band hb-dark hb-final">
     <div class="hb-in hb-center">
       <h2 class="rv">Your next long case<br>starts here.</h2>
-      <div class="hb-cta rv"><a class="hb-btn" href="#browse">Open the Approach</a><a class="hb-btn ghost" href="${BANK_URL}" target="_blank" rel="noopener">Practice in the Bank</a><a class="hb-btn ghost" href="${SIM_HUB}" target="_blank" rel="noopener">Run the Simulators</a></div>
+      <div class="hb-cta rv"><a class="hb-btn" href="#browse">Open the Approach</a><a class="hb-btn ghost" href="${SIM_HUB}" target="_blank" rel="noopener">Run the Simulators</a></div>
       <p class="hb-fine rv">Built for nephrology fellows and internal medicine residents. Always confirm management against current guidelines.</p>
     </div>
   </section>
@@ -2053,7 +2053,7 @@ function viewDisease(id){
     ${d.std?`<p class="std-foot"><b>Standard</b> ${esc(d.std)}</p>`:""}
     ${simPanel(d.sim,"Simulate it")}
     ${lines.length?`<section class="panel"><h2 style="font-size:1.05rem">Appears in these approach lines</h2><div class="chips" style="margin-top:8px">${lines.map(n=>`<a class="chip" href="#n-${n.id}">${esc(shortName(n.en))}</a>`).join("")}</div></section>`:""}
-    <div class="links"><a class="btn" href="#library">All diseases</a><a class="btn" href="${BANK_URL}" target="_blank" rel="noopener">Practice in the Bank</a></div>`;
+    <div class="links"><a class="btn" href="#library">All diseases</a></div>`;
 }
 
 /* ---------- flow tree ---------- */
@@ -2174,12 +2174,12 @@ function viewNode(id){
       <p class="muted" style="font-size:.85rem;margin:8px 0 0">Use with the <a href="#checklist">universal must-ask</a></p></section>`}
     ${simPanel(APPROACH_SIMS[id],"Simulate the physiology behind this line")}
     ${libPanel(id)}
-    <div class="links"><a class="btn" href="#template">Presentation template</a><a class="btn" href="${BANK_URL}" target="_blank" rel="noopener">Practice in the Bank</a></div>
+    <div class="links"><a class="btn" href="#template">Presentation template</a></div>
     ${stds.length?`<p class="std-foot"><b>Standards</b> ${stds.map(esc).join(", ")}</p>`:""}`;
   }
   return head + `<section class="panel"><h2 style="font-size:1.05rem">In preparation</h2>
     <p class="muted" style="margin:6px 0 0">Differential diagnosis to be covered</p><div class="ddx">${n.ddx.map(d=>`<span>${esc(d)}</span>`).join("")}</div></section>
-    <div class="links"><a class="btn" href="#checklist">Must-ask</a><a class="btn" href="${BANK_URL}" target="_blank" rel="noopener">Practice in the Bank</a></div>`;
+    <div class="links"><a class="btn" href="#checklist">Must-ask</a></div>`;
 }
 
 /* ---------- imaging teaching guide ---------- */
